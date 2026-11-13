@@ -1,0 +1,56 @@
+[project]
+name = "kumite"
+version = "0.1.0"
+description = "Kaggle 100本ノックの共通ライブラリ"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "nbstripout",
+    "pre-commit",
+    "pyright",
+    "pytest",
+    "ruff",
+]
+tabular = [
+    "catboost",
+    "ipykernel",
+    "lightgbm",
+    "matplotlib",
+    "numpy",
+    "pandas",
+    "polars",
+    "scikit-learn",
+    "xgboost",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/kumite"]
+
+[tool.uv]
+# CI は dev のみ (`uv sync --no-default-groups --group dev`) で軽量に保つ。
+default-groups = ["dev", "tabular"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "PTH", "RUF"]
+# 行長は formatter に任せる（全角文字は幅2で数えられ、日本語メッセージで誤検知するため）。
+# RUF001-003: 日本語の全角記号を「紛らわしい文字」と判定させない。
+ignore = ["E501", "RUF001", "RUF002", "RUF003"]
+
+[tool.pyright]
+include = ["src", "tests"]
+typeCheckingMode = "strict"
+pythonVersion = "3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

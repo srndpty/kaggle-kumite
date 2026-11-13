@@ -1,0 +1,18 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      # ML 依存 (tabular など) は入れず、dev グループのみで検査する。
+      - run: uv sync --locked --no-default-groups --group dev
+      - run: pwsh ./dev.ps1 check
+        env:
+          UV_NO_SYNC: "1"

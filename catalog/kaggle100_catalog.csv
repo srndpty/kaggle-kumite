@@ -1,0 +1,101 @@
+﻿number,category,title,slug,url,learning_goal,difficulty,compute
+1,A,Otto Group Product Classification Challenge,otto-group-product-classification-challenge,https://www.kaggle.com/competitions/otto-group-product-classification-challenge,多クラス分類：LogLoss・モデルの較正,2,S
+2,A,Porto Seguro’s Safe Driver Prediction,porto-seguro-safe-driver-prediction,https://www.kaggle.com/competitions/porto-seguro-safe-driver-prediction,不均衡二値分類：GiniとAUC・欠損符号,2,S
+3,A,Santander Customer Transaction Prediction,santander-customer-transaction-prediction,https://www.kaggle.com/competitions/santander-customer-transaction-prediction,匿名特徴：分布の異常・変数ごとの効果,3,M
+4,A,Home Credit Default Risk,home-credit-default-risk,https://www.kaggle.com/competitions/home-credit-default-risk,リレーショナル集約・顧客単位CV,3,M
+5,A,Home Credit - Credit Risk Model Stability,home-credit-credit-risk-model-stability,https://www.kaggle.com/competitions/home-credit-credit-risk-model-stability,時点を跨ぐ頑健性・安定性指標,4,L
+6,A,American Express - Default Prediction,amex-default-prediction,https://www.kaggle.com/competitions/amex-default-prediction,履歴集約と系列モデルの比較,4,L
+7,A,IEEE-CIS Fraud Detection,ieee-fraud-detection,https://www.kaggle.com/competitions/ieee-fraud-detection,不正検出：ID・時間ドリフト・リーク,4,L
+8,A,Microsoft Malware Prediction,microsoft-malware-prediction,https://www.kaggle.com/competitions/microsoft-malware-prediction,巨大カテゴリ列とメモリ節約,3,L
+9,A,TalkingData AdTracking Fraud Detection Challenge,talkingdata-adtracking-fraud-detection,https://www.kaggle.com/competitions/talkingdata-adtracking-fraud-detection,クリックログの頻度・時刻集約,4,L
+10,A,BNP Paribas Cardif Claims Management,bnp-paribas-cardif-claims-management,https://www.kaggle.com/competitions/bnp-paribas-cardif-claims-management,匿名数値・カテゴリ欠損処理,2,M
+11,A,Allstate Claims Severity,allstate-claims-severity,https://www.kaggle.com/competitions/allstate-claims-severity,右裾の長い目的変数と損失関数,2,M
+12,A,Mercedes-Benz Greener Manufacturing,mercedes-benz-greener-manufacturing,https://www.kaggle.com/competitions/mercedes-benz-greener-manufacturing,小標本回帰・高カーディナリティ,2,S
+13,A,Bosch Production Line Performance,bosch-production-line-performance,https://www.kaggle.com/competitions/bosch-production-line-performance,工場ログ・希少イベント・工程系列,4,L
+14,A,Zillow Prize: Zillow’s Home Value Prediction,zillow-prize-1,https://www.kaggle.com/competitions/zillow-prize-1,不動産回帰・位置特徴・ドメイン分割,3,M
+15,A,Elo Merchant Category Recommendation,elo-merchant-category-recommendation,https://www.kaggle.com/competitions/elo-merchant-category-recommendation,履歴特徴集約・外れ値への耐性,3,M
+16,A,PetFinder.my Adoption Prediction,petfinder-adoption-prediction,https://www.kaggle.com/competitions/petfinder-adoption-prediction,順序分類・画像と表の融合,3,M
+17,A,Riiid Answer Correctness Prediction,riiid-test-answer-prediction,https://www.kaggle.com/competitions/riiid-test-answer-prediction,学習履歴の時系列特徴・逐次推論,5,L
+18,A,2019 Data Science Bowl,data-science-bowl-2019,https://www.kaggle.com/competitions/data-science-bowl-2019,ゲームイベント集約・QWKと順序分類,4,M
+19,B,Rossmann Store Sales,rossmann-store-sales,https://www.kaggle.com/competitions/rossmann-store-sales,店別売上・祝日・時系列CV,2,S
+20,B,Corporación Favorita Grocery Sales Forecasting,favorita-grocery-sales-forecasting,https://www.kaggle.com/competitions/favorita-grocery-sales-forecasting,大規模小売・商品階層・販促効果,4,L
+21,B,M5 Forecasting - Accuracy,m5-forecasting-accuracy,https://www.kaggle.com/competitions/m5-forecasting-accuracy,階層時系列・ラグ・WRMSSE,4,L
+22,B,M5 Forecasting - Uncertainty,m5-forecasting-uncertainty,https://www.kaggle.com/competitions/m5-forecasting-uncertainty,分位点予測・予測区間と較正,5,L
+23,B,ASHRAE - Great Energy Predictor III,ashrae-energy-prediction,https://www.kaggle.com/competitions/ashrae-energy-prediction,建物×気象・欠損・時差とリーク,3,L
+24,B,Recruit Restaurant Visitor Forecasting,recruit-restaurant-visitor-forecasting,https://www.kaggle.com/competitions/recruit-restaurant-visitor-forecasting,予約・来店・休日の系列結合,3,M
+25,B,Optiver Realized Volatility Prediction,optiver-realized-volatility-prediction,https://www.kaggle.com/competitions/optiver-realized-volatility-prediction,板情報・秒単位の特徴量・RV,4,L
+26,B,Optiver - Trading at the Close,optiver-trading-at-the-close,https://www.kaggle.com/competitions/optiver-trading-at-the-close,オンライン推論API・時系列検証,5,L
+27,B,Jane Street Market Prediction,jane-street-market-prediction,https://www.kaggle.com/competitions/jane-street-market-prediction,期待効用・重み付き目的関数,5,L
+28,B,Jane Street Real-Time Market Data Forecasting,jane-street-real-time-market-data-forecasting,https://www.kaggle.com/competitions/jane-street-real-time-market-data-forecasting,非定常分布・遅延ラベル・オンラインAPI,5,XL
+29,B,Ubiquant Market Prediction,ubiquant-market-prediction,https://www.kaggle.com/competitions/ubiquant-market-prediction,金融の分布変化・相関係数最適化,5,L
+30,B,G-Research Crypto Forecasting,g-research-crypto-forecasting,https://www.kaggle.com/competitions/g-research-crypto-forecasting,暗号資産・時系列評価API・ドリフト,5,L
+31,B,LANL Earthquake Prediction,LANL-Earthquake-Prediction,https://www.kaggle.com/competitions/LANL-Earthquake-Prediction,信号窓の統計量・時系列リーク防止,4,L
+32,B,MITSUI&CO. Commodity Prediction Challenge,mitsui-commodity-prediction-challenge,https://www.kaggle.com/competitions/mitsui-commodity-prediction-challenge,コモディティ・時系列安定性・ラグ制約,5,XL
+33,C,H&M Personalized Fashion Recommendations,h-and-m-personalized-fashion-recommendations,https://www.kaggle.com/competitions/h-and-m-personalized-fashion-recommendations,二段階推薦・候補生成とMAP@12,4,XL
+34,C,Santander Product Recommendation,santander-product-recommendation,https://www.kaggle.com/competitions/santander-product-recommendation,顧客別多ラベル・既存保有商品の除外,3,M
+35,C,WSDM - KKBox's Music Recommendation Challenge,kkbox-music-recommendation-challenge,https://www.kaggle.com/competitions/kkbox-music-recommendation-challenge,ユーザー×楽曲CTRと負例生成,3,M
+36,C,WSDM - KKBox's Churn Prediction Challenge,kkbox-churn-prediction-challenge,https://www.kaggle.com/competitions/kkbox-churn-prediction-challenge,解約予測・契約更新系列,3,M
+37,C,Shopee - Price Match Guarantee,shopee-product-matching,https://www.kaggle.com/competitions/shopee-product-matching,画像＋文書の埋め込み・類似検索,4,L
+38,C,Google Landmark Retrieval 2020,landmark-retrieval-2020,https://www.kaggle.com/competitions/landmark-retrieval-2020,Metric Learning・近傍検索・mAP,5,XL
+39,C,Google Landmark Recognition 2020,landmark-recognition-2020,https://www.kaggle.com/competitions/landmark-recognition-2020,大規模分類・未知クラス拒否,5,XL
+40,C,OTTO – Multi-Objective Recommender System,otto-recommender-system,https://www.kaggle.com/competitions/otto-recommender-system,セッション推薦・Recall@Kと複数目的,5,XL
+41,D,Jigsaw Toxic Comment Classification Challenge,jigsaw-toxic-comment-classification-challenge,https://www.kaggle.com/competitions/jigsaw-toxic-comment-classification-challenge,TF-IDF vs Transformer・多ラベル毒性分類,2,S
+42,D,Jigsaw Unintended Bias in Toxicity Classification,jigsaw-unintended-bias-in-toxicity-classification,https://www.kaggle.com/competitions/jigsaw-unintended-bias-in-toxicity-classification,部分集団での公平性・バイアス評価,4,M
+43,D,Jigsaw Multilingual Toxic Comment Classification,jigsaw-multilingual-toxic-comment-classification,https://www.kaggle.com/competitions/jigsaw-multilingual-toxic-comment-classification,多言語・翻訳・ドメイン適応,4,L
+44,D,Jigsaw Rate Severity of Toxic Comments,jigsaw-toxic-severity-rating,https://www.kaggle.com/competitions/jigsaw-toxic-severity-rating,ペアワイズ順位学習,4,M
+45,D,Quora Question Pairs,quora-question-pairs,https://www.kaggle.com/competitions/quora-question-pairs,重複質問・文字列類似・二塔モデル,2,M
+46,D,Quora Insincere Questions Classification,quora-insincere-questions-classification,https://www.kaggle.com/competitions/quora-insincere-questions-classification,不均衡テキスト分類・閾値選択,3,M
+47,D,Google QUEST Q&A Labeling,google-quest-challenge,https://www.kaggle.com/competitions/google-quest-challenge,多目的回帰・順位相関,4,M
+48,D,Tweet Sentiment Extraction,tweet-sentiment-extraction,https://www.kaggle.com/competitions/tweet-sentiment-extraction,span抽出・token位置復元,3,M
+49,D,CommonLit Readability Prize,commonlitreadabilityprize,https://www.kaggle.com/competitions/commonlitreadabilityprize,文章の難易度回帰・小標本CV,3,M
+50,D,CommonLit - Evaluate Student Summaries,commonlit-evaluate-student-summaries,https://www.kaggle.com/competitions/commonlit-evaluate-student-summaries,文章評価回帰・文章長の影響,3,M
+51,D,Feedback Prize - Evaluating Student Writing,feedback-prize-2021,https://www.kaggle.com/competitions/feedback-prize-2021,談話単位系列タグ付け・F1,4,L
+52,D,Feedback Prize - Predicting Effective Arguments,feedback-prize-effectiveness,https://www.kaggle.com/competitions/feedback-prize-effectiveness,論証分類・事前抽出結果との接続,3,M
+53,D,Feedback Prize - English Language Learning,feedback-prize-english-language-learning,https://www.kaggle.com/competitions/feedback-prize-english-language-learning,複数連続値・MCRMSE・CPU効率,3,M
+54,D,U.S. Patent Phrase to Phrase Matching,us-patent-phrase-to-phrase-matching,https://www.kaggle.com/competitions/us-patent-phrase-to-phrase-matching,意味類似・文脈依存・相関評価,3,M
+55,D,NBME - Score Clinical Patient Notes,nbme-score-clinical-patient-notes,https://www.kaggle.com/competitions/nbme-score-clinical-patient-notes,臨床ノートから根拠span抽出,4,M
+56,D,LLM - Detect AI Generated Text,llm-detect-ai-generated-text,https://www.kaggle.com/competitions/llm-detect-ai-generated-text,生成文検出・ドメイン汎化,4,L
+57,D,Kaggle - LLM Science Exam,kaggle-llm-science-exam,https://www.kaggle.com/competitions/kaggle-llm-science-exam,RAG・検索文書と選択肢スコア,4,L
+58,D,Eedi - Mining Misconceptions in Mathematics,eedi-mining-misconceptions-in-mathematics,https://www.kaggle.com/competitions/eedi-mining-misconceptions-in-mathematics,検索ランキング・誤概念の候補生成,5,L
+59,E,Cassava Leaf Disease Classification,cassava-leaf-disease-classification,https://www.kaggle.com/competitions/cassava-leaf-disease-classification,画像分類・転移学習・TTA,2,M
+60,E,State Farm Distracted Driver Detection,state-farm-distracted-driver-detection,https://www.kaggle.com/competitions/state-farm-distracted-driver-detection,運転手単位GroupCVと見かけの高精度,3,M
+61,E,Planet: Understanding the Amazon from Space,planet-understanding-the-amazon-from-space,https://www.kaggle.com/competitions/planet-understanding-the-amazon-from-space,衛星画像の多ラベル分類・F2閾値,3,M
+62,E,RSNA Pneumonia Detection Challenge,rsna-pneumonia-detection-challenge,https://www.kaggle.com/competitions/rsna-pneumonia-detection-challenge,医療画像物体検出・bboxとmAP,4,L
+63,E,RSNA Intracranial Hemorrhage Detection,rsna-intracranial-hemorrhage-detection,https://www.kaggle.com/competitions/rsna-intracranial-hemorrhage-detection,CT多ラベル・患者単位CV,4,L
+64,E,RSNA Breast Cancer Detection,rsna-breast-cancer-detection,https://www.kaggle.com/competitions/rsna-breast-cancer-detection,高解像度画像・強い不均衡,5,XL
+65,E,RSNA 2022 Cervical Spine Fracture Detection,rsna-2022-cervical-spine-fracture-detection,https://www.kaggle.com/competitions/rsna-2022-cervical-spine-fracture-detection,3D CT・スライス集約,5,XL
+66,E,RSNA 2023 Abdominal Trauma Detection,rsna-2023-abdominal-trauma-detection,https://www.kaggle.com/competitions/rsna-2023-abdominal-trauma-detection,CT系列・患者レベル評価,5,XL
+67,E,RSNA 2024 Lumbar Spine Degenerative Classification,rsna-2024-lumbar-spine-degenerative-classification,https://www.kaggle.com/competitions/rsna-2024-lumbar-spine-degenerative-classification,MRI・部位別多クラス・重み付きLogLoss,5,XL
+68,E,SIIM-ISIC Melanoma Classification,siim-isic-melanoma-classification,https://www.kaggle.com/competitions/siim-isic-melanoma-classification,DICOM・画像＋メタデータ融合,3,M
+69,E,ISIC 2024 - Skin Cancer Detection with 3D-TBP,isic-2024-challenge,https://www.kaggle.com/competitions/isic-2024-challenge,極端な不均衡・pAUC・Tabular融合,4,L
+70,E,TGS Salt Identification Challenge,tgs-salt-identification-challenge,https://www.kaggle.com/competitions/tgs-salt-identification-challenge,二値セグメンテーション・IoU閾値,3,M
+71,E,Carvana Image Masking Challenge,carvana-image-masking-challenge,https://www.kaggle.com/competitions/carvana-image-masking-challenge,精緻なマスク・U-Net・TTA,3,L
+72,E,Severstal: Steel Defect Detection,severstal-steel-defect-detection,https://www.kaggle.com/competitions/severstal-steel-defect-detection,工場欠陥・分類→セグメント,4,L
+73,E,Airbus Ship Detection Challenge,airbus-ship-detection,https://www.kaggle.com/competitions/airbus-ship-detection,航空写真・小物体・RLE,4,L
+74,E,Global Wheat Detection,global-wheat-detection,https://www.kaggle.com/competitions/global-wheat-detection,物体検出・ラベル品質とNMS,3,M
+75,E,VinBigData Chest X-ray Abnormalities Detection,vinbigdata-chest-xray-abnormalities-detection,https://www.kaggle.com/competitions/vinbigdata-chest-xray-abnormalities-detection,多疾患検出・複数アノテータ,5,XL
+76,E,TensorFlow - Help Protect the Great Barrier Reef,tensorflow-great-barrier-reef,https://www.kaggle.com/competitions/tensorflow-great-barrier-reef,動画連続フレームと魚群検出,4,L
+77,E,Sartorius - Cell Instance Segmentation,sartorius-cell-instance-segmentation,https://www.kaggle.com/competitions/sartorius-cell-instance-segmentation,細胞インスタンス分割・重なり,4,L
+78,E,HuBMAP + HPA - Hacking the Human Body,hubmap-organ-segmentation,https://www.kaggle.com/competitions/hubmap-organ-segmentation,臓器組織切片・高解像度分割,4,L
+79,E,HuBMAP - Hacking the Human Vasculature,hubmap-hacking-the-human-vasculature,https://www.kaggle.com/competitions/hubmap-hacking-the-human-vasculature,微小血管・インスタンス分割,5,XL
+80,E,UW-Madison GI Tract Image Segmentation,uw-madison-gi-tract-image-segmentation,https://www.kaggle.com/competitions/uw-madison-gi-tract-image-segmentation,MRIスライス間文脈・3クラス分割,4,M
+81,E,Happywhale - Whale and Dolphin Identification,happy-whale-and-dolphin,https://www.kaggle.com/competitions/happy-whale-and-dolphin,個体識別・ArcFace・未知個体,5,L
+82,E,Google Research - Identify Contrails to Reduce Global Warming,google-research-identify-contrails-reduce-global-warming,https://www.kaggle.com/competitions/google-research-identify-contrails-reduce-global-warming,衛星時系列画像・細線領域分割,4,L
+83,F,TensorFlow Speech Recognition Challenge,tensorflow-speech-recognition-challenge,https://www.kaggle.com/competitions/tensorflow-speech-recognition-challenge,音声コマンド・log-mel・CNN,2,S
+84,F,Freesound Audio Tagging 2019,freesound-audio-tagging-2019,https://www.kaggle.com/competitions/freesound-audio-tagging-2019,環境音・弱いラベル・複数タグ,4,M
+85,F,Rainforest Connection Species Audio Detection,rfcx-species-audio-detection,https://www.kaggle.com/competitions/rfcx-species-audio-detection,野生生物・ノイズ・低頻度イベント,4,M
+86,F,BirdCLEF 2021 - Birdcall Identification,birdclef-2021,https://www.kaggle.com/competitions/birdclef-2021,鳥声・音源混在・窓分割,3,M
+87,F,BirdCLEF 2023,birdclef-2023,https://www.kaggle.com/competitions/birdclef-2023,録音場所・ドメインシフト・閾値,4,L
+88,F,BirdCLEF+ 2026,birdclef-2026,https://www.kaggle.com/competitions/birdclef-2026,動物横断の多ラベル音響認識・推論制約,5,L
+89,F,HMS - Harmful Brain Activity Classification,hms-harmful-brain-activity-classification,https://www.kaggle.com/competitions/hms-harmful-brain-activity-classification,EEG・スペクトログラム・ソフトラベル,4,L
+90,F,Child Mind Institute - Detect Sleep States,child-mind-institute-detect-sleep-states,https://www.kaggle.com/competitions/child-mind-institute-detect-sleep-states,加速度系列・イベント検出AP,4,M
+91,F,Parkinson's Freezing of Gait Prediction,tlvmc-parkinsons-freezing-gait-prediction,https://www.kaggle.com/competitions/tlvmc-parkinsons-freezing-gait-prediction,ウェアラブル系列・イベント開始／終了,4,M
+92,F,G2Net Gravitational Wave Detection,g2net-gravitational-wave-detection,https://www.kaggle.com/competitions/g2net-gravitational-wave-detection,物理信号・雑音・スペクトル変換,5,L
+93,G,Mechanisms of Action (MoA) Prediction,lish-moa,https://www.kaggle.com/competitions/lish-moa,化合物応答・多ラベルNN・LogLoss,3,M
+94,G,OpenVaccine: COVID-19 mRNA Vaccine Degradation Prediction,stanford-covid-vaccine,https://www.kaggle.com/competitions/stanford-covid-vaccine,RNA配列・二次構造・GNN,4,M
+95,G,Open Problems - Multimodal Single-Cell Integration,open-problems-multimodal,https://www.kaggle.com/competitions/open-problems-multimodal,遺伝子・タンパク質・次元削減,5,XL
+96,G,Open Problems – Single-Cell Perturbations,open-problems-single-cell-perturbations,https://www.kaggle.com/competitions/open-problems-single-cell-perturbations,摂動の外挿・細胞型一般化,5,XL
+97,G,Stanford Ribonanza RNA Folding,stanford-ribonanza-rna-folding,https://www.kaggle.com/competitions/stanford-ribonanza-rna-folding,RNA配列の位置別予測・構造特徴,5,XL
+98,G,NeurIPS 2024 - Predict New Medicines with BELKA,leash-BELKA,https://www.kaggle.com/competitions/leash-BELKA,分子表現・ECFP vs GNN,4,L
+99,G,Vesuvius Challenge - Ink Detection,vesuvius-challenge-ink-detection,https://www.kaggle.com/competitions/vesuvius-challenge-ink-detection,3D X線・体積パッチ・微弱信号分割,5,XL
+100,G,Santa 2023 - The Polytope Permutation Puzzle,santa-2023,https://www.kaggle.com/competitions/santa-2023,群・探索・最適化アルゴリズム,5,M

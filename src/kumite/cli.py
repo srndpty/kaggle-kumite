@@ -3,9 +3,10 @@
 import argparse
 import subprocess
 from collections.abc import Sequence
+from pathlib import Path
 
 from kumite.catalog import find_competition, load_catalog
-from kumite.kaggle_data import download_data
+from kumite.kaggle_data import download_data, show_submissions, submit
 from kumite.paths import CATALOG_CSV, COMPETITIONS_DIR, TEMPLATE_DIR
 from kumite.scaffold import create_competition_dir
 
@@ -40,16 +41,46 @@ def _download(number: int) -> int:
     return 0
 
 
+def _submit(number: int, file: Path, message: str) -> int:
+    competition = find_competition(load_catalog(CATALOG_CSV), number)
+    submit(competition, file, message)
+    show_submissions(competition)
+    return 0
+
+
+def _submissions(number: int) -> int:
+    show_submissions(find_competition(load_catalog(CATALOG_CSV), number))
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="kumite", description="Kaggle 100本ノックの補助コマンド")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("list", help="カタログ一覧と着手状況")
-    for name, help_text in (("new", "コンペ用ディレクトリを生成"), ("download", "データを取得")):
+    for name, help_text in (
+        ("new", "コンペ用ディレクトリを生成"),
+        ("download", "データを取得"),
+        ("submissions", "提出履歴とスコアを表示"),
+    ):
         sub.add_parser(name, help=help_text).add_argument("number", type=int, help="カタログ番号")
+    submit_parser = sub.add_parser("submit", help="ファイルを提出し、提出履歴を表示")
+    submit_parser.add_argument("number", type=int, help="カタログ番号")
+    submit_parser.add_argument("file", type=Path, help="提出ファイル")
+    submit_parser.add_argument("-m", "--message", required=True, help="提出メッセージ")
 
     args = parser.parse_args(argv)
     command: str = args.command
     if command == "list":
         return _list()
     number: int = args.number
-    return _new(number) if command == "new" else _download(number)
+    match command:
+        case "new":
+            return _new(number)
+        case "download":
+            return _download(number)
+        case "submissions":
+            return _submissions(number)
+        case _:
+            file: Path = args.file
+            message: str = args.message
+            return _submit(number, file, message)

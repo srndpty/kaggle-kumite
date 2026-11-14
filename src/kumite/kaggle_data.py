@@ -1,4 +1,4 @@
-"""kaggle CLI によるコンペデータの取得。"""
+"""kaggle CLI によるデータ取得と提出。"""
 
 import subprocess
 import zipfile
@@ -26,3 +26,24 @@ def download_data(competition: Competition, competitions_dir: Path) -> Path:
             zf.extractall(data_dir)
         archive.unlink()
     return data_dir
+
+
+def submit(competition: Competition, file: Path, message: str) -> None:
+    subprocess.run(
+        [
+            "kaggle",
+            "competitions",
+            "submit",
+            "-c",
+            competition.slug,
+            "-f",
+            str(file),
+            "-m",
+            message,
+        ],
+        check=True,
+    )
+
+
+def show_submissions(competition: Competition) -> None:
+    subprocess.run(["kaggle", "competitions", "submissions", "-c", competition.slug], check=True)

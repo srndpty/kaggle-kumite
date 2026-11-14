@@ -4,40 +4,15 @@
 """
 
 import argparse
-import json
 import time
-from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
-import pandas as pd
-from cv import N_SPLITS, SEED, SPLIT_VERSION, make_folds
-from dataset import (
-    CLASSES,
-    COMPETITION_DIR,
-    FEATURES,
-    OUTPUT_DIR,
-    TARGET,
-    encode_target,
-    load_test,
-    load_train,
-)
+from cv import N_SPLITS, SEED, make_folds
+from dataset import CLASSES, TARGET, encode_target, load_test, load_train
+from features import FEATURE_SETS
 from models import MODELS
-from sklearn.metrics import log_loss
-
-from kumite.experiments import LOG_FILE_NAME, ExperimentRecord, append_record
-
-COMPETITION_ID = "001"
-DATA_VERSION = "raw"
-
-
-@dataclass(frozen=True)
-class Experiment:
-    model: str
-    hypothesis: str
-    changed_one_thing: str
-    params: dict[str, Any] = field(default_factory=dict)
-
+from runs import Experiment, save_run
 
 LGBM_BASE = {
     "learning_rate": 0.05,
@@ -46,6 +21,7 @@ LGBM_BASE = {
     "num_boost_round": 10000,
     "early_stopping": 100,
 }
+LOGREG_BASE = {"C": 1.0, "max_iter": 2000}
 
 EXPERIMENTS: dict[str, Experiment] = {
     "E00": Experiment(
@@ -59,62 +35,57 @@ EXPERIMENTS: dict[str, Experiment] = {
         changed_one_thing="E00 からモデルを LightGBM に変更（パラメータはほぼ既定値）",
         params=LGBM_BASE,
     ),
+    "E02": Experiment(
+        model="logistic_regression",
+        hypothesis="H1 の比較基準。生カウントの線形モデル",
+        changed_one_thing="E00 からモデルを標準化 + 多クラスロジスティック回帰に変更",
+        params=LOGREG_BASE,
+    ),
+    "E03": Experiment(
+        model="logistic_regression",
+        hypothesis="H1: log1p で裾を潰すと線形モデルの logloss が改善する",
+        changed_one_thing="E02 の特徴量を log1p 変換",
+        features="log1p",
+        params=LOGREG_BASE,
+    ),
+    "E04": Experiment(
+        model="lightgbm",
+        hypothesis="H1: 単調変換なので木モデルの結果はほぼ変わらない",
+        changed_one_thing="E01 の特徴量を log1p 変換",
+        features="log1p",
+        params=LGBM_BASE,
+    ),
+    "E05": Experiment(
+        model="lightgbm",
+        hypothesis="H3: 行合計・非ゼロ数を加えると木モデルも改善する",
+        changed_one_thing="E01 に row_sum, row_nnz の 2 特徴量を追加",
+        features="row_stats",
+        params=LGBM_BASE,
+    ),
 }
 
 
 def run(run_id: str) -> None:
     exp = EXPERIMENTS[run_id]
     fit_predict = MODELS[exp.model]
+    make_features = FEATURE_SETS[exp.features]
     train, test = load_train(), load_test()
-    x, y, x_te = train[FEATURES], encode_target(train[TARGET]), test[FEATURES]
+    x, x_te = make_features(train), make_features(test)
+    y = encode_target(train[TARGET])
     folds = make_folds(y)
 
     started = time.perf_counter()
     oof = np.zeros((len(x), len(CLASSES)))
     test_pred = np.zeros((len(x_te), len(CLASSES)))
-    fold_scores: list[float] = []
     fold_infos: list[dict[str, Any]] = []
     for fold in range(N_SPLITS):
         tr, va = folds != fold, folds == fold
         result = fit_predict(x[tr], y[tr], x[va], y[va], x_te, exp.params)
         oof[va] = result.valid_pred
         test_pred += result.test_pred / N_SPLITS
-        fold_scores.append(float(log_loss(y[va], result.valid_pred, labels=range(len(CLASSES)))))
         fold_infos.append(result.info)
-        print(f"fold {fold}: {fold_scores[-1]:.5f} {result.info}")
     runtime = time.perf_counter() - started
-    oof_score = float(log_loss(y, oof, labels=range(len(CLASSES))))
-    print(
-        f"OOF logloss: {oof_score:.5f}（fold 平均 {np.mean(fold_scores):.5f} ± {np.std(fold_scores):.5f}）"
-    )
-
-    run_dir = OUTPUT_DIR / "runs" / run_id
-    run_dir.mkdir(parents=True, exist_ok=True)
-    np.save(run_dir / "oof.npy", oof)
-    np.save(run_dir / "test.npy", test_pred)
-    submission = pd.DataFrame(test_pred, columns=CLASSES)
-    submission.insert(0, "id", test["id"])
-    submission.to_csv(run_dir / "submission.csv", index=False)
-    (run_dir / "fold_info.json").write_text(json.dumps(fold_infos), encoding="utf-8")
-
-    append_record(
-        COMPETITION_DIR / LOG_FILE_NAME,
-        ExperimentRecord(
-            competition_id=COMPETITION_ID,
-            run_id=run_id,
-            data_version=DATA_VERSION,
-            split_version=SPLIT_VERSION,
-            seed=SEED,
-            hypothesis=exp.hypothesis,
-            changed_one_thing=exp.changed_one_thing,
-            model=exp.model,
-            params=exp.params,
-            fold_scores=[round(s, 5) for s in fold_scores],
-            oof_score=round(oof_score, 5),
-            runtime_sec=round(runtime, 1),
-        ),
-    )
-    print(f"出力: {run_dir}")
+    save_run(run_id, exp, y, folds, oof, test_pred, test["id"], runtime, fold_infos)
 
 
 def main() -> None:

@@ -8,6 +8,9 @@ import lightgbm as lgb
 import numpy as np
 import pandas as pd
 from dataset import CLASSES
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
 
 
 @dataclass(frozen=True)
@@ -51,4 +54,21 @@ def lightgbm(x_tr, y_tr, x_va, y_va, x_te, params) -> FoldResult:
     )
 
 
-MODELS: dict[str, FitPredict] = {"prior": prior, "lightgbm": lightgbm}
+def logistic_regression(x_tr, y_tr, x_va, y_va, x_te, params) -> FoldResult:
+    """標準化 + 多クラスロジスティック回帰。標準化は学習 fold だけで fit する。"""
+    model = make_pipeline(
+        StandardScaler(), LogisticRegression(C=params["C"], max_iter=params["max_iter"])
+    )
+    model.fit(x_tr, y_tr)
+    return FoldResult(
+        model.predict_proba(x_va),
+        model.predict_proba(x_te),
+        {"n_iter": int(model[-1].n_iter_[0])},
+    )
+
+
+MODELS: dict[str, FitPredict] = {
+    "prior": prior,
+    "lightgbm": lightgbm,
+    "logistic_regression": logistic_regression,
+}

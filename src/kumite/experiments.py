@@ -39,3 +39,40 @@ def append_record(log_path: Path, record: ExperimentRecord) -> None:
 def read_records(log_path: Path) -> list[ExperimentRecord]:
     with log_path.open(encoding="utf-8") as f:
         return [ExperimentRecord(**json.loads(line)) for line in f if line.strip()]
+
+
+def find_record(records: list[ExperimentRecord], run_id: str) -> ExperimentRecord:
+    for record in records:
+        if record.run_id == run_id:
+            return record
+    raise LookupError(f"run_id {run_id} の記録がありません")
+
+
+@dataclass(frozen=True)
+class PairedComparison:
+    """同じ分割の fold どうしで比べた差 (other - base)。指標の向きは解釈側で判断する。"""
+
+    base_run_id: str
+    run_id: str
+    diffs: list[float]
+
+    @property
+    def mean_diff(self) -> float:
+        return sum(self.diffs) / len(self.diffs)
+
+    @property
+    def n_lower(self) -> int:
+        return sum(d < 0 for d in self.diffs)
+
+    @property
+    def n_higher(self) -> int:
+        return sum(d > 0 for d in self.diffs)
+
+
+def compare_runs(base: ExperimentRecord, other: ExperimentRecord) -> PairedComparison:
+    if base.split_version != other.split_version:
+        raise ValueError(
+            f"分割が異なるため比較できません: {base.split_version} と {other.split_version}"
+        )
+    diffs = [o - b for b, o in zip(base.fold_scores, other.fold_scores, strict=True)]
+    return PairedComparison(base_run_id=base.run_id, run_id=other.run_id, diffs=diffs)

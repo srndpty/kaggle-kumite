@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from kumite.experiments import LOG_FILE_NAME, ExperimentRecord, append_record, read_records
 
 
@@ -37,3 +39,5 @@ def test_records_round_trip_in_order(tmp_path: Path) -> None:
     append_record(log_path, improved)
 
     assert read_records(log_path) == [baseline, improved]
+    with pytest.raises(ValueError, match="E00"):
+        append_record(log_path, baseline)

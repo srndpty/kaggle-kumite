@@ -29,6 +29,9 @@ class ExperimentRecord:
 
 
 def append_record(log_path: Path, record: ExperimentRecord) -> None:
+    """記録を追記する。同じ run_id が既にあれば拒否する（再実行するなら該当行を消す）。"""
+    if log_path.exists() and any(r.run_id == record.run_id for r in read_records(log_path)):
+        raise ValueError(f"run_id {record.run_id} は {log_path} に記録済みです")
     with log_path.open("a", encoding="utf-8", newline="\n") as f:
         f.write(json.dumps(asdict(record), ensure_ascii=False) + "\n")
 

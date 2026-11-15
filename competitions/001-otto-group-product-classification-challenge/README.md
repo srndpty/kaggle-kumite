@@ -137,7 +137,7 @@
 | H1 | 線形モデルや NN では、log1p 変換でカウントの裾を潰すと logloss が改善する（決定木系にはほぼ影響しない） | 非ゼロ値の中央値 1 に対して 99.9% 点は 51、歪度は最大 36.5 | 線形は弱く支持（E02→E03 で -0.0061、4/5 fold）。木は変化なし（E01→E04 差 1e-5 以下）。NN は不支持（E14→E15 で +0.0023、改善 1/5） |
 | H2 | 誤差は Class_2・3・4 の取り違えに集中する。クラスごとの logloss に分解すると、この3クラスの寄与が件数比以上に大きい | クラス平均プロファイルの cosine 類似度は 2-3 間で 0.973、2-4 間で 0.932、3-4 間で 0.925 | 一部支持。3クラスで件数 43%・損失 59%。ただし Class_2 自体は件数比以下で、重いのは 3・4。Class_1・7 も重い |
 | H3 | 行単位の集約特徴（行合計・非ゼロ数）を加えると、木モデルの logloss も改善する | 非ゼロ数の平均は Class_5 の 9.4 から Class_8 の 24.3 まで、クラスで大きく異なる | 不支持。E01→E05 で平均 +0.0003、改善は 2/5 fold。ノイズの範囲 |
-| H4 | 木モデルの出力確率は較正がずれており、温度スケーリングなどの較正で logloss が下がる | 評価指標が logloss で、比較実験のテーマが較正のため（EDA 由来ではなく、検証用に追加した仮説） | 単一モデルでは支持、提出（5 モデル平均）では不支持。CV は -0.0025 だが Late は +0.00075（P5 参照） |
+| H4 | 木モデルの出力確率は較正がずれており、温度スケーリングなどの較正で logloss が下がる | 評価指標が logloss で、比較実験のテーマが較正のため（EDA 由来ではなく、検証用に追加した仮説） | 単一モデルでは支持、提出（5 モデル平均）では不支持。CV は -0.0025（nested 版 E17 でも -0.0025）だが Late は +0.00075（P5 参照） |
 | H5 | 異なるモデルの OOF 予測を 2 段目で統合すると、単一モデルより改善する | P6: 1 位・2 位とも多段のスタッキングが中心 | 支持。nested 版 E01→E12 で CV 平均 -0.0329（5/5 fold）。旧実装 E10 は Late（Private）-0.0294 |
 | H6 | 各クラスの最近傍までの距離を特徴に加えると、木モデルが改善する | P6: 1 位解法の追加特徴の中心。2 位も kNN を重視 | 支持。nested 版 E01→E11 で CV 平均 -0.0205（5/5 fold）。旧実装 E09 は Late（Private）-0.0195 |
 
@@ -155,7 +155,7 @@
 | H1 | E04 | 特徴量 [`features.log1p`](src/features.py#L28)、モデル [`models.lightgbm`](src/models.py#L30) | `uv run python src/train.py E04` |
 | H2 | （E01 の分析） | [`analyze.per_class_loss`](src/analyze.py#L17)、[`analyze.confusion`](src/analyze.py#L37) | `uv run python src/analyze.py E01` |
 | H3 | E05 | 特徴量 [`features.row_stats`](src/features.py#L33) | `uv run python src/train.py E05` |
-| H4 | E06 | [`calibrate.apply_temperature` / `fit_temperature`](src/calibrate.py#L24)、クロスフィットのループは [`calibrate.main`](src/calibrate.py#L56) | `uv run python src/calibrate.py E01 E06` |
+| H4 | E06（旧）, E17 | [`calibrate.apply_temperature` / `fit_temperature`](src/calibrate.py#L31)、nested のループは [`calibrate.calibrate`](src/calibrate.py#L59) | `uv run python src/calibrate.py E01 E17` |
 | H5 | E07, E08, E10 | 1 段目 [`models.knn`](src/models.py#L70)・[`models.extra_trees`](src/models.py#L83)、2 段目の入力 [`stacking.Stacking`](src/stacking.py#L17)（nested） | `uv run python src/train.py E12` |
 | H6 | E11 | [`features.KnnDistance`](src/features.py#L67)（nested） | `uv run python src/train.py E11` |
 | リーク検査 | E11, E12 | ラベルを使う特徴は [`pipeline.fold_inputs`](src/pipeline.py#L52) で学習行のラベルだけを受け取る。検査は [`leak_check.check`](src/leak_check.py#L22) | `uv run python src/leak_check.py E11 E12` |
@@ -182,14 +182,16 @@ contribution = [sample_loss[y == k].sum() / sample_loss.sum() for k in range(9)]
 x.assign(row_sum=x.sum(axis=1), row_nnz=(x > 0).sum(axis=1))
 
 
-# H4: 温度スケーリング（calibrate.py）。fold k の T は、k 以外の fold の OOF で決める（クロスフィット）
+# H4: 温度スケーリング（calibrate.py）。fold k の T は、外側の学習行だけで元の実験を
+# 内側 4 fold で学習し直した OOF から決める（nested。E17）
 def apply_temperature(pred, t):
     return softmax(np.log(np.clip(pred, EPS, 1)) / t, axis=1)
 
 
 for fold in range(N_SPLITS):
-    tr, va = folds != fold, folds == fold
-    t = fit_temperature(y[tr], oof[tr])
+    tr, va = np.flatnonzero(folds != fold), np.flatnonzero(folds == fold)
+    inner = run_cv(base, train.iloc[tr], y.iloc[tr], make_inner_folds(y.iloc[tr]), train.iloc[va])
+    t = fit_temperature(y.iloc[tr], inner.oof)
     calibrated[va] = apply_temperature(oof[va], t)
 ```
 
@@ -234,6 +236,7 @@ for fold in range(N_SPLITS):
 - E01 の OOF は過信気味だった。確信度 0.7〜0.8 のビンでは正解率 0.715 に対して平均確信度 0.750。ECE は 0.0151
 - 温度 T は fold ごとに 1.098〜1.113（T > 1 は確率を穏やかにする方向）。他の fold の OOF で T を決めるクロスフィットなので、OOF スコアに検証データの情報は漏れていない
 - E01 → E06 の fold ごとの差は -0.0011 -0.0038 -0.0020 -0.0034 -0.0020。5 fold すべてで改善し、平均 -0.0025
+- 追記（レビュー対応）: E06 の T は「全行 OOF の学習行部分」で決めていた。その OOF を作った fold モデルは検証 fold のラベルでも学習しているので、T に検証ラベルが間接的に入る（E09・E10 と同じ cross-fold leakage）。T を外側の学習行だけで作った内側 OOF で決める nested 版（E17）で測り直すと、E01 比 -0.0014 -0.0036 -0.0020 -0.0036 -0.0020（平均 -0.0025、5/5 fold）、E06 との差は -0.00007 だった。漏れるのはスカラー 1 つで、実質的な影響はなかった
 - 注意: テスト予測は 5 モデルの平均で、すでに確率が穏やかになっている。単一モデルの OOF で決めた T をそのままかけると、テスト側では効きすぎる可能性がある
   - → Late で確認したところ、実際に悪化した（P5 参照）
 
@@ -249,7 +252,7 @@ for fold in range(N_SPLITS):
 | E03 | E02 + log1p | 0.63496 | | 改善（4/5 fold） |
 | E04 | E01 + log1p | 0.47393 | | 変化なし |
 | E05 | E01 + row_sum, row_nnz | 0.47419 | | 効果なし |
-| E06 | E01 + 温度スケーリング | 0.47148 | 0.45226 | CV は改善、Late は悪化 |
+| E06 | E01 + 温度スケーリング | 0.47148 | 0.45226 | CV は改善、Late は悪化。旧実装（T に検証ラベルが間接的に入る） |
 | E07 | kNN（k=32、距離重み）、log1p + 標準化 | 0.58269 | | H5 の 1 段目 |
 | E08 | ExtraTrees（300 本）、log1p | 0.59506 | | H5 の 1 段目 |
 | E09 | E01 + kNN 距離特徴 27 列 | 0.45890 | 0.43201 | 改善（CV・Late とも）。旧実装（CV にリーク経路あり） |
@@ -259,6 +262,7 @@ for fold in range(N_SPLITS):
 | E13 | E11 の検証・テスト行の距離を参照集合 1 つで計算（切り分け） | 0.46084 | | E11 より悪化（5/5 fold） |
 | E14 | MLP（256-128、標準化、生カウント） | 0.54096 | | E01 より悪化、線形より大幅に良い |
 | E15 | E14 + log1p | 0.54323 | | 効果なし（改善 1/5） |
+| E17 | E06 の nested 版（T を外側の学習行だけで決める） | 0.47142 | | E06 と差 -0.00007（リークの影響なし） |
 | E16 | E12 の 1 段目に E15（MLP）を追加 | 0.43747 | 0.42112 | 改善（E12 比 5/5 fold）。CV・Late とも最良（最終モデル） |
 
 ### CV と Late Submission の差

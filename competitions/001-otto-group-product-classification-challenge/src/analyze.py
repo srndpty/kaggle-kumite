@@ -39,7 +39,10 @@ def confusion(y: np.ndarray, oof: np.ndarray) -> None:
     print(
         f"\n=== 混同行列（argmax、行 = 正解、行ごとに正規化）=== accuracy {np.mean(pred == y):.4f}"
     )
+    labels = range(len(CLASSES))
     cm = pd.crosstab(pd.Series(y, name="true"), pd.Series(pred, name="pred"), normalize="index")
+    # 予測に出ないクラス（E00 のように全行同じ予測など）も 0 の行・列として残す
+    cm = cm.reindex(index=labels, columns=labels, fill_value=0.0)
     cm.index, cm.columns = CLASSES, CLASSES
     print(cm.round(3).to_string())
     off = cm.to_numpy().copy()

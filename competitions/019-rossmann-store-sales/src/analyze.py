@@ -9,12 +9,14 @@ import argparse
 
 import numpy as np
 import pandas as pd
-from cv import SEED, windows
+from cv import HORIZON_DAYS, N_WINDOWS, SEED
 from dataset import DATA_FILES, TARGET, load_train, modeling_rows
 from pipeline import STORE
 
+from kumite.bootstrap import group_bootstrap_diff
 from kumite.experiments import compare_runs
 from kumite.provenance import files_sha256
+from kumite.timesplit import windows
 
 N_BOOTSTRAP = 2000
 
@@ -47,7 +49,7 @@ def errors(run_id: str) -> None:
         f"{run_id}: RMSPE {_rmspe(rows['pct']):.5f}、相対誤差の中央値 {rows['pct'].median():+.4f}"
     )
     print(f"過大予測の行の割合: {(rows['pct'] > 0).mean():.4f}")
-    starts = [start for start, _ in windows(rows["Date"].max())]
+    starts = [start for start, _ in windows(rows["Date"].max(), HORIZON_DAYS, N_WINDOWS)]
     window = (
         np.searchsorted(np.array(starts, dtype="datetime64[ns]"), rows["Date"].to_numpy(), "right")
         - 1
@@ -89,29 +91,21 @@ def compare(base_run_id: str, run_ids: list[str]) -> None:
     """行ごとの二乗相対誤差の差を、店舗単位で再標本化して確かめる（同じ店舗の行は独立でないため）。"""
     base = _validated(base_run_id)
     stores = base["Store"].to_numpy()
-    codes, n_stores = pd.factorize(stores)[0], len(np.unique(stores))
-    rng = np.random.default_rng(SEED)
-    draws = rng.integers(0, n_stores, size=(N_BOOTSTRAP, n_stores))
-    counts = np.bincount(codes, minlength=n_stores)
-
-    def store_sums(pct: pd.Series) -> np.ndarray:
-        return np.bincount(codes, weights=(pct**2).to_numpy(), minlength=n_stores)
-
-    base_sums = store_sums(base["pct"])
     print(
         f"基準 {base_run_id}: RMSPE {_rmspe(base['pct']):.5f}。差は (実験 - 基準)、{N_BOOTSTRAP} 回の店舗単位 bootstrap"
     )
     for run_id in run_ids:
-        other_sums = store_sums(_same_rows(base_run_id, base, run_id)["pct"])
-        n = counts[draws].sum(axis=1)
-        diff = np.sqrt(other_sums[draws].sum(axis=1) / n) - np.sqrt(
-            base_sums[draws].sum(axis=1) / n
+        other = _same_rows(base_run_id, base, run_id)
+        d = group_bootstrap_diff(
+            (base["pct"] ** 2).to_numpy(),
+            (other["pct"] ** 2).to_numpy(),
+            stores,
+            n_bootstrap=N_BOOTSTRAP,
+            seed=SEED,
         )
-        lo, hi = np.percentile(diff, [2.5, 97.5])
-        point = np.sqrt(other_sums.sum() / counts.sum()) - np.sqrt(base_sums.sum() / counts.sum())
         print(
-            f"{run_id}: 差 {point:+.5f}、95% 区間 [{lo:+.5f}, {hi:+.5f}]、"
-            f"改善した再標本の割合 {(diff < 0).mean():.3f}"
+            f"{run_id}: 差 {d.point:+.5f}、95% 区間 [{d.low:+.5f}, {d.high:+.5f}]、"
+            f"改善した再標本の割合 {d.share_negative:.3f}"
         )
 
 

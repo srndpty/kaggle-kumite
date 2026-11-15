@@ -6,12 +6,12 @@
 from collections.abc import Callable
 from typing import Any
 
-import lightgbm as lgb
 import numpy as np
 import pandas as pd
 from features import CATEGORICAL
 
 from kumite.crossfit import FoldOutput
+from kumite.gbdt import lightgbm_regression
 
 # (学習 X, 学習 y, 検証 X, 検証 y, 予測対象 X, params) -> 検証・予測対象への予測
 FitPredict = Callable[
@@ -37,36 +37,8 @@ def group_median(x_tr, y_tr, x_va, y_va, x_te, params) -> FoldOutput:
 
 
 def lightgbm(x_tr, y_tr, x_va, y_va, x_te, params) -> FoldOutput:
-    """検証窓で early stopping する（CV スコアは楽観側に偏る）。
-
-    params["early_stopping"] が None なら、検証行を見ずに num_boost_round まで学習する。
-    """
-    lgb_params = {
-        "objective": "regression",
-        "verbosity": -1,
-        **{k: v for k, v in params.items() if k not in ("num_boost_round", "early_stopping")},
-    }
-    categorical = [c for c in CATEGORICAL if c in x_tr.columns]
-    train_set = lgb.Dataset(x_tr, y_tr, categorical_feature=categorical)
-    if params["early_stopping"] is None:
-        booster = lgb.train(lgb_params, train_set, num_boost_round=params["num_boost_round"])
-        rounds = params["num_boost_round"]
-        # 全行で学習し直すときは検証行が無い
-        valid = np.asarray(booster.predict(x_va)) if len(x_va) else np.zeros(0)
-        return FoldOutput(valid, np.asarray(booster.predict(x_te)), {"rounds": rounds})
-    booster = lgb.train(
-        lgb_params,
-        train_set,
-        num_boost_round=params["num_boost_round"],
-        valid_sets=[lgb.Dataset(x_va, y_va, reference=train_set)],
-        callbacks=[lgb.early_stopping(params["early_stopping"], verbose=False)],
-    )
-    best = booster.best_iteration
-    return FoldOutput(
-        np.asarray(booster.predict(x_va, num_iteration=best)),
-        np.asarray(booster.predict(x_te, num_iteration=best)),
-        {"best_iteration": best},
-    )
+    """kumite.gbdt.lightgbm_regression（検証窓で early stopping。CV スコアは楽観側に偏る）。"""
+    return lightgbm_regression(x_tr, y_tr, x_va, y_va, x_te, params, CATEGORICAL)
 
 
 MODELS: dict[str, FitPredict] = {"group_median": group_median, "lightgbm": lightgbm}

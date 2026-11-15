@@ -34,9 +34,12 @@
 
 | カード | 状態 | 要旨 |
 |---|---|---|
-| [K001](K001-oof-vs-fold-average.md) | 仮説 | OOF（単一モデル）と提出（fold 平均）は別物。Otto では平均で約 -0.02 |
+| [K001](K001-oof-vs-fold-average.md) | 条件付き | OOF（単一モデル）と提出（fold 平均）は別物。Otto では平均で約 -0.02。時系列分割では平均が逆効果で、学習し直しが良い |
 | [K002](K002-calibrate-on-submission-form.md) | 仮説 | 較正は提出と同じ形の予測で決める。単一モデルの OOF で決めると平均予測には効きすぎる |
 | [K003](K003-monotone-transform-by-model.md) | 条件付き | log1p は線形モデルには効くが、木モデルと標準化した MLP には効かなかった |
 | [K004](K004-cross-fold-label-leak.md) | 仮説 | 全行で作った OOF 特徴を後段の CV に使うと、外側の検証ラベルが学習側に入る |
 | [K005](K005-stacking-diversity.md) | 仮説 | 単体で弱くても誤り方の違うモデル（kNN・ExtraTrees・MLP）はスタッキングで効く |
 | [K006](K006-class-wise-knn-distance.md) | 仮説 | クラス別の最近傍距離は、意味の伏せられた特徴でも強い手がかりになる |
+| [K007](K007-time-split-vs-random-split.md) | 仮説 | 未来を予測する問題では、ランダム分割は楽観的で、特徴量の採否まで変える |
+| [K008](K008-reproduce-information-cutoff-in-validation.md) | 仮説 | 検証でも「その時点で分かる情報の範囲」を test と同じにする（予定の打ち切り） |
+| [K009](K009-log-target-for-relative-error.md) | 仮説 | 相対誤差の指標では、目的変数を log にして学習する |

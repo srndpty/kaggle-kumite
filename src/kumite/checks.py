@@ -22,6 +22,26 @@ def validate_probabilities(
         raise ValueError(f"確率の和が 1 からずれています（最大 {max_dev:.2e}）")
 
 
+def validate_regression(pred: np.ndarray, n_rows: int, lower: float | None = None) -> None:
+    """回帰の予測として保存・提出してよいかを確かめる。lower は許される最小値（売上なら 0）。"""
+    if n_rows == 0:
+        raise ValueError("予測が 0 行です")
+    if pred.shape != (n_rows,):
+        raise ValueError(f"形状が {pred.shape} です（期待値 {(n_rows,)}）")
+    if not np.isfinite(pred).all():
+        raise ValueError("NaN または Inf を含みます")
+    if lower is not None and (pred < lower).any():
+        raise ValueError(f"予測が下限 {lower} を下回っています（最小 {pred.min()}）")
+
+
+def perturb_targets(y: np.ndarray, rows: np.ndarray, seed: int = 0) -> np.ndarray:
+    """rows の行の目的変数（連続値）を、必ず別の値に置き換えたコピーを返す。`shift_labels` の回帰版。"""
+    perturbed = y.astype(np.float64)
+    scale = np.random.default_rng(seed).uniform(0.5, 1.5, size=int(rows.sum()))
+    perturbed[rows] += (1 + np.abs(perturbed[rows])) * scale
+    return perturbed
+
+
 def shift_labels(y: np.ndarray, rows: np.ndarray, n_classes: int, seed: int = 0) -> np.ndarray:
     """rows の行のラベルを、必ず別のクラスに置き換えたコピーを返す。"""
     shifted = y.copy()

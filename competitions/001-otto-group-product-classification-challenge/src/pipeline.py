@@ -1,6 +1,5 @@
 """実験の定義・実行・保存。train.py・calibrate.py・stacking.py で共通に使う。"""
 
-import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -14,10 +13,9 @@ from models import MODELS
 from sklearn.metrics import log_loss
 
 from kumite.checks import validate_probabilities
-from kumite.crossfit import CrossFitResult, cross_fit
-from kumite.experiments import ExperimentRecord
-from kumite.paths import REPO_ROOT
-from kumite.provenance import array_sha256, code_version, files_sha256, peak_memory_mb
+from kumite.crossfit import CrossFitResult, cross_fit, folds_to_splits
+from kumite.cv_run import Evaluation, Trial, publish_cv_run
+from kumite.provenance import array_sha256, files_sha256
 from kumite.runs import Reservation, RunStore
 
 COMPETITION_ID = "001"
@@ -98,45 +96,41 @@ def save_run(
     """予測を検証してからスコアを計算し、成果物と実験ログを保存する（kumite.runs.RunStore）。"""
     validate_probabilities(result.oof, len(y), len(CLASSES))
     validate_probabilities(result.query, len(test_ids), len(CLASSES))
-    fold_scores = [
-        multi_logloss(y[folds == k], result.oof[folds == k]) for k in range(len(result.infos))
-    ]
-    oof_score = multi_logloss(y, result.oof)
-    for k, (score, info) in enumerate(zip(fold_scores, result.infos, strict=True)):
-        print(f"fold {k}: {score:.5f} {info}")
-    print(f"OOF logloss: {oof_score:.5f}（fold 標準偏差 {np.std(fold_scores):.5f}）")
-
-    record = ExperimentRecord(
+    evaluation = Evaluation(
         competition_id=COMPETITION_ID,
-        run_id=reservation.run_id,
         metric=METRIC,
         greater_is_better=False,
-        data_version=exp.data_version,
+        score=multi_logloss,
         data_hash=files_sha256(DATA_FILES),
         split_version=SPLIT_VERSION,
         split_hash=array_sha256(folds),
         seed=SEED,
+    )
+    trial = Trial(
         hypothesis=exp.hypothesis,
         changed_one_thing=exp.changed_one_thing,
         model=exp.model,
+        data_version=exp.data_version,
         params=exp.params,
-        fold_scores=fold_scores,
-        oof_score=oof_score,
-        runtime_sec=runtime_sec,
-        peak_memory_mb=peak_memory_mb(),
-        code_version=code_version(REPO_ROOT),
         inputs=inputs or {},
     )
 
-    def write(out_dir: Path) -> None:
-        np.save(out_dir / "oof.npy", result.oof)
-        np.save(out_dir / "test.npy", result.query)
+    def write_submission(out_dir: Path) -> None:
         submission = pd.DataFrame(result.query, columns=CLASSES)
         submission.insert(0, "id", test_ids.to_numpy())
         submission.to_csv(out_dir / "submission.csv", index=False)
-        (out_dir / "fold_info.json").write_text(json.dumps(result.infos), encoding="utf-8")
 
-    print(f"出力: {STORE.publish(reservation, record, write)}")
+    publish_cv_run(
+        STORE,
+        reservation,
+        evaluation,
+        trial,
+        y.to_numpy(),
+        folds_to_splits(folds),
+        result,
+        runtime_sec,
+        write_submission,
+    )
 
 
 def load_predictions(run_id: str) -> tuple[np.ndarray, np.ndarray]:

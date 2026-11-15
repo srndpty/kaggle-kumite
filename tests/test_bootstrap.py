@@ -49,3 +49,13 @@ def test_rejects_mismatched_shapes_and_nan() -> None:
         group_bootstrap_diff(np.zeros(6), np.zeros(5), GROUPS)
     with pytest.raises(ValueError):
         group_bootstrap_diff(np.full(6, np.nan), np.zeros(6), GROUPS)
+
+
+def test_rejects_empty_input_missing_groups_and_bad_n_bootstrap() -> None:
+    empty = np.zeros(0)
+    with pytest.raises(ValueError, match="空"):
+        group_bootstrap_diff(empty, empty, np.array([], dtype=object))
+    with pytest.raises(ValueError, match="グループ ID"):
+        group_bootstrap_diff(np.zeros(2), np.zeros(2), np.array(["a", None], dtype=object))
+    with pytest.raises(ValueError, match="n_bootstrap"):
+        group_bootstrap_diff(np.zeros(6), np.zeros(6), GROUPS, n_bootstrap=0)

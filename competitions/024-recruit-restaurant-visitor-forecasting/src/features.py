@@ -212,7 +212,7 @@ class StoreStats:
 # --- 予約（ラベルを使わない。予約日時で打ち切る） ---
 
 
-def _reserved(reserves: pd.DataFrame, rows: pd.DataFrame, cutoff: pd.Series) -> np.ndarray:
+def reserved_counts(reserves: pd.DataFrame, rows: pd.DataFrame, cutoff: pd.Series) -> np.ndarray:
     """各行の店舗・日付への予約のうち、予約日時が cutoff より前のものの (人数, 件数)。"""
     r = reserves.assign(**{DATE: reserves["visit_datetime"].dt.normalize()})
     q = rows[[STORE, DATE]].reset_index(drop=True).assign(_cutoff=cutoff.to_numpy())
@@ -230,18 +230,24 @@ class Reservations:
 
     検証・テスト行は予測の起点（窓の開始日の 0 時）より前に入った予約だけを数える（test と同じ）。
 
-    - train_rows="horizon": 学習行にも、0〜38 日の「何日先か」を行ごとにランダムに割り当て、その日数ぶん
-      前の 0 時より前に入った予約だけを数える（検証・テスト行と同じ打ち切りの分布にする）
-    - train_rows="all": 学習行は来店日までに入った予約をすべて数え、何日先かは 0 とする
+    - train_rows="horizon": 学習行にも、0〜38 日の「何日先か」（`pseudo_ahead`）を行ごとにランダムに
+      割り当て、その日数ぶん前の 0 時より前に入った予約だけを数える。予測時の打ち切りの近似で、
+      実際の予測で各日に見える予約の分布をそのまま再現したものではない
+    - train_rows="all": 学習行は来店日までに入った予約をすべて数える
+    - train_ahead: 学習行の「何日先か」の列。既定は train_rows="horizon" なら打ち切りに使った日数、
+      "all" なら 0（E05A）。"pseudo" を明示すると、打ち切らない場合も `pseudo_ahead` の日数を入れる（E05B）
     - valid_rows="all": 検証行でも打ち切らない（H3b。test では再現しない楽観を測るためだけに使う）
     """
 
     train_rows: Literal["horizon", "all"] = "horizon"
     valid_rows: Literal["cutoff", "all"] = "cutoff"
+    train_ahead: Literal["pseudo", "zero"] | None = None
 
     @property
     def name(self) -> str:
-        return f"reservations-train_{self.train_rows}-valid_{self.valid_rows}"
+        # train_ahead を明示しない run（E05・E05A など）の名前は変えない
+        ahead = "" if self.train_ahead is None else f"-ahead_{self.train_ahead}"
+        return f"reservations-train_{self.train_rows}-valid_{self.valid_rows}{ahead}"
 
     @property
     def columns(self) -> list[str]:
@@ -249,7 +255,7 @@ class Reservations:
 
     def build(self, ctx: FoldContext) -> Built:
         def make(rows: pd.DataFrame, cutoff: pd.Series, ahead: np.ndarray) -> np.ndarray:
-            return np.column_stack([_reserved(ctx.reserves, rows, cutoff), ahead])
+            return np.column_stack([reserved_counts(ctx.reserves, rows, cutoff), ahead])
 
         def from_origin(rows: pd.DataFrame, origin: pd.Timestamp) -> tuple[pd.Series, np.ndarray]:
             ahead = (rows[DATE] - origin).dt.days.to_numpy(dtype=np.float64)
@@ -258,12 +264,16 @@ class Reservations:
             return pd.Series(origin, index=rows.index), ahead
 
         dates = ctx.train[DATE]
+        pseudo = pseudo_ahead(len(dates))
         if self.train_rows == "horizon":
-            ahead_tr = pseudo_ahead(len(dates))
-            cut_tr = dates - pd.to_timedelta(ahead_tr, unit="D")
+            cut_tr = dates - pd.to_timedelta(pseudo, unit="D")
+        else:
+            cut_tr = dates + DAY
+        default_ahead = "pseudo" if self.train_rows == "horizon" else "zero"
+        if (self.train_ahead or default_ahead) == "pseudo":
+            ahead_tr = pseudo
         else:
             ahead_tr = np.zeros(len(dates), dtype=np.int64)
-            cut_tr = dates + DAY
         cut_va, ahead_va = from_origin(ctx.valid, ctx.valid_origin)
         if self.valid_rows == "all":
             cut_va = ctx.valid[DATE] + DAY

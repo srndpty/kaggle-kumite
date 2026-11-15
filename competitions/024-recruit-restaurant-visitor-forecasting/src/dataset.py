@@ -54,11 +54,17 @@ def load_reserves() -> pd.DataFrame:
     1 行 = 1 件の予約。source は "air" / "hpg"。
     """
     times = ["visit_datetime", "reserve_datetime"]
-    air = pd.read_csv(AIR_RESERVE_CSV, parse_dates=times).assign(source="air")
-    hpg = pd.read_csv(HPG_RESERVE_CSV, parse_dates=times)
-    relation = pd.read_csv(RELATION_CSV)
+    return combine_reserves(
+        pd.read_csv(AIR_RESERVE_CSV, parse_dates=times),
+        pd.read_csv(HPG_RESERVE_CSV, parse_dates=times),
+        pd.read_csv(RELATION_CSV),
+    )
+
+
+def combine_reserves(air: pd.DataFrame, hpg: pd.DataFrame, relation: pd.DataFrame) -> pd.DataFrame:
+    """hpg の予約を対応表で air の店舗 ID に付け替えて air の予約とつなぐ。対応の無い hpg の予約は除く。"""
     hpg = hpg.merge(relation, on="hpg_store_id", how="inner").drop(columns="hpg_store_id")
-    return pd.concat([air, hpg.assign(source="hpg")], ignore_index=True)
+    return pd.concat([air.assign(source="air"), hpg.assign(source="hpg")], ignore_index=True)
 
 
 def load_air_stores() -> pd.DataFrame:

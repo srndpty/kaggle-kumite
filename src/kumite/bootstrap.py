@@ -38,8 +38,14 @@ def group_bootstrap_diff(
             f"損失とグループは同じ長さの 1 次元配列である必要があります（{base_loss.shape}, "
             f"{other_loss.shape}, {groups.shape}）"
         )
+    if len(base_loss) == 0:
+        raise ValueError("損失が空です")
+    if n_bootstrap < 1:
+        raise ValueError(f"n_bootstrap は 1 以上である必要があります（{n_bootstrap}）")
     if not (np.isfinite(base_loss).all() and np.isfinite(other_loss).all()):
         raise ValueError("損失に NaN または Inf があります")
+    if pd.isna(groups).any():
+        raise ValueError("グループ ID に欠損があります")
     codes, uniques = pd.factorize(groups)
     n_groups = len(uniques)
     draws = np.random.default_rng(seed).integers(0, n_groups, size=(n_bootstrap, n_groups))

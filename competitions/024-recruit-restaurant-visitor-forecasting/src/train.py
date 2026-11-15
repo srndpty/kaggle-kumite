@@ -69,6 +69,13 @@ EXPERIMENTS["E05A"] = replace(
     changed_one_thing="E05 の学習行の予約を、来店日までに入ったすべての予約に変更（起点からの日数は 0）",
     features=(Reservations(train_rows="all"),),
 )
+# レビュー後の追加: E05A は予約の打ち切りと「何日先か」の列（学習行はすべて 0）を同時に変えていた
+EXPERIMENTS["E05B"] = replace(
+    EXPERIMENTS["E05A"],
+    hypothesis="H3c の切り分け: 学習行の予約を打ち切らないことだけで悪化する（何日先かの列は E05 と同じにする）",
+    changed_one_thing="E05A の学習行の「何日先か」を、E05 と同じ疑似の日数に戻す（予約は打ち切らないまま）",
+    features=(Reservations(train_rows="all", train_ahead="pseudo"),),
+)
 EXPERIMENTS["E06"] = replace(
     EXPERIMENTS["E02"],
     hypothesis="H3+4+5: 祝日・店舗別統計量・予約は別の情報源なので、組み合わせると改善がほぼ足し合わさる",

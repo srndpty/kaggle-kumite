@@ -3,7 +3,13 @@ from collections.abc import Callable
 import numpy as np
 import pytest
 
-from kumite.checks import check_label_independence, shift_labels, validate_probabilities
+from kumite.checks import (
+    check_label_independence,
+    perturb_targets,
+    shift_labels,
+    validate_probabilities,
+    validate_regression,
+)
 from kumite.crossfit import FoldOutput, cross_fit
 
 N_CLASSES = 3
@@ -38,6 +44,38 @@ def test_validate_probabilities_rejects_wrong_sum_and_shape() -> None:
         validate_probabilities(_uniform(4) * 0.9, 4, N_CLASSES)
     with pytest.raises(ValueError, match="形状"):
         validate_probabilities(_uniform(4), 5, N_CLASSES)
+
+
+def test_validate_regression_accepts_valid() -> None:
+    validate_regression(np.array([0.0, 1.5, 3.0]), 3, lower=0)
+    validate_regression(np.array([-1.0, 1.5]), 2)
+
+
+@pytest.mark.parametrize(
+    ("pred", "n_rows", "message"),
+    [
+        (np.zeros(0), 0, "0 行"),
+        (np.zeros((3, 1)), 3, "形状"),
+        (np.zeros(2), 3, "形状"),
+        (np.array([0.0, np.nan]), 2, "NaN"),
+        (np.array([0.0, -np.inf]), 2, "NaN"),
+        (np.array([0.0, -0.1]), 2, "下限"),
+    ],
+)
+def test_validate_regression_rejects_invalid(pred: np.ndarray, n_rows: int, message: str) -> None:
+    with pytest.raises(ValueError, match=message):
+        validate_regression(pred, n_rows, lower=0)
+
+
+def test_perturb_targets_changes_only_selected_rows() -> None:
+    y = np.array([0, 5, -3, 0, 100, 2])
+    rows = np.array([True, False, True, False, True, False])
+
+    perturbed = perturb_targets(y, rows)
+
+    assert (perturbed[rows] != y[rows]).all()
+    np.testing.assert_array_equal(perturbed[~rows], y[~rows])
+    assert y.dtype == np.int64  # 元の配列は変えない
 
 
 def test_shift_labels_changes_only_selected_rows() -> None:

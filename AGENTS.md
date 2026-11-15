@@ -29,10 +29,12 @@ Kaggle 100本ノック: 終了済みの賞金付きコンペ100題を解き、�
 - `dev check` — lint + 整形確認 + 型検査 + テスト。CI と同一なので、commit 前に通す
 - `dev format` / `dev lint` / `dev test` / `dev clean`
 - `dev list` / `dev new <番号>` / `dev download <番号>`
+- `dev submit <番号> <ファイル> -m <メッセージ>` / `dev submissions <番号>` / `dev compare <番号> <基準> <run_id...>`
 
 Python は uv で管理する（`uv run ...`、依存追加は `uv add --group <group> ...`）。
-重い ML 依存は dependency group（`tabular` など）に分け、CI は `dev` グループのみで動かす。
-型検査 (pyright strict) の対象は `src/` と `tests/`。`competitions/` は ruff のみ。
+ML 依存は dependency group（`tabular` など）に分ける。既定グループ（`dev` + `tabular`）は CI でも入れる。
+型検査は pyright。`src/` と `tests/` は strict。`competitions/` は ML ライブラリの型情報が不完全なため
+「型が不明」系のルールだけ切っている（`pyproject.toml` の `executionEnvironments`）。型エラーは無視せず、型が付く書き方に直す。
 
 ## 1コンペの進め方
 

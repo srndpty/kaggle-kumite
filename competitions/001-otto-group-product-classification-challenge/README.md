@@ -30,6 +30,12 @@
 
 - [x] P0. 参加・評価環境の確認（Rules 承諾、データ取得、ダミー提出で採点されるか）
 - [x] P1. 問題設定・EDA（予測仮説を3件以上）
+- [x] P2. 検証分割の設計
+- [x] P3. Baseline の固定（seed・fold・指標・前処理）
+- [x] P4. 仮説検証・Ablation（単一要因で3回以上）
+- [x] P5. Late Submission とエラー分析（CV と外部スコアの整合性）
+- [x] P6. 上位解法との照合
+- [ ] P7. 知見の保存（`report.md`）
 
 ## EDA（P1）
 
@@ -119,12 +125,6 @@
 
 - E01 の fold スコアの標準偏差は 0.0076 あり、fold によるばらつきが大きい
 - そのため改善の判断は OOF の差だけでなく、5 fold のうちいくつで改善したかと、同じ fold どうしの差の平均で行う
-- [x] P2. 検証分割の設計
-- [x] P3. Baseline の固定（seed・fold・指標・前処理）
-- [x] P4. 仮説検証・Ablation（単一要因で3回以上）
-- [x] P5. Late Submission とエラー分析（CV と外部スコアの整合性）
-- [ ] P6. 上位解法との照合
-- [ ] P7. 知見の保存（`report.md`）
 
 ## 仮説
 
@@ -134,6 +134,8 @@
 | H2 | 誤差は Class_2・3・4 の取り違えに集中する。クラスごとの logloss に分解すると、この3クラスの寄与が件数比以上に大きい | クラス平均プロファイルの cosine 類似度は 2-3 間で 0.973、2-4 間で 0.932、3-4 間で 0.925 | 一部支持。3クラスで件数 43%・損失 59%。ただし Class_2 自体は件数比以下で、重いのは 3・4。Class_1・7 も重い |
 | H3 | 行単位の集約特徴（行合計・非ゼロ数）を加えると、木モデルの logloss も改善する | 非ゼロ数の平均は Class_5 の 9.4 から Class_8 の 24.3 まで、クラスで大きく異なる | 不支持。E01→E05 で平均 +0.0003、改善は 2/5 fold。ノイズの範囲 |
 | H4 | 木モデルの出力確率は較正がずれており、温度スケーリングなどの較正で logloss が下がる | 評価指標が logloss で、比較実験のテーマが較正のため（EDA 由来ではなく、検証用に追加した仮説） | 単一モデルでは支持、提出（5 モデル平均）では不支持。CV は -0.0025 だが Late は +0.00075（P5 参照） |
+| H5 | 異なるモデルの OOF 予測を 2 段目で統合すると、単一モデルより改善する | P6: 1 位・2 位とも多段のスタッキングが中心 | 支持。E01→E10 で CV 平均 -0.0301（5/5 fold）、Late（Private）-0.0294 |
+| H6 | 各クラスの最近傍までの距離を特徴に加えると、木モデルが改善する | P6: 1 位解法の追加特徴の中心。2 位も kNN を重視 | 支持。E01→E09 で CV 平均 -0.0150（5/5 fold）、Late（Private）-0.0195 |
 
 ## 仮説検証（P4）
 
@@ -145,11 +147,13 @@
 
 | 仮説 | run | 中核コード | 再実行 |
 |---|---|---|---|
-| H1 | E02, E03 | 特徴量 [`features.log1p`](src/features.py#L14)、モデル [`models.logistic_regression`](src/models.py#L57) | `uv run python src/train.py E03` |
-| H1 | E04 | 特徴量 [`features.log1p`](src/features.py#L14)、モデル [`models.lightgbm`](src/models.py#L34) | `uv run python src/train.py E04` |
+| H1 | E02, E03 | 特徴量 [`features.log1p`](src/features.py#L27)、モデル [`models.logistic_regression`](src/models.py#L59) | `uv run python src/train.py E03` |
+| H1 | E04 | 特徴量 [`features.log1p`](src/features.py#L27)、モデル [`models.lightgbm`](src/models.py#L36) | `uv run python src/train.py E04` |
 | H2 | （E01 の分析） | [`analyze.per_class_loss`](src/analyze.py#L17)、[`analyze.confusion`](src/analyze.py#L37) | `uv run python src/analyze.py E01` |
-| H3 | E05 | 特徴量 [`features.row_stats`](src/features.py#L19) | `uv run python src/train.py E05` |
+| H3 | E05 | 特徴量 [`features.row_stats`](src/features.py#L32) | `uv run python src/train.py E05` |
 | H4 | E06 | [`calibrate.apply_temperature` / `fit_temperature`](src/calibrate.py#L24)、クロスフィットのループは [`calibrate.main`](src/calibrate.py#L56) | `uv run python src/calibrate.py E01 E06` |
+| H5 | E07, E08, E10 | 1 段目 [`models.knn`](src/models.py#L76)・[`models.extra_trees`](src/models.py#L89)、2 段目の入力 [`features.stack`](src/features.py#L90) | `uv run python src/train.py E10`（E07・E08 を先に実行） |
+| H6 | E09 | [`features.knn_dist`](src/features.py#L73)（計算本体は `_compute_knn_dist`） | `uv run python src/train.py E09` |
 | P5 | — | [`averaging_check.check_outer_fold`](src/averaging_check.py#L24) | `uv run python src/averaging_check.py` |
 
 `train.py` で同じ run_id を再実行すると、`experiments.jsonl` への二重記録を防ぐためエラーになる。再実行するときは、`experiments.jsonl` から該当する行を消してから実行する。
@@ -241,6 +245,10 @@ for fold in range(N_SPLITS):
 | E04 | E01 + log1p | 0.47393 | | 変化なし |
 | E05 | E01 + row_sum, row_nnz | 0.47419 | | 効果なし |
 | E06 | E01 + 温度スケーリング | 0.47148 | 0.45226 | CV は改善、Late は悪化 |
+| E07 | kNN（k=32、距離重み）、log1p + 標準化 | 0.58269 | | H5 の 1 段目 |
+| E08 | ExtraTrees（300 本）、log1p | 0.59506 | | H5 の 1 段目 |
+| E09 | E01 + kNN 距離特徴 27 列 | 0.45890 | 0.43201 | 改善（CV・Late とも） |
+| E10 | スタッキング（E01・E03・E07・E08 の OOF → LightGBM） | 0.44381 | 0.42209 | 改善（CV・Late とも）、現時点の最良 |
 
 ### CV と Late Submission の差
 
@@ -249,6 +257,8 @@ for fold in range(N_SPLITS):
 | E00 | 1.95041 | 1.94998 | 1.95125 |
 | E01 | 0.47393 | 0.45008 | 0.45151 |
 | E06 | 0.47148 | 0.45104 | 0.45226 |
+| E09 | 0.45890 | 0.42986 | 0.43201 |
+| E10 | 0.44381 | 0.42023 | 0.42209 |
 
 - E00 は CV と Late がほぼ一致する。採点の仕組みとクラス比の前提は CV と同じとみてよい
 - E01 は Late の方が CV より約 0.022 良い。E06 は CV では E01 より良いが、Late では E01 より 0.00075 悪い
@@ -277,3 +287,80 @@ for fold in range(N_SPLITS):
 - OOF は「単一モデルの予測」、提出は「fold モデルの平均」であり、評価しているものが違う。モデル間の比較には OOF を使ってよいが、OOF の絶対値は提出スコアを約 0.02 悲観的に見積もる
 - **較正などの後処理は、提出と同じ形の予測で決め、同じ形で評価しなければならない**。単一モデルの OOF で調整すると、平均予測では逆効果になりうる
 - 今後の後処理は、この入れ子の枠組み（疑似テスト上の平均予測）で評価する
+
+## P6: 上位解法との照合
+
+### 出典と信頼度
+
+- 1 位（Gilberto Titericz・Stanislav Semenov）: 本人の Kaggle フォーラム投稿は直接開けなかった。投稿を転載したブログ（[wenchenli.github.io](https://wenchenli.github.io/2015/05/kaggle-competition-summary)）から読んだ。スコアは Public 0.38055 と記載されており、P0 で取得した Leaderboard の 1 位の値と一致する
+- 2 位（Alexander Guschin）・5 位: Kaggle 公式ブログの転載記事は取得できなかった。85 位チームの発表資料（[SlideShare](https://www.slideshare.net/slideshow/kaggle-otto-challenge-how-we-achieved-85th-out-of-3845-and-what-we/49486013)）の要約と、検索結果の抜粋から読んだ
+- 以下の内容は二次情報に基づく。細部（パラメータなど）は原文と違う可能性がある
+
+### 1 位解法の概要
+
+- 3 段構成。1 段目で約 33 モデルと 8 種類の追加特徴を作り、2 段目で 3 モデル、3 段目で加重平均する
+- 1 段目のモデルは、性質の異なるものを幅広くそろえている
+  - RandomForest、ExtraTrees、ロジスティック回帰、多項ナイーブベイズ、libFM、XGBoost（複数の特徴量の組み合わせ）、NN（Lasagne・H2O、最大 120 回の bagging）
+  - kNN を k = 2〜1024 で 10 本
+  - 変換はモデルごとに使い分けている: log(X+1)、sqrt(X+3/8)、標準化、TF-IDF、X==0 の指標
+- 追加特徴: 各クラスの最近傍までの距離（近傍 1・2・4 件、生・TF-IDF・t-SNE の各空間）、t-SNE（3 次元）、k-means のクラスタ、行の非ゼロ数
+- 2 段目: XGBoost、NN、AdaBoost + ExtraTrees を、1 段目の予測と一部の追加特徴の上で学習する。全データで学習し、それぞれ 250〜600 回 bagging する
+- 3 段目: `0.85 × XGB^0.65 × NN^0.35 + 0.15 × ET`（幾何平均と算術平均の組み合わせ）
+- 1 段目は「常に同じ fold の分け方」で OOF を作っている。2 段目の CV（4 fold）は Leaderboard と非常によく相関した、と書かれている
+- スコア: CV 約 0.3962、Public 0.38055、Private 0.38243
+
+### 2 位・5 位解法の概要
+
+- 2 位: 中心はスタッキング。生データと TF-IDF 変換したデータの 2 系統で、K-fold の OOF からメタ特徴を作る。2 段目は元の特徴とメタ特徴を合わせて学習する。kNN 系の手法は過小評価されている、と述べている
+- 5 位: TF-IDF 変換と、モデルの予測から作った特徴を元の特徴に加え、XGBoost と 2 層 NN をそれぞれ 30 回 bagging して平均
+
+### 自分の取り組みとの差分
+
+| 観点 | 上位解法 | 自分（P4 まで） |
+|---|---|---|
+| モデルの数・種類 | 1 段目だけで約 33 モデル。木・線形・kNN・NN・NB・FM | LightGBM と線形の 2 種類 |
+| 統合方法 | 多段のスタッキング + 加重平均 | なし（単一モデル） |
+| 近傍の情報 | クラス別の最近傍距離を特徴に使う。kNN モデルも多数 | 使っていない |
+| 変換 | log1p、sqrt(X+3/8)、TF-IDF、t-SNE をモデルごとに使い分け | log1p のみ（H1） |
+| bagging | NN は 120〜600 回 | fold 平均（5 モデル）のみ |
+| 共通していた点 | 線形・kNN・NN に log(X+1)、行の非ゼロ数、全モデルで同じ fold | H1、H3、`split_version` の固定 |
+
+- H3（行の非ゼロ数）は単独の LightGBM では効かなかったが、1 位は 2 段目の入力として使っている。単体で効かない特徴でも、統合の段階では意味を持ちうる
+- 上位解法は「1 つのモデルを磨く」より「誤り方の異なるモデルを多数そろえて統合する」ことに労力を割いている。特徴量の意味が伏せられていて、ドメイン知識で特徴を作れないコンペならではの戦略と考える
+
+### 再現実験（H5・H6）
+
+差分のうち効果が大きそうな 2 点を、変更を 1 つに絞って再現した。
+
+| run | 内容 | OOF | E01 との差（fold ごと） | 平均 | 改善 fold |
+|---|---|---:|---|---:|---:|
+| E07 | kNN（k=32、距離重み、log1p + 標準化） | 0.58269 | +0.101 〜 +0.124 | +0.1088 | 0/5 |
+| E08 | ExtraTrees（300 本、log1p） | 0.59506 | +0.114 〜 +0.132 | +0.1211 | 0/5 |
+| E09 | E01 + kNN 距離特徴 27 列（H6） | 0.45890 | -0.0173 -0.0139 -0.0084 -0.0172 -0.0184 | -0.0150 | 5/5 |
+| E10 | スタッキング: E01・E03・E07・E08 の OOF 36 列 → LightGBM（H5） | 0.44381 | -0.0337 -0.0319 -0.0230 -0.0306 -0.0314 | -0.0301 | 5/5 |
+
+- **H6（kNN 距離特徴）**: 5 fold すべてで改善し、平均 -0.0150。best iteration は約 480 から約 200 に減った。距離特徴が強い手がかりになり、少ない木で済むようになったと考えられる
+  - 実装は [`features.knn_dist`](src/features.py)。距離は log1p 空間で測り、各クラスについて近傍 1・2・4 件までの距離の和をとる（9 クラス × 3 = 27 列）
+  - train 側は、自分の fold 以外を参照集合にして作る（自分自身や同じ fold のラベルは使わない）
+  - test 側は、各 fold の参照集合（train の 80%）で計算して平均する。参照集合の大きさを train 側とそろえ、test だけ近傍が近く出るずれを防ぐため
+- **H5（スタッキング）**: 単体では E01 より大幅に悪い kNN（E07）や ExtraTrees（E08）を加えて統合すると、5 fold すべてで改善し、平均 -0.0301 となった。E09 と比べても -0.0151（5/5 fold）
+  - 単体の精度が低くても、誤り方が違うモデルは統合に役立つ。上位解法が多様なモデルをそろえていた理由を確認できた
+  - 実装は [`features.stack`](src/features.py)。1 段目の OOF 予測をそのまま 2 段目の特徴にし、2 段目は E01 と同じ LightGBM・同じ分割で学習する
+
+### 注意点と Late での確認
+
+CV 上は大きく改善したが、どちらにも OOF が楽観側に偏る要因があったため、Late で確かめた。
+
+- E09: 学習行の距離特徴を作るときの参照集合に、検証 fold の行（とそのラベル）が含まれる。検証行自身の特徴には自分のラベルは入らないが、間接的なリークになりうる
+- E10: 2 段目の学習行のメタ特徴は、検証 fold の行も含めて学習した 1 段目モデルの予測である（スタッキングで一般的な軽いリーク）
+- E10: 2 段目は「単一モデルの OOF」で学習するが、テストでは「fold 平均の予測」を入力にする。P5 で、この形の違いが温度スケーリングを逆効果にしたのと同じ構造で、効果が目減りする可能性がある
+
+| run | OOF | Public | Private | E01 との差（CV） | E01 との差（Private） | Public 順位相当 |
+|---|---:|---:|---:|---:|---:|---:|
+| E01 | 0.47393 | 0.45008 | 0.45151 | — | — | 709 / 3,509（上位 20.2%） |
+| E09 | 0.45890 | 0.42986 | 0.43201 | -0.0150 | -0.0195 | 360 / 3,509（上位 10.3%） |
+| E10 | 0.44381 | 0.42023 | 0.42209 | -0.0301 | -0.0294 | 199 / 3,509（上位 5.7%） |
+
+- どちらも、CV での改善幅が Late でもほぼそのまま（E09 はむしろ大きく）残った。上に挙げたリークや入力の形のずれによる目減りは、少なくともこの規模では問題にならなかった
+- E06（温度スケーリング）と違い、E10 の 2 段目は fold 平均の入力でも崩れなかった。温度スケーリングは「確率の鋭さ」そのものを調整するため平均によるならし効果と打ち消し合ったが、スタッキングの 2 段目は主に「どのモデルをどのクラスで信じるか」を学ぶため、入力が多少ならされても影響が小さかったと考える（未検証の解釈）
+- 順位は Late Submission での参考値で、正式な順位ではない

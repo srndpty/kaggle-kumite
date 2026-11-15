@@ -12,7 +12,7 @@ import pandas as pd
 from calibrate import apply_temperature, fit_temperature
 from cv import N_SPLITS, SEED, make_folds
 from dataset import CLASSES, TARGET, encode_target, load_train
-from features import FEATURE_SETS
+from features import raw
 from models import lightgbm
 from runs import multi_logloss
 from sklearn.model_selection import StratifiedKFold
@@ -51,7 +51,7 @@ def check_outer_fold(x: pd.DataFrame, y: pd.Series, hold: np.ndarray) -> dict[st
 
 def main() -> None:
     train = load_train()
-    x = FEATURE_SETS["raw"](train)
+    x = raw(train)
     y = encode_target(train[TARGET])
     folds = make_folds(y)
     rows = []

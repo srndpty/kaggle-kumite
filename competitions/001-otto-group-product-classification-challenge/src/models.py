@@ -8,7 +8,9 @@ import lightgbm as lgb
 import numpy as np
 import pandas as pd
 from dataset import CLASSES
+from sklearn.ensemble import ExtraTreesClassifier
 from sklearn.linear_model import LogisticRegression
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
@@ -66,8 +68,42 @@ def logistic_regression(x_tr, y_tr, x_va, y_va, x_te, params) -> FoldResult:
     )
 
 
+def _mix_uniform(pred: np.ndarray, weight: float) -> np.ndarray:
+    """確率 0 を避けるため一様分布を少し混ぜる。kNN・木の投票確率は 0 になりやすく、logloss が発散する。"""
+    return (1 - weight) * pred + weight / len(CLASSES)
+
+
+def knn(x_tr, y_tr, x_va, y_va, x_te, params) -> FoldResult:
+    """標準化 + 距離重み付き kNN。標準化は学習 fold だけで fit する。"""
+    model = make_pipeline(
+        StandardScaler(),
+        KNeighborsClassifier(n_neighbors=params["n_neighbors"], weights="distance", n_jobs=-1),
+    )
+    model.fit(x_tr, y_tr)
+    w = params["uniform_mix"]
+    return FoldResult(
+        _mix_uniform(model.predict_proba(x_va), w), _mix_uniform(model.predict_proba(x_te), w), {}
+    )
+
+
+def extra_trees(x_tr, y_tr, x_va, y_va, x_te, params) -> FoldResult:
+    model = ExtraTreesClassifier(
+        n_estimators=params["n_estimators"], n_jobs=-1, random_state=params["seed"]
+    )
+    model.fit(x_tr, y_tr)
+    w = params["uniform_mix"]
+    # 多出力分類ではリストを返しうる型定義のため、ndarray に固定する（今回は単一出力）。
+    return FoldResult(
+        _mix_uniform(np.asarray(model.predict_proba(x_va)), w),
+        _mix_uniform(np.asarray(model.predict_proba(x_te)), w),
+        {},
+    )
+
+
 MODELS: dict[str, FitPredict] = {
     "prior": prior,
     "lightgbm": lightgbm,
     "logistic_regression": logistic_regression,
+    "knn": knn,
+    "extra_trees": extra_trees,
 }

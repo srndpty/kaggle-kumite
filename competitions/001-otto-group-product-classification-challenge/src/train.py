@@ -62,6 +62,35 @@ EXPERIMENTS: dict[str, Experiment] = {
         features="row_stats",
         params=LGBM_BASE,
     ),
+    # --- P6: 上位解法の着眼点の再現 ---
+    "E07": Experiment(
+        model="knn",
+        hypothesis="H5 の 1 段目: 近傍法は木・線形と異なる誤り方をする（2 位解法は kNN を重視）",
+        changed_one_thing="E03 からモデルを kNN（k=32、距離重み）に変更",
+        features="log1p",
+        params={"n_neighbors": 32, "uniform_mix": 0.01},
+    ),
+    "E08": Experiment(
+        model="extra_trees",
+        hypothesis="H5 の 1 段目: ランダムな分割の木は GBDT と異なる誤り方をする（1 位解法の 1 段目に含まれる）",
+        changed_one_thing="E03 からモデルを ExtraTrees（300 本）に変更",
+        features="log1p",
+        params={"n_estimators": 300, "seed": SEED, "uniform_mix": 0.01},
+    ),
+    "E09": Experiment(
+        model="lightgbm",
+        hypothesis="H6: 各クラスの最近傍までの距離を加えると木モデルが改善する（1 位解法の特徴量）",
+        changed_one_thing="E01 に kNN 距離特徴 27 列（9 クラス × 近傍 1・2・4 件の距離和）を追加",
+        features="knn_dist",
+        params=LGBM_BASE,
+    ),
+    "E10": Experiment(
+        model="lightgbm",
+        hypothesis="H5: 異なるモデルの OOF 予測を 2 段目で統合すると単一モデルより改善する",
+        changed_one_thing="E01 の入力を、E01・E03・E07・E08 の OOF 予測確率 36 列に変更（スタッキング）",
+        features="stack_v1",
+        params=LGBM_BASE,
+    ),
 }
 
 
@@ -70,7 +99,7 @@ def run(run_id: str) -> None:
     fit_predict = MODELS[exp.model]
     make_features = FEATURE_SETS[exp.features]
     train, test = load_train(), load_test()
-    x, x_te = make_features(train), make_features(test)
+    x, x_te = make_features(train, test)
     y = encode_target(train[TARGET])
     folds = make_folds(y)
 

@@ -10,6 +10,7 @@ from dataset import CLASSES
 from sklearn.ensemble import ExtraTreesClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.neural_network import MLPClassifier
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
@@ -94,10 +95,33 @@ def extra_trees(x_tr, y_tr, x_va, y_va, x_te, params) -> FoldOutput:
     )
 
 
+def mlp(x_tr, y_tr, x_va, y_va, x_te, params) -> FoldOutput:
+    """標準化 + 全結合 NN。early stopping は学習 fold 内の 10% で行い、検証 fold のラベルは使わない。"""
+    classifier = MLPClassifier(
+        hidden_layer_sizes=params["hidden_layer_sizes"],
+        alpha=params["alpha"],
+        batch_size=params["batch_size"],
+        learning_rate_init=params["learning_rate_init"],
+        max_iter=params["max_iter"],
+        early_stopping=True,
+        validation_fraction=0.1,
+        n_iter_no_change=params["n_iter_no_change"],
+        random_state=params["seed"],
+    )
+    model = make_pipeline(StandardScaler(), classifier)
+    model.fit(x_tr, y_tr)
+    return FoldOutput(
+        model.predict_proba(x_va),
+        model.predict_proba(x_te),
+        {"n_iter": classifier.n_iter_},
+    )
+
+
 MODELS: dict[str, FitPredict] = {
     "prior": prior,
     "lightgbm": lightgbm,
     "logistic_regression": logistic_regression,
     "knn": knn,
     "extra_trees": extra_trees,
+    "mlp": mlp,
 }

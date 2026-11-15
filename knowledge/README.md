@@ -36,7 +36,7 @@
 |---|---|---|
 | [K001](K001-oof-vs-fold-average.md) | 仮説 | OOF（単一モデル）と提出（fold 平均）は別物。Otto では平均で約 -0.02 |
 | [K002](K002-calibrate-on-submission-form.md) | 仮説 | 較正は提出と同じ形の予測で決める。単一モデルの OOF で決めると平均予測には効きすぎる |
-| [K003](K003-monotone-transform-by-model.md) | 仮説 | log1p などの単調変換は線形モデルには効くが、木モデルには効かない |
+| [K003](K003-monotone-transform-by-model.md) | 条件付き | log1p は線形モデルには効くが、木モデルと標準化した MLP には効かなかった |
 | [K004](K004-cross-fold-label-leak.md) | 仮説 | 全行で作った OOF 特徴を後段の CV に使うと、外側の検証ラベルが学習側に入る |
-| [K005](K005-stacking-diversity.md) | 仮説 | 単体で弱くても誤り方の違うモデルはスタッキングで効く |
+| [K005](K005-stacking-diversity.md) | 仮説 | 単体で弱くても誤り方の違うモデル（kNN・ExtraTrees・MLP）はスタッキングで効く |
 | [K006](K006-class-wise-knn-distance.md) | 仮説 | クラス別の最近傍距離は、意味の伏せられた特徴でも強い手がかりになる |

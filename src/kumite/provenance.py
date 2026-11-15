@@ -38,16 +38,15 @@ def array_sha256(array: np.ndarray) -> str:
 def code_version(repo_root: Path) -> str:
     """HEAD のコミット。未コミットの変更があれば、その差分のハッシュを `+` で付ける。"""
 
-    def git(*args: str) -> str:
-        return subprocess.run(
-            ["git", *args], cwd=repo_root, check=True, capture_output=True, text=True
-        ).stdout
+    def git(*args: str) -> bytes:
+        # 差分には日本語などが含まれるので、ロケールの文字コードで復号せずバイト列のまま扱う。
+        return subprocess.run(["git", *args], cwd=repo_root, check=True, capture_output=True).stdout
 
-    head = git("rev-parse", "HEAD").strip()
+    head = git("rev-parse", "HEAD").decode().strip()
     diff = git("diff", "HEAD")
     if not diff:
         return head
-    return f"{head}+{hashlib.sha256(diff.encode()).hexdigest()[:12]}"
+    return f"{head}+{hashlib.sha256(diff).hexdigest()[:12]}"
 
 
 def peak_memory_mb() -> float:

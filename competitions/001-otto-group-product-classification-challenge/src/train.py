@@ -20,6 +20,15 @@ LGBM_BASE = {
     "early_stopping": 100,
 }
 LOGREG_BASE = {"C": 1.0, "max_iter": 2000}
+MLP_BASE = {
+    "hidden_layer_sizes": (256, 128),
+    "alpha": 1e-4,
+    "batch_size": 256,
+    "learning_rate_init": 1e-3,
+    "max_iter": 200,
+    "n_iter_no_change": 10,
+    "seed": SEED,
+}
 
 EXPERIMENTS: dict[str, Experiment] = {
     "E00": Experiment(
@@ -86,12 +95,42 @@ EXPERIMENTS["E11"] = Experiment(
     supervised=KnnDistance(),
     params=LGBM_BASE,
 )
+EXPERIMENTS["E13"] = Experiment(
+    model="lightgbm",
+    hypothesis="E11 が E09 より良かった理由の切り分け: 検証・テスト行の距離を参照集合 4 つの平均にしたことが効いている",
+    changed_one_thing="E11 の検証・テスト行の距離特徴を、内側の参照集合 1 つ（fold 0 以外）だけで計算",
+    supervised=KnnDistance(average_query=False),
+    params=LGBM_BASE,
+)
+EXPERIMENTS["E14"] = Experiment(
+    model="mlp",
+    hypothesis="NN の基準: 標準化した生カウントの 2 層 MLP は、線形（E02）より大きく良く、LightGBM（E01）に近づく",
+    changed_one_thing="E02 からモデルを MLP（256-128、ReLU、Adam、学習 fold 内 10% で early stopping）に変更",
+    params=MLP_BASE,
+)
+EXPERIMENTS["E15"] = Experiment(
+    model="mlp",
+    hypothesis="H1 の NN 版: log1p で裾を潰すと MLP の logloss が改善する（線形より効果が大きい）",
+    changed_one_thing="E14 の特徴量を log1p 変換",
+    transform="log1p",
+    params=MLP_BASE,
+)
 EXPERIMENTS["E12"] = Experiment(
     model="lightgbm",
     hypothesis="H5 の再測定: 1 段目を外側 fold ごとに学習し直す nested stacking でも、単一モデルより改善する",
     changed_one_thing="E01 の入力を、E01・E03・E07・E08 を外側学習行の内側 4 fold で学習した予測確率 36 列に変更",
     transform="none",
     supervised=Stacking(tuple((rid, EXPERIMENTS[rid]) for rid in ("E01", "E03", "E07", "E08"))),
+    params=LGBM_BASE,
+)
+EXPERIMENTS["E16"] = Experiment(
+    model="lightgbm",
+    hypothesis="NN と GBDT の相補性: MLP を 1 段目に加えると nested stacking がさらに改善する",
+    changed_one_thing="E12 の 1 段目に E15（log1p の MLP）を追加（36 列 → 45 列）",
+    transform="none",
+    supervised=Stacking(
+        tuple((rid, EXPERIMENTS[rid]) for rid in ("E01", "E03", "E07", "E08", "E15"))
+    ),
     params=LGBM_BASE,
 )
 

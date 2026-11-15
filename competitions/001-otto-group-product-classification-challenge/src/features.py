@@ -70,10 +70,17 @@ class KnnDistance:
     距離は log1p 空間のユークリッド距離（生カウントのままだと裾の大きい値が距離を支配するため）。
     query 側も内側の各参照集合（学習行の 3/4）で計算して平均し、参照集合の大きさを学習行の特徴と
     そろえる（query だけ近傍が近く出るずれを防ぐ）。
+
+    average_query=False にすると、query 側は内側 fold 0 の参照集合 1 つだけで計算する（E13 の切り分け用:
+    学習行と同じく「参照集合 1 つ」の特徴になる）。
     """
 
     neighbors: tuple[int, ...] = (1, 2, 4)
-    name: str = "knn_dist"
+    average_query: bool = True
+
+    @property
+    def name(self) -> str:
+        return "knn_dist" if self.average_query else "knn_dist_single_ref"
 
     @property
     def columns(self) -> list[str]:
@@ -98,5 +105,9 @@ class KnnDistance:
                 self._distances(ref, ref_y, space[va]), self._distances(ref, ref_y, space_q)
             )
 
-        result = cross_fit(make_inner_folds(y), fit_fold)
-        return result.oof, result.query
+        folds = make_inner_folds(y)
+        result = cross_fit(folds, fit_fold)
+        if self.average_query:
+            return result.oof, result.query
+        ref = folds != 0
+        return result.oof, self._distances(space[ref], y_arr[ref], space_q)

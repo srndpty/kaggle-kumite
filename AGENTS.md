@@ -30,7 +30,7 @@ Kaggle 100本ノック: 終了済みの賞金付きコンペ100題を解き、�
 - `dev check` — lint + 整形確認 + 型検査 + テスト。CI と同一なので、commit 前に通す
 - `dev format` / `dev lint` / `dev test` / `dev clean`
 - `dev list` / `dev new <番号>` / `dev download <番号>`
-- `dev submit <番号> <ファイル> -m <メッセージ>` / `dev submissions <番号>` / `dev compare <番号> <基準> <run_id...>`
+- `dev submit <番号> <ファイル> -m <メッセージ>` / `dev submissions <番号>` / `dev compare <番号> <基準> <run_id...>` / `dev orphans <番号> [--delete]`
 
 Python は uv で管理する（`uv run ...`、依存追加は `uv add --group <group> ...`）。
 ML 依存は dependency group（`tabular` など）に分ける。既定グループ（`dev` + `tabular`）は CI でも入れる。
@@ -72,7 +72,7 @@ Survey でも、リーク対策・正しい検証分割・Baseline・評価指�
 - 変更は一度に1つだけ。組み合わせ効果は片方ずつの実験と比較して判断する
 - 同じ CV 分割でのペア比較を原則とする。分割を変えたら `split_version` を変える
 - seed・fold・評価指標・前処理を固定し、再現できる状態で比較する
-- 全ての実験を `experiments.jsonl` に記録する。保存は `kumite.runs.RunStore` を通す（データ・分割・コード・成果物のハッシュが残る）
+- 全ての実験を `experiments.jsonl` に記録する。保存は `kumite.runs.RunStore` を通す（`reserve` で run_id を予約してから学習し、その中で `publish`。データ・分割・コード・成果物のハッシュが残る）
 - 記録は追記のみ。計測値は書き換えない。やり直すときは別の run_id（例: `E01-r2`）にする。後から書き足してよいのは `late_score`・`conclusion`・`next_experiment` だけ
 - ラベルを使う特徴量（target encoding・近傍特徴・スタッキングなど）は、外側 fold の学習行とそのラベルだけから作る（内側 fold で OOF にする）。全行で作った OOF を後段の CV に使わない。`kumite.checks.check_label_independence` で、外側の検証ラベルを変えても入力が変わらないことを確かめる
 - 予測は保存・提出の前に検査する（形状・NaN/Inf・確率の範囲と和）

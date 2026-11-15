@@ -54,6 +54,7 @@ $commands = [ordered]@{
     download = @{ Description = "コンペのデータを取得: dev download <番号>"; Action = { Invoke-Kumite download @rest } }
     submit   = @{ Description = "提出: dev submit <番号> <ファイル> -m <メッセージ>"; Action = { Invoke-Kumite submit @rest } }
     compare  = @{ Description = "同じ fold どうしで比較: dev compare <番号> <基準> <run_id...>"; Action = { Invoke-Kumite compare @rest } }
+    orphans  = @{ Description = "ログにない run の残骸: dev orphans <番号> [--delete]"; Action = { Invoke-Kumite orphans @rest } }
     submissions = @{ Description = "提出履歴とスコア: dev submissions <番号>"; Action = { Invoke-Kumite submissions @rest } }
 }
 

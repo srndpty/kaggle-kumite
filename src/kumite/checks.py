@@ -9,12 +9,14 @@ def validate_probabilities(
     pred: np.ndarray, n_rows: int, n_classes: int, atol: float = 1e-6
 ) -> None:
     """多クラス確率として保存・提出してよいかを確かめる。不正なら ValueError。"""
+    if n_rows == 0:
+        raise ValueError("予測が 0 行です")
     if pred.shape != (n_rows, n_classes):
         raise ValueError(f"形状が {pred.shape} です（期待値 {(n_rows, n_classes)}）")
     if not np.isfinite(pred).all():
         raise ValueError("NaN または Inf を含みます")
-    if (pred < 0).any():
-        raise ValueError(f"負の確率を含みます（最小 {pred.min()}）")
+    if (pred < 0).any() or (pred > 1).any():
+        raise ValueError(f"確率が [0, 1] の範囲外です（最小 {pred.min()}、最大 {pred.max()}）")
     max_dev = float(np.abs(pred.sum(axis=1) - 1).max())
     if max_dev > atol:
         raise ValueError(f"確率の和が 1 からずれています（最大 {max_dev:.2e}）")

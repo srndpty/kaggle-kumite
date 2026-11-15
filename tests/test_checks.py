@@ -1,3 +1,5 @@
+from collections.abc import Callable
+
 import numpy as np
 import pytest
 
@@ -17,13 +19,18 @@ def test_validate_probabilities_accepts_valid() -> None:
 
 @pytest.mark.parametrize(
     ("value", "message"),
-    [(np.nan, "NaN"), (np.inf, "NaN"), (-0.1, "負")],
+    [(np.nan, "NaN"), (np.inf, "NaN"), (-0.1, "範囲外"), (1.0000001, "範囲外")],
 )
 def test_validate_probabilities_rejects_invalid_values(value: float, message: str) -> None:
     pred = _uniform(4)
     pred[1, 0] = value
     with pytest.raises(ValueError, match=message):
         validate_probabilities(pred, 4, N_CLASSES)
+
+
+def test_validate_probabilities_rejects_empty() -> None:
+    with pytest.raises(ValueError, match="0 行"):
+        validate_probabilities(np.zeros((0, N_CLASSES)), 0, N_CLASSES)
 
 
 def test_validate_probabilities_rejects_wrong_sum_and_shape() -> None:
@@ -96,6 +103,56 @@ def test_cross_fit_averages_query_over_folds() -> None:
     assert len(result.infos) == 2
 
 
-def test_cross_fit_rejects_non_contiguous_folds() -> None:
-    with pytest.raises(ValueError, match="連番"):
-        cross_fit(np.array([0, 2]), lambda tr, va: FoldOutput(np.zeros(1), np.zeros(1)))
+@pytest.mark.parametrize(
+    "folds",
+    [np.array([0, 2]), np.array([0, 0]), np.array([], dtype=int), np.zeros((2, 2), dtype=int)],
+)
+def test_cross_fit_rejects_invalid_folds(folds: np.ndarray) -> None:
+    with pytest.raises(ValueError, match=r"folds|fold 番号"):
+        cross_fit(folds, lambda tr, va: FoldOutput(np.zeros(len(va)), np.zeros(1)))
+
+
+def test_cross_fit_rejects_float_folds() -> None:
+    with pytest.raises(ValueError, match="整数"):
+        cross_fit(np.array([0.0, 1.0]), lambda tr, va: FoldOutput(np.zeros(1), np.zeros(1)))
+
+
+FOLDS = np.array([0, 1, 0, 1])
+
+
+def _one_valid_row(tr: np.ndarray, va: np.ndarray) -> FoldOutput:
+    """valid が 1 行だけ（ブロードキャストで黙って通りうる）。"""
+    return FoldOutput(np.zeros((1, 2)), np.zeros(1))
+
+
+def _valid_width_varies(tr: np.ndarray, va: np.ndarray) -> FoldOutput:
+    return FoldOutput(np.zeros((len(va), 2 + int(va[0]))), np.zeros(1))
+
+
+def _query_shape_varies(tr: np.ndarray, va: np.ndarray) -> FoldOutput:
+    return FoldOutput(np.zeros(len(va)), np.zeros(1 + int(va[0])))
+
+
+def _nan_valid(tr: np.ndarray, va: np.ndarray) -> FoldOutput:
+    return FoldOutput(np.full(len(va), np.nan), np.zeros(1))
+
+
+def _inf_query(tr: np.ndarray, va: np.ndarray) -> FoldOutput:
+    return FoldOutput(np.zeros(len(va)), np.array([np.inf]))
+
+
+@pytest.mark.parametrize(
+    ("fit_fold", "message"),
+    [
+        (_one_valid_row, "行数"),
+        (_valid_width_varies, "valid の形"),
+        (_query_shape_varies, "query の形"),
+        (_nan_valid, "NaN"),
+        (_inf_query, "NaN"),
+    ],
+)
+def test_cross_fit_rejects_inconsistent_outputs(
+    fit_fold: Callable[[np.ndarray, np.ndarray], FoldOutput], message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        cross_fit(FOLDS, fit_fold)

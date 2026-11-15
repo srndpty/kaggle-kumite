@@ -25,8 +25,10 @@ def check_outer_fold(x: pd.DataFrame, y: pd.Series, hold: np.ndarray) -> dict[st
     hold_preds = []
     inner = make_inner_folds(y_in)
     for k in range(inner.max() + 1):
-        tr, va = inner != k, inner == k
-        res = lightgbm(x_in[tr], y_in[tr], x_in[va], y_in[va], x_hold, LGBM_BASE)
+        tr, va = np.flatnonzero(inner != k), np.flatnonzero(inner == k)
+        res = lightgbm(
+            x_in.iloc[tr], y_in.iloc[tr], x_in.iloc[va], y_in.iloc[va], x_hold, LGBM_BASE
+        )
         inner_oof[va] = res.valid
         hold_preds.append(res.query)
     avg = np.mean(hold_preds, axis=0)

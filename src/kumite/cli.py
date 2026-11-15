@@ -9,6 +9,7 @@ from kumite.catalog import find_competition, load_catalog
 from kumite.experiments import LOG_FILE_NAME, compare_runs, find_record, read_records
 from kumite.kaggle_data import download_data, show_submissions, submit
 from kumite.paths import CATALOG_CSV, COMPETITIONS_DIR, TEMPLATE_DIR
+from kumite.runs import RunStore
 from kumite.scaffold import create_competition_dir
 
 
@@ -75,6 +76,19 @@ def _compare(number: int, base_run_id: str, run_ids: list[str]) -> int:
     return 0
 
 
+def _orphans(number: int, delete: bool) -> int:
+    competition = find_competition(load_catalog(CATALOG_CSV), number)
+    store = RunStore(COMPETITIONS_DIR / competition.dir_name)
+    found = store.discard_orphans() if delete else store.orphans()
+    if not found:
+        print("ログにない run ディレクトリ・一時ディレクトリはありません")
+        return 0
+    print("削除しました:" if delete else "ログにない残骸（--delete で削除）:")
+    for path in found:
+        print(f"  {path}")
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="kumite", description="Kaggle 100本ノックの補助コマンド")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -89,6 +103,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     submit_parser.add_argument("number", type=int, help="カタログ番号")
     submit_parser.add_argument("file", type=Path, help="提出ファイル")
     submit_parser.add_argument("-m", "--message", required=True, help="提出メッセージ")
+    orphans_parser = sub.add_parser("orphans", help="ログにない run の残骸を一覧・削除")
+    orphans_parser.add_argument("number", type=int, help="カタログ番号")
+    orphans_parser.add_argument("--delete", action="store_true", help="一覧した残骸を削除する")
     compare_parser = sub.add_parser("compare", help="実験を同じ fold どうしで比較")
     compare_parser.add_argument("number", type=int, help="カタログ番号")
     compare_parser.add_argument("base", help="基準の run_id")
@@ -106,6 +123,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _download(number)
         case "submissions":
             return _submissions(number)
+        case "orphans":
+            delete: bool = args.delete
+            return _orphans(number, delete)
         case "compare":
             base_run_id: str = args.base
             run_ids: list[str] = args.run_ids

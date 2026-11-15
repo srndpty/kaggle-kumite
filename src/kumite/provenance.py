@@ -36,17 +36,24 @@ def array_sha256(array: np.ndarray) -> str:
 
 
 def code_version(repo_root: Path) -> str:
-    """HEAD のコミット。未コミットの変更があれば、その差分のハッシュを `+` で付ける。"""
+    """HEAD のコミット。未コミットの変更があれば、その内容のハッシュを `+` で付ける。
+
+    変更には、追跡済みファイルの差分と、未追跡ファイル（.gitignore で除外したデータ・出力・
+    仮想環境などは含まない）の名前と中身の両方を含める。
+    """
 
     def git(*args: str) -> bytes:
         # 差分には日本語などが含まれるので、ロケールの文字コードで復号せずバイト列のまま扱う。
         return subprocess.run(["git", *args], cwd=repo_root, check=True, capture_output=True).stdout
 
     head = git("rev-parse", "HEAD").decode().strip()
-    diff = git("diff", "HEAD")
-    if not diff:
+    digest = hashlib.sha256(git("diff", "HEAD", "--binary"))
+    untracked = sorted(git("ls-files", "--others", "--exclude-standard", "-z").split(b"\0"))
+    for name in filter(None, untracked):
+        digest.update(b"\0untracked:" + name + b"\0" + (repo_root / name.decode()).read_bytes())
+    if digest.digest() == hashlib.sha256().digest():  # 差分も未追跡ファイルもない
         return head
-    return f"{head}+{hashlib.sha256(diff).hexdigest()[:12]}"
+    return f"{head}+{digest.hexdigest()[:12]}"
 
 
 def peak_memory_mb() -> float:

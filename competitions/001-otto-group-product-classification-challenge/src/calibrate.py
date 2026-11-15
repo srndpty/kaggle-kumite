@@ -47,8 +47,11 @@ def main() -> None:
     args = parser.parse_args()
     base_run_id: str = args.base_run_id
     run_id: str = args.run_id
-    STORE.ensure_new(run_id)
+    with STORE.reserve(run_id):
+        calibrate(base_run_id, run_id)
 
+
+def calibrate(base_run_id: str, run_id: str) -> None:
     y = encode_target(load_train()[TARGET])
     folds = make_folds(y)
     oof, test_pred = load_predictions(base_run_id)

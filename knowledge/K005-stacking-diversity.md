@@ -32,4 +32,4 @@
 | コンペ | run | 結果 |
 |---|---|---|
 | #001 Otto | E10（旧）・E12（nested） | E01 比 -0.0301（旧）、-0.0329（nested）。旧 E10 は Late（Private）-0.0294 |
-| #001 Otto | E12→E16 | MLP 追加で -0.0036（5/5 fold） |
+| #001 Otto | E12→E16 | MLP 追加で CV -0.0036（5/5 fold）、Late（Private）-0.0024 |

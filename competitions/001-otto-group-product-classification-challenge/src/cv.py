@@ -10,17 +10,27 @@ from dataset import CLASSES, TARGET, encode_target, load_train
 from sklearn.model_selection import StratifiedKFold
 
 N_SPLITS = 5
+N_INNER_SPLITS = 4
 SEED = 42
 SPLIT_VERSION = f"skf{N_SPLITS}-seed{SEED}"
 
 
-def make_folds(y: pd.Series) -> np.ndarray:
-    """各行の検証 fold 番号 (0..N_SPLITS-1) を返す。train は class 順に並ぶので shuffle 必須。"""
+def _stratified_folds(y: pd.Series, n_splits: int) -> np.ndarray:
     folds = np.full(len(y), -1, dtype=np.int8)
-    skf = StratifiedKFold(n_splits=N_SPLITS, shuffle=True, random_state=SEED)
+    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=SEED)
     for fold, (_, valid_idx) in enumerate(skf.split(np.zeros(len(y)), y)):
         folds[valid_idx] = fold
     return folds
+
+
+def make_folds(y: pd.Series) -> np.ndarray:
+    """各行の検証 fold 番号 (0..N_SPLITS-1) を返す。train は class 順に並ぶので shuffle 必須。"""
+    return _stratified_folds(y, N_SPLITS)
+
+
+def make_inner_folds(y: pd.Series) -> np.ndarray:
+    """外側 fold の学習行だけで作る内側の分割。ラベルを使う特徴量を学習行の中で OOF にするために使う。"""
+    return _stratified_folds(y, N_INNER_SPLITS)
 
 
 def main() -> None:

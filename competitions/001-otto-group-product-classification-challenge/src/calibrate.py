@@ -13,9 +13,11 @@ from typing import cast
 import numpy as np
 from cv import N_SPLITS, make_folds
 from dataset import TARGET, encode_target, load_test, load_train
-from runs import Experiment, load_predictions, multi_logloss, save_run
+from pipeline import STORE, Experiment, load_predictions, multi_logloss, save_run
 from scipy.optimize import OptimizeResult, minimize_scalar
 from scipy.special import softmax
+
+from kumite.crossfit import CrossFitResult
 
 EPS = 1e-15
 T_BOUNDS = (0.2, 5.0)
@@ -45,6 +47,7 @@ def main() -> None:
     args = parser.parse_args()
     base_run_id: str = args.base_run_id
     run_id: str = args.run_id
+    STORE.ensure_new(run_id)
 
     y = encode_target(load_train()[TARGET])
     folds = make_folds(y)
@@ -68,17 +71,9 @@ def main() -> None:
         changed_one_thing=f"{base_run_id} の予測に温度スケーリングを適用（T はクロスフィット）",
         params={"base_run_id": base_run_id, "temperature_for_test": round(t_all, 4)},
     )
-    save_run(
-        run_id,
-        exp,
-        y,
-        folds,
-        calibrated,
-        apply_temperature(test_pred, t_all),
-        load_test()["id"],
-        runtime,
-        fold_infos,
-    )
+    result = CrossFitResult(calibrated, apply_temperature(test_pred, t_all), fold_infos)
+    inputs = STORE.input_hashes(base_run_id, "oof.npy", "test.npy")
+    save_run(run_id, exp, y, folds, result, load_test()["id"], runtime, inputs)
 
 
 if __name__ == "__main__":

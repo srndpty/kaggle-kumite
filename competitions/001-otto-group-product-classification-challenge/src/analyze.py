@@ -8,7 +8,7 @@ import argparse
 import numpy as np
 import pandas as pd
 from dataset import CLASSES, TARGET, encode_target, load_train
-from runs import load_predictions
+from pipeline import load_predictions
 
 EPS = 1e-15
 N_BINS = 10

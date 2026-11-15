@@ -58,16 +58,20 @@ def _compare(number: int, base_run_id: str, run_ids: list[str]) -> int:
     competition = find_competition(load_catalog(CATALOG_CSV), number)
     records = read_records(COMPETITIONS_DIR / competition.dir_name / LOG_FILE_NAME)
     base = find_record(records, base_run_id)
-    print(f"基準 {base.run_id}: OOF {base.oof_score}  folds {base.fold_scores}")
-    print("差は (実験 - 基準)。fold ごとの差・平均・基準より低い/高い fold 数")
+    direction = "大きいほど良い" if base.greater_is_better else "小さいほど良い"
+    folds = " ".join(f"{s:.5f}" for s in base.fold_scores)
+    print(f"指標 {base.metric}（{direction}）")
+    print(f"基準 {base.run_id}: OOF {base.oof_score:.5f}  folds [{folds}]")
+    print("差は (実験 - 基準)。fold ごとの差・平均・改善/悪化した fold 数")
     for run_id in run_ids:
         other = find_record(records, run_id)
         c = compare_runs(base, other)
         diffs = " ".join(f"{d:+.5f}" for d in c.diffs)
         print(
-            f"{run_id}: OOF {other.oof_score}  差 [{diffs}]  平均 {c.mean_diff:+.5f}"
-            f"  低い {c.n_lower} / 高い {c.n_higher}"
+            f"{run_id}: OOF {other.oof_score:.5f}  差 [{diffs}]  平均 {c.mean_diff:+.5f}"
+            f"  改善 {c.n_improved} / 悪化 {c.n_worsened}"
         )
+    print("注: fold どうしは学習データが重なるので、改善 fold 数は独立な再現回数ではない")
     return 0
 
 

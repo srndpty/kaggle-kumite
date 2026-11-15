@@ -1,7 +1,6 @@
 """モデル定義。どのモデルも同じ関数形 `fit_predict` にそろえ、学習ループ (train.py) と分離する。"""
 
 from collections.abc import Callable
-from dataclasses import dataclass
 from typing import Any
 
 import lightgbm as lgb
@@ -14,26 +13,21 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
+from kumite.crossfit import FoldOutput
 
-@dataclass(frozen=True)
-class FoldResult:
-    valid_pred: np.ndarray
-    test_pred: np.ndarray
-    info: dict[str, Any]
-
-
+# (学習 X, 学習 y, 検証 X, 検証 y, 予測対象 X, params) -> 検証・予測対象への予測確率
 FitPredict = Callable[
-    [pd.DataFrame, pd.Series, pd.DataFrame, pd.Series, pd.DataFrame, dict[str, Any]], FoldResult
+    [pd.DataFrame, pd.Series, pd.DataFrame, pd.Series, pd.DataFrame, dict[str, Any]], FoldOutput
 ]
 
 
-def prior(x_tr, y_tr, x_va, y_va, x_te, params) -> FoldResult:
+def prior(x_tr, y_tr, x_va, y_va, x_te, params) -> FoldOutput:
     """学習 fold のクラス比をそのまま全行の予測にする。"""
     ratio = np.bincount(y_tr, minlength=len(CLASSES)) / len(y_tr)
-    return FoldResult(np.tile(ratio, (len(x_va), 1)), np.tile(ratio, (len(x_te), 1)), {})
+    return FoldOutput(np.tile(ratio, (len(x_va), 1)), np.tile(ratio, (len(x_te), 1)), {})
 
 
-def lightgbm(x_tr, y_tr, x_va, y_va, x_te, params) -> FoldResult:
+def lightgbm(x_tr, y_tr, x_va, y_va, x_te, params) -> FoldOutput:
     """検証 fold で early stopping する（OOF スコアはわずかに楽観側に偏る）。"""
     lgb_params = {
         "objective": "multiclass",
@@ -49,19 +43,19 @@ def lightgbm(x_tr, y_tr, x_va, y_va, x_te, params) -> FoldResult:
         callbacks=[lgb.early_stopping(params["early_stopping"], verbose=False)],
     )
     best = booster.best_iteration
-    return FoldResult(
+    return FoldOutput(
         np.asarray(booster.predict(x_va, num_iteration=best)),
         np.asarray(booster.predict(x_te, num_iteration=best)),
         {"best_iteration": best},
     )
 
 
-def logistic_regression(x_tr, y_tr, x_va, y_va, x_te, params) -> FoldResult:
+def logistic_regression(x_tr, y_tr, x_va, y_va, x_te, params) -> FoldOutput:
     """標準化 + 多クラスロジスティック回帰。標準化は学習 fold だけで fit する。"""
     classifier = LogisticRegression(C=params["C"], max_iter=params["max_iter"])
     model = make_pipeline(StandardScaler(), classifier)
     model.fit(x_tr, y_tr)
-    return FoldResult(
+    return FoldOutput(
         model.predict_proba(x_va),
         model.predict_proba(x_te),
         {"n_iter": int(classifier.n_iter_[0])},
@@ -73,7 +67,7 @@ def _mix_uniform(pred: np.ndarray, weight: float) -> np.ndarray:
     return (1 - weight) * pred + weight / len(CLASSES)
 
 
-def knn(x_tr, y_tr, x_va, y_va, x_te, params) -> FoldResult:
+def knn(x_tr, y_tr, x_va, y_va, x_te, params) -> FoldOutput:
     """標準化 + 距離重み付き kNN。標準化は学習 fold だけで fit する。"""
     model = make_pipeline(
         StandardScaler(),
@@ -81,19 +75,19 @@ def knn(x_tr, y_tr, x_va, y_va, x_te, params) -> FoldResult:
     )
     model.fit(x_tr, y_tr)
     w = params["uniform_mix"]
-    return FoldResult(
+    return FoldOutput(
         _mix_uniform(model.predict_proba(x_va), w), _mix_uniform(model.predict_proba(x_te), w), {}
     )
 
 
-def extra_trees(x_tr, y_tr, x_va, y_va, x_te, params) -> FoldResult:
+def extra_trees(x_tr, y_tr, x_va, y_va, x_te, params) -> FoldOutput:
     model = ExtraTreesClassifier(
         n_estimators=params["n_estimators"], n_jobs=-1, random_state=params["seed"]
     )
     model.fit(x_tr, y_tr)
     w = params["uniform_mix"]
     # 多出力分類ではリストを返しうる型定義のため、ndarray に固定する（今回は単一出力）。
-    return FoldResult(
+    return FoldOutput(
         _mix_uniform(np.asarray(model.predict_proba(x_va)), w),
         _mix_uniform(np.asarray(model.predict_proba(x_te)), w),
         {},

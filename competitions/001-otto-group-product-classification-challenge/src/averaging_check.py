@@ -10,15 +10,12 @@ early stopping）を行う。内側 OOF（単一モデル）・疑似テスト�
 import numpy as np
 import pandas as pd
 from calibrate import apply_temperature, fit_temperature
-from cv import N_SPLITS, SEED, make_folds
+from cv import N_SPLITS, make_folds, make_inner_folds
 from dataset import CLASSES, TARGET, encode_target, load_train
 from features import raw
 from models import lightgbm
-from runs import multi_logloss
-from sklearn.model_selection import StratifiedKFold
+from pipeline import multi_logloss
 from train import LGBM_BASE
-
-N_INNER = 4
 
 
 def check_outer_fold(x: pd.DataFrame, y: pd.Series, hold: np.ndarray) -> dict[str, float]:
@@ -26,13 +23,12 @@ def check_outer_fold(x: pd.DataFrame, y: pd.Series, hold: np.ndarray) -> dict[st
     x_hold, y_hold = x[hold], y[hold].to_numpy()
     inner_oof = np.zeros((len(x_in), len(CLASSES)))
     hold_preds = []
-    skf = StratifiedKFold(n_splits=N_INNER, shuffle=True, random_state=SEED)
-    for tr, va in skf.split(np.zeros(len(y_in)), y_in):
-        res = lightgbm(
-            x_in.iloc[tr], y_in.iloc[tr], x_in.iloc[va], y_in.iloc[va], x_hold, LGBM_BASE
-        )
-        inner_oof[va] = res.valid_pred
-        hold_preds.append(res.test_pred)
+    inner = make_inner_folds(y_in)
+    for k in range(inner.max() + 1):
+        tr, va = inner != k, inner == k
+        res = lightgbm(x_in[tr], y_in[tr], x_in[va], y_in[va], x_hold, LGBM_BASE)
+        inner_oof[va] = res.valid
+        hold_preds.append(res.query)
     avg = np.mean(hold_preds, axis=0)
     t = fit_temperature(y_in.to_numpy(), inner_oof)
     return {

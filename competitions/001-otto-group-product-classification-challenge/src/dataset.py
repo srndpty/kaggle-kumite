@@ -7,6 +7,9 @@ import pandas as pd
 COMPETITION_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = COMPETITION_DIR / "data"
 OUTPUT_DIR = COMPETITION_DIR / "outputs"
+TRAIN_CSV = DATA_DIR / "train.csv"
+TEST_CSV = DATA_DIR / "test.csv"
+DATA_FILES = (TRAIN_CSV, TEST_CSV)
 
 N_FEATURES = 93
 FEATURES = [f"feat_{i}" for i in range(1, N_FEATURES + 1)]
@@ -15,11 +18,11 @@ TARGET = "target"
 
 
 def load_train() -> pd.DataFrame:
-    return pd.read_csv(DATA_DIR / "train.csv", dtype={c: "int16" for c in FEATURES})
+    return pd.read_csv(TRAIN_CSV, dtype={c: "int16" for c in FEATURES})
 
 
 def load_test() -> pd.DataFrame:
-    return pd.read_csv(DATA_DIR / "test.csv", dtype={c: "int16" for c in FEATURES})
+    return pd.read_csv(TEST_CSV, dtype={c: "int16" for c in FEATURES})
 
 
 def encode_target(target: pd.Series) -> pd.Series:

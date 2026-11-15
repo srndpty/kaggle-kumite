@@ -3,6 +3,7 @@
 - URL: https://www.kaggle.com/competitions/otto-group-product-classification-challenge
 - カテゴリ: A / 難度: 2 / 計算負荷: S
 - 今回の比較実験テーマ: 多クラス分類：LogLoss・モデルの較正
+- 深さ: Deep Dive
 
 ## コンペ概要
 
@@ -12,7 +13,7 @@
 - 背景: 国や子会社ごとにシステムが異なるため、同じ商品が別々のカテゴリに分類されてしまうことが多い。商品分析の質は、似た商品を正しくまとめられるかに大きく左右されるため、商品を自動で正しいカテゴリに振り分けるモデルが求められた
 - 予測するもの: 各商品が9つの主要カテゴリ（ファッション、電子機器などの大分類）のどれに属するか。ラベルを当てるのではなく、9カテゴリそれぞれの確率を出す
 - 入力: 1行 = 1商品。93個の特徴量は商品に関するさまざまなイベントの回数だが、意味は伏せられている。カテゴリ名も Class_1〜Class_9 に置き換えられている
-- 開催: 2015年3月〜2015年5月18日（Featured、賞金総額 $10,000）。Public Leaderboard 上の参加は 3,509 チーム
+- 開催: 2015年3月〜2015年5月18日（Featured、賞金総額 $10,000）。`kaggle competitions leaderboard --download` で取得した Public Leaderboard は 3,509 行（2026-11-15 取得）。レビューでは、コンペ公式ページの表示は 3,507 チームとの指摘があった（当方では未確認。取得時点や数え方の違いと考えられる）。本文の順位相当はすべて 3,509 行の Leaderboard に対するもの
 - 位置づけ: 特徴量の意味がわからないため、ドメイン知識が使えない。モデルの選び方・検証・確率の扱いだけで勝負する、純粋な表形式の多クラス分類
 - 参考スコア（Public Leaderboard）: 1位 0.38055、上位10% 0.42907、中央値 0.54175。当リポジトリの E01（0.45008）は 709 位相当（Late Submission なので正式な順位ではない）
 
@@ -36,6 +37,9 @@
 - [x] P5. Late Submission とエラー分析（CV と外部スコアの整合性）
 - [x] P6. 上位解法との照合
 - [x] P7. 知見の保存（`report.md`）
+- [x] 追補: レビュー対応（E09・E10 の nested 化と再測定、run 保存の fail-closed 化、知見カード化）
+
+※ #001 は進め方 v1（P6 = 上位解法の照合、P7 = 知見の保存）で実施した。v2 の段階分けは AGENTS.md を参照。
 
 ## EDA（P1）
 
@@ -115,7 +119,7 @@
 `uv run python competitions/001-otto-group-product-classification-challenge/src/train.py <run_id>` で実行する。
 
 - 構成: 実験定義と学習ループは `src/train.py`、モデルは `src/models.py`（どのモデルも `fit_predict` という同じ関数形）
-- 出力: `outputs/runs/<run_id>/` に OOF 予測、テスト予測（5 fold の平均）、`submission.csv`、fold ごとの情報。`experiments.jsonl` に1行追記される（同じ run_id の再記録はエラーになる）
+- 出力: `outputs/runs/<run_id>/` に OOF 予測、テスト予測（5 fold の平均）、`submission.csv`、fold ごとの情報。`experiments.jsonl` に1行追記される。保存は `kumite.runs.RunStore` 経由で、一時ディレクトリに書き、予測を検査してハッシュを取ってから公開する。同じ run_id は学習前に拒否される。記録にはデータ・分割・コード・成果物のハッシュが残る
 - 固定したもの: seed 42、上記の分割、指標は `sklearn.metrics.log_loss`、前処理なし（生カウント、id は除外）
 - E01 の LightGBM は lr 0.05、num_leaves 31、その他は既定値。最大 10,000 round で、検証 fold を使って early stopping（100 round）する。best iteration は 422〜533
   - 注意: 検証 fold で early stopping するため、OOF スコアはわずかに楽観側に偏る。全実験で同じ条件なので、比較には影響しない
@@ -147,16 +151,17 @@
 
 | 仮説 | run | 中核コード | 再実行 |
 |---|---|---|---|
-| H1 | E02, E03 | 特徴量 [`features.log1p`](src/features.py#L27)、モデル [`models.logistic_regression`](src/models.py#L59) | `uv run python src/train.py E03` |
-| H1 | E04 | 特徴量 [`features.log1p`](src/features.py#L27)、モデル [`models.lightgbm`](src/models.py#L36) | `uv run python src/train.py E04` |
+| H1 | E02, E03 | 特徴量 [`features.log1p`](src/features.py#L28)、モデル [`models.logistic_regression`](src/models.py#L53) | `uv run python src/train.py E03` |
+| H1 | E04 | 特徴量 [`features.log1p`](src/features.py#L28)、モデル [`models.lightgbm`](src/models.py#L30) | `uv run python src/train.py E04` |
 | H2 | （E01 の分析） | [`analyze.per_class_loss`](src/analyze.py#L17)、[`analyze.confusion`](src/analyze.py#L37) | `uv run python src/analyze.py E01` |
-| H3 | E05 | 特徴量 [`features.row_stats`](src/features.py#L32) | `uv run python src/train.py E05` |
+| H3 | E05 | 特徴量 [`features.row_stats`](src/features.py#L33) | `uv run python src/train.py E05` |
 | H4 | E06 | [`calibrate.apply_temperature` / `fit_temperature`](src/calibrate.py#L24)、クロスフィットのループは [`calibrate.main`](src/calibrate.py#L56) | `uv run python src/calibrate.py E01 E06` |
-| H5 | E07, E08, E10 | 1 段目 [`models.knn`](src/models.py#L76)・[`models.extra_trees`](src/models.py#L89)、2 段目の入力 [`features.stack`](src/features.py#L90) | `uv run python src/train.py E10`（E07・E08 を先に実行） |
-| H6 | E09 | [`features.knn_dist`](src/features.py#L73)（計算本体は `_compute_knn_dist`） | `uv run python src/train.py E09` |
+| H5 | E07, E08, E10 | 1 段目 [`models.knn`](src/models.py#L70)・[`models.extra_trees`](src/models.py#L83)、2 段目の入力 [`stacking.Stacking`](src/stacking.py#L17)（nested） | `uv run python src/train.py E12` |
+| H6 | E11 | [`features.KnnDistance`](src/features.py#L67)（nested） | `uv run python src/train.py E11` |
+| リーク検査 | E11, E12 | ラベルを使う特徴は [`pipeline.fold_inputs`](src/pipeline.py#L52) で学習行のラベルだけを受け取る。検査は [`leak_check.check`](src/leak_check.py#L22) | `uv run python src/leak_check.py E11 E12` |
 | P5 | — | [`averaging_check.check_outer_fold`](src/averaging_check.py#L24) | `uv run python src/averaging_check.py` |
 
-`train.py` で同じ run_id を再実行すると、`experiments.jsonl` への二重記録を防ぐためエラーになる。再実行するときは、`experiments.jsonl` から該当する行を消してから実行する。
+同じ run_id での再実行は、学習前にエラーになる（既存の成果物とログは変わらない）。やり直すときは記録を消さず、別の run_id（例: `E01-r2`）として `EXPERIMENTS` に定義する。E09・E10 は旧実装で作った記録で、コードは nested 版の E11・E12 に置き換えた（旧実装は commit a1d6df4 にある）。
 
 中核部分の抜粋:
 
@@ -276,7 +281,7 @@ for fold in range(N_SPLITS):
 | 疑似テスト・単一モデル + 温度 T | 0.48787 |
 | 疑似テスト・4 モデル平均 + 温度 T（E06 の提出に相当） | 0.47017 |
 
-- **平均の効果は -0.0208**（単一 0.49015 → 平均 0.46931）。E01 の CV と Late の差（-0.022）とほぼ同じ大きさで、差のほとんどはこれで説明できる
+- **平均の効果は -0.0208**（単一 0.49015 → 平均 0.46931）。E01 の CV と Late の差（-0.022）とほぼ同じ大きさ。fold モデルの平均が CV と Late の差の主要因であることを、独立した疑似テストで強く支持する。ただし同じ train を使った追加実験であり、学習量の違いや分布差の影響まで完全に切り分けたわけではない
 - 内側 OOF と疑似テストの単一モデルの差は +0.0020。OOF は検証 fold で early stopping しているので、その分だけ楽観側に偏っている（P3 で書いた偏りの大きさの実測値）。分布の差はこれ以上は見られない
 - **温度スケーリングは、単一モデルには -0.0023 で効くが、平均予測には +0.0009 で悪化する**。E06 の CV（-0.0025）と Late（+0.00075）の結果を、両方ともほぼそのまま再現した
   - 内側 OOF で決めた T は平均 1.093。一方、平均予測にとって最適な T は 1.026（疑似テストのラベルで求めた診断値）
@@ -284,7 +289,7 @@ for fold in range(N_SPLITS):
 
 ### わかったこと
 
-- OOF は「単一モデルの予測」、提出は「fold モデルの平均」であり、評価しているものが違う。モデル間の比較には OOF を使ってよいが、OOF の絶対値は提出スコアを約 0.02 悲観的に見積もる
+- OOF は「単一モデルの予測」、提出は「fold モデルの平均」であり、評価しているものが違う。モデル間の比較には OOF を使ってよいが、OOF の絶対値は提出スコアを悲観的に見積もる（約 0.02 という大きさは、Otto のこの学習方式に限った値で、別のモデル・コンペには一般化できない）
 - **較正などの後処理は、提出と同じ形の予測で決め、同じ形で評価しなければならない**。単一モデルの OOF で調整すると、平均予測では逆効果になりうる
 - 今後の後処理は、この入れ子の枠組み（疑似テスト上の平均予測）で評価する
 
@@ -292,9 +297,9 @@ for fold in range(N_SPLITS):
 
 ### 出典と信頼度
 
-- 1 位（Gilberto Titericz・Stanislav Semenov）: 本人の Kaggle フォーラム投稿は直接開けなかった。投稿を転載したブログ（[wenchenli.github.io](https://wenchenli.github.io/2015/05/kaggle-competition-summary)）から読んだ。スコアは Public 0.38055 と記載されており、P0 で取得した Leaderboard の 1 位の値と一致する
+- 1 位（Gilberto Titericz・Stanislav Semenov）: 本人の writeup は Kaggle 上にある（[1st PLACE - WINNER SOLUTION](https://www.kaggle.com/competitions/otto-group-product-classification-challenge/writeups/gilberto-titericz-stanislav-semenov-1st-place-winn)。レビューで指摘を受けて確認したが、ページは JavaScript で描画されるため、CLI では題名しか取得できなかった）。本文は投稿を転載したブログ（[wenchenli.github.io](https://wenchenli.github.io/2015/05/kaggle-competition-summary)）から読んだ。スコアは Public 0.38055 と記載されており、P0 で取得した Leaderboard の 1 位の値と一致する
 - 2 位（Alexander Guschin）・5 位: Kaggle 公式ブログの転載記事は取得できなかった。85 位チームの発表資料（[SlideShare](https://www.slideshare.net/slideshow/kaggle-otto-challenge-how-we-achieved-85th-out-of-3845-and-what-we/49486013)）の要約と、検索結果の抜粋から読んだ
-- 以下の内容は二次情報に基づく。細部（パラメータなど）は原文と違う可能性がある
+- 以下の内容は二次情報に基づく。細部（パラメータなど）は原文と違う可能性がある。レビューでは、一次情報（上記 writeup）とも主要な内容（約 33 モデル、8 種類の追加特徴、3 段構成、近傍距離特徴）が一致すると報告されている（当方では本文未確認）
 
 ### 1 位解法の概要
 

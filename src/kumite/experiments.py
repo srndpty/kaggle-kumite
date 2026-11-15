@@ -1,4 +1,8 @@
-"""実験ログ (JSONL)。100コンペ共通の形式にして横断分析できるようにする。"""
+"""実験ログ (JSONL)。100コンペ共通の形式にして横断分析できるようにする。
+
+記録は追記のみで、計測した値は書き換えない。後から書き足してよいのは late_score・conclusion・
+next_experiment だけ。同じ実験をやり直すときは `E01-r2` のように別の run_id にする。
+"""
 
 import json
 from dataclasses import asdict, dataclass, field
@@ -12,24 +16,39 @@ LOG_FILE_NAME = "experiments.jsonl"
 class ExperimentRecord:
     competition_id: str
     run_id: str
-    data_version: str
+    created_at: str = ""  # RunStore.publish が記録する
+    # 何で評価したか（compare_runs はこれらが一致する run だけを比べる）
+    metric: str
+    greater_is_better: bool
+    data_version: str  # 特徴量・前処理の名前
+    data_hash: str  # 入力データファイルのハッシュ
     split_version: str
+    split_hash: str  # fold 番号の配列のハッシュ
     seed: int
+    # 何を試したか
     hypothesis: str
     changed_one_thing: str
     model: str
     params: dict[str, Any] = field(default_factory=dict[str, Any])
+    # 結果（丸めずに保存し、表示するときだけ丸める）
     fold_scores: list[float]
     oof_score: float
     late_score: float | None = None
     runtime_sec: float | None = None
     peak_memory_mb: float | None = None
+    # 再現のための証跡
+    code_version: str
+    inputs: dict[str, str] = field(
+        default_factory=dict[str, str]
+    )  # 使った他 run の成果物 → ハッシュ
+    artifacts: dict[str, str] = field(default_factory=dict[str, str])  # 成果物 → ハッシュ
+    # 解釈
     conclusion: str = ""
     next_experiment: str = ""
 
 
 def append_record(log_path: Path, record: ExperimentRecord) -> None:
-    """記録を追記する。同じ run_id が既にあれば拒否する（再実行するなら該当行を消す）。"""
+    """記録を追記する。同じ run_id が既にあれば拒否する。"""
     if log_path.exists() and any(r.run_id == record.run_id for r in read_records(log_path)):
         raise ValueError(f"run_id {record.run_id} は {log_path} に記録済みです")
     with log_path.open("a", encoding="utf-8", newline="\n") as f:
@@ -48,31 +67,52 @@ def find_record(records: list[ExperimentRecord], run_id: str) -> ExperimentRecor
     raise LookupError(f"run_id {run_id} の記録がありません")
 
 
+# 同じ評価条件とみなすために一致が必要な項目
+_COMPARABLE_FIELDS = (
+    "competition_id",
+    "metric",
+    "greater_is_better",
+    "data_hash",
+    "split_version",
+    "split_hash",
+)
+
+
 @dataclass(frozen=True)
 class PairedComparison:
-    """同じ分割の fold どうしで比べた差 (other - base)。指標の向きは解釈側で判断する。"""
+    """同じ分割の fold どうしで比べた差 (other - base)。"""
 
     base_run_id: str
     run_id: str
     diffs: list[float]
+    greater_is_better: bool
 
     @property
     def mean_diff(self) -> float:
         return sum(self.diffs) / len(self.diffs)
 
     @property
-    def n_lower(self) -> int:
-        return sum(d < 0 for d in self.diffs)
+    def n_improved(self) -> int:
+        return sum((d > 0) if self.greater_is_better else (d < 0) for d in self.diffs)
 
     @property
-    def n_higher(self) -> int:
-        return sum(d > 0 for d in self.diffs)
+    def n_worsened(self) -> int:
+        return sum((d < 0) if self.greater_is_better else (d > 0) for d in self.diffs)
 
 
 def compare_runs(base: ExperimentRecord, other: ExperimentRecord) -> PairedComparison:
-    if base.split_version != other.split_version:
-        raise ValueError(
-            f"分割が異なるため比較できません: {base.split_version} と {other.split_version}"
-        )
+    """評価条件（データ・分割・指標）が一致する run だけを fold ごとに比べる。"""
+    mismatched = [
+        f"{name}: {getattr(base, name)} と {getattr(other, name)}"
+        for name in _COMPARABLE_FIELDS
+        if getattr(base, name) != getattr(other, name)
+    ]
+    if mismatched:
+        raise ValueError("評価条件が異なるため比較できません: " + " / ".join(mismatched))
     diffs = [o - b for b, o in zip(base.fold_scores, other.fold_scores, strict=True)]
-    return PairedComparison(base_run_id=base.run_id, run_id=other.run_id, diffs=diffs)
+    return PairedComparison(
+        base_run_id=base.run_id,
+        run_id=other.run_id,
+        diffs=diffs,
+        greater_is_better=base.greater_is_better,
+    )

@@ -5,14 +5,12 @@
 
 import argparse
 import time
-from typing import Any
 
-import numpy as np
-from cv import N_SPLITS, SEED, make_folds
-from dataset import CLASSES, TARGET, encode_target, load_test, load_train
-from features import FEATURE_SETS
-from models import MODELS
-from runs import Experiment, save_run
+from cv import SEED, make_folds
+from dataset import TARGET, encode_target, load_test, load_train
+from features import KnnDistance
+from pipeline import STORE, Experiment, run_cv, save_run
+from stacking import Stacking
 
 LGBM_BASE = {
     "learning_rate": 0.05,
@@ -45,21 +43,21 @@ EXPERIMENTS: dict[str, Experiment] = {
         model="logistic_regression",
         hypothesis="H1: log1p で裾を潰すと線形モデルの logloss が改善する",
         changed_one_thing="E02 の特徴量を log1p 変換",
-        features="log1p",
+        transform="log1p",
         params=LOGREG_BASE,
     ),
     "E04": Experiment(
         model="lightgbm",
         hypothesis="H1: 単調変換なので木モデルの結果はほぼ変わらない",
         changed_one_thing="E01 の特徴量を log1p 変換",
-        features="log1p",
+        transform="log1p",
         params=LGBM_BASE,
     ),
     "E05": Experiment(
         model="lightgbm",
         hypothesis="H3: 行合計・非ゼロ数を加えると木モデルも改善する",
         changed_one_thing="E01 に row_sum, row_nnz の 2 特徴量を追加",
-        features="row_stats",
+        transform="row_stats",
         params=LGBM_BASE,
     ),
     # --- P6: 上位解法の着眼点の再現 ---
@@ -67,54 +65,46 @@ EXPERIMENTS: dict[str, Experiment] = {
         model="knn",
         hypothesis="H5 の 1 段目: 近傍法は木・線形と異なる誤り方をする（2 位解法は kNN を重視）",
         changed_one_thing="E03 からモデルを kNN（k=32、距離重み）に変更",
-        features="log1p",
+        transform="log1p",
         params={"n_neighbors": 32, "uniform_mix": 0.01},
     ),
     "E08": Experiment(
         model="extra_trees",
         hypothesis="H5 の 1 段目: ランダムな分割の木は GBDT と異なる誤り方をする（1 位解法の 1 段目に含まれる）",
         changed_one_thing="E03 からモデルを ExtraTrees（300 本）に変更",
-        features="log1p",
+        transform="log1p",
         params={"n_estimators": 300, "seed": SEED, "uniform_mix": 0.01},
     ),
-    "E09": Experiment(
-        model="lightgbm",
-        hypothesis="H6: 各クラスの最近傍までの距離を加えると木モデルが改善する（1 位解法の特徴量）",
-        changed_one_thing="E01 に kNN 距離特徴 27 列（9 クラス × 近傍 1・2・4 件の距離和）を追加",
-        features="knn_dist",
-        params=LGBM_BASE,
-    ),
-    "E10": Experiment(
-        model="lightgbm",
-        hypothesis="H5: 異なるモデルの OOF 予測を 2 段目で統合すると単一モデルより改善する",
-        changed_one_thing="E01 の入力を、E01・E03・E07・E08 の OOF 予測確率 36 列に変更（スタッキング）",
-        features="stack_v1",
-        params=LGBM_BASE,
-    ),
+    # E09・E10 は旧実装（全行で作った OOF を特徴にする）で、外側の検証ラベルが学習側に入っていた。
+    # 記録は experiments.jsonl に残し、コードは nested 版（E11・E12）に置き換えた。
 }
+# 2 段目は 1 段目の定義を参照するので、辞書を作ってから追加する。
+EXPERIMENTS["E11"] = Experiment(
+    model="lightgbm",
+    hypothesis="H6 の再測定: 外側の検証ラベルを使わずに作った kNN 距離特徴でも、木モデルが改善する",
+    changed_one_thing="E01 に kNN 距離特徴 27 列を追加（外側 fold の学習行だけで、内側 4 fold の OOF として作る）",
+    supervised=KnnDistance(),
+    params=LGBM_BASE,
+)
+EXPERIMENTS["E12"] = Experiment(
+    model="lightgbm",
+    hypothesis="H5 の再測定: 1 段目を外側 fold ごとに学習し直す nested stacking でも、単一モデルより改善する",
+    changed_one_thing="E01 の入力を、E01・E03・E07・E08 を外側学習行の内側 4 fold で学習した予測確率 36 列に変更",
+    transform="none",
+    supervised=Stacking(tuple((rid, EXPERIMENTS[rid]) for rid in ("E01", "E03", "E07", "E08"))),
+    params=LGBM_BASE,
+)
 
 
 def run(run_id: str) -> None:
+    STORE.ensure_new(run_id)  # 学習前に run_id の重複を拒否する
     exp = EXPERIMENTS[run_id]
-    fit_predict = MODELS[exp.model]
-    make_features = FEATURE_SETS[exp.features]
     train, test = load_train(), load_test()
-    x, x_te = make_features(train, test)
     y = encode_target(train[TARGET])
     folds = make_folds(y)
-
     started = time.perf_counter()
-    oof = np.zeros((len(x), len(CLASSES)))
-    test_pred = np.zeros((len(x_te), len(CLASSES)))
-    fold_infos: list[dict[str, Any]] = []
-    for fold in range(N_SPLITS):
-        tr, va = folds != fold, folds == fold
-        result = fit_predict(x[tr], y[tr], x[va], y[va], x_te, exp.params)
-        oof[va] = result.valid_pred
-        test_pred += result.test_pred / N_SPLITS
-        fold_infos.append(result.info)
-    runtime = time.perf_counter() - started
-    save_run(run_id, exp, y, folds, oof, test_pred, test["id"], runtime, fold_infos)
+    result = run_cv(exp, train, y, folds, test)
+    save_run(run_id, exp, y, folds, result, test["id"], time.perf_counter() - started)
 
 
 def main() -> None:

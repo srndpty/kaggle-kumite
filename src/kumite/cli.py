@@ -3,10 +3,13 @@
 import argparse
 import subprocess
 from collections.abc import Sequence
+from pathlib import Path
 
 from kumite.catalog import find_competition, load_catalog
-from kumite.kaggle_data import download_data
+from kumite.experiments import LOG_FILE_NAME, compare_runs, find_record, read_records
+from kumite.kaggle_data import download_data, show_submissions, submit
 from kumite.paths import CATALOG_CSV, COMPETITIONS_DIR, TEMPLATE_DIR
+from kumite.runs import RunStore
 from kumite.scaffold import create_competition_dir
 
 
@@ -40,16 +43,96 @@ def _download(number: int) -> int:
     return 0
 
 
+def _submit(number: int, file: Path, message: str) -> int:
+    competition = find_competition(load_catalog(CATALOG_CSV), number)
+    submit(competition, file, message)
+    show_submissions(competition)
+    return 0
+
+
+def _submissions(number: int) -> int:
+    show_submissions(find_competition(load_catalog(CATALOG_CSV), number))
+    return 0
+
+
+def _compare(number: int, base_run_id: str, run_ids: list[str]) -> int:
+    competition = find_competition(load_catalog(CATALOG_CSV), number)
+    records = read_records(COMPETITIONS_DIR / competition.dir_name / LOG_FILE_NAME)
+    base = find_record(records, base_run_id)
+    direction = "大きいほど良い" if base.greater_is_better else "小さいほど良い"
+    folds = " ".join(f"{s:.5f}" for s in base.fold_scores)
+    print(f"指標 {base.metric}（{direction}）")
+    print(f"基準 {base.run_id}: OOF {base.oof_score:.5f}  folds [{folds}]")
+    print("差は (実験 - 基準)。fold ごとの差・平均・改善/悪化した fold 数")
+    for run_id in run_ids:
+        other = find_record(records, run_id)
+        c = compare_runs(base, other)
+        diffs = " ".join(f"{d:+.5f}" for d in c.diffs)
+        print(
+            f"{run_id}: OOF {other.oof_score:.5f}  差 [{diffs}]  平均 {c.mean_diff:+.5f}"
+            f"  改善 {c.n_improved} / 悪化 {c.n_worsened}"
+        )
+    print("注: fold どうしは学習データが重なるので、改善 fold 数は独立な再現回数ではない")
+    return 0
+
+
+def _orphans(number: int, delete: bool) -> int:
+    competition = find_competition(load_catalog(CATALOG_CSV), number)
+    store = RunStore(COMPETITIONS_DIR / competition.dir_name)
+    found = store.orphans()
+    if delete:
+        found = store.discard_orphans(found)
+    if not found:
+        print("ログにない run ディレクトリ・一時ディレクトリはありません")
+        return 0
+    print("削除しました:" if delete else "ログにない残骸（--delete で削除）:")
+    for path in found:
+        print(f"  {path}")
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="kumite", description="Kaggle 100本ノックの補助コマンド")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("list", help="カタログ一覧と着手状況")
-    for name, help_text in (("new", "コンペ用ディレクトリを生成"), ("download", "データを取得")):
+    for name, help_text in (
+        ("new", "コンペ用ディレクトリを生成"),
+        ("download", "データを取得"),
+        ("submissions", "提出履歴とスコアを表示"),
+    ):
         sub.add_parser(name, help=help_text).add_argument("number", type=int, help="カタログ番号")
+    submit_parser = sub.add_parser("submit", help="ファイルを提出し、提出履歴を表示")
+    submit_parser.add_argument("number", type=int, help="カタログ番号")
+    submit_parser.add_argument("file", type=Path, help="提出ファイル")
+    submit_parser.add_argument("-m", "--message", required=True, help="提出メッセージ")
+    orphans_parser = sub.add_parser("orphans", help="ログにない run の残骸を一覧・削除")
+    orphans_parser.add_argument("number", type=int, help="カタログ番号")
+    orphans_parser.add_argument("--delete", action="store_true", help="一覧した残骸を削除する")
+    compare_parser = sub.add_parser("compare", help="実験を同じ fold どうしで比較")
+    compare_parser.add_argument("number", type=int, help="カタログ番号")
+    compare_parser.add_argument("base", help="基準の run_id")
+    compare_parser.add_argument("run_ids", nargs="+", help="比較する run_id")
 
     args = parser.parse_args(argv)
     command: str = args.command
     if command == "list":
         return _list()
     number: int = args.number
-    return _new(number) if command == "new" else _download(number)
+    match command:
+        case "new":
+            return _new(number)
+        case "download":
+            return _download(number)
+        case "submissions":
+            return _submissions(number)
+        case "orphans":
+            delete: bool = args.delete
+            return _orphans(number, delete)
+        case "compare":
+            base_run_id: str = args.base
+            run_ids: list[str] = args.run_ids
+            return _compare(number, base_run_id, run_ids)
+        case _:
+            file: Path = args.file
+            message: str = args.message
+            return _submit(number, file, message)

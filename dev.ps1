@@ -52,12 +52,16 @@ $commands = [ordered]@{
     list     = @{ Description = "カタログ一覧と着手状況"; Action = { Invoke-Kumite list } }
     new      = @{ Description = "コンペ用ディレクトリを生成: dev new <番号>"; Action = { Invoke-Kumite new @rest } }
     download = @{ Description = "コンペのデータを取得: dev download <番号>"; Action = { Invoke-Kumite download @rest } }
+    submit   = @{ Description = "提出: dev submit <番号> <ファイル> -m <メッセージ>"; Action = { Invoke-Kumite submit @rest } }
+    compare  = @{ Description = "同じ fold どうしで比較: dev compare <番号> <基準> <run_id...>"; Action = { Invoke-Kumite compare @rest } }
+    orphans  = @{ Description = "ログにない run の残骸: dev orphans <番号> [--delete]"; Action = { Invoke-Kumite orphans @rest } }
+    submissions = @{ Description = "提出履歴とスコア: dev submissions <番号>"; Action = { Invoke-Kumite submissions @rest } }
 }
 
 function Show-Help {
     Write-Host "使い方: dev <command> [args]`n"
     foreach ($name in $commands.Keys) {
-        Write-Host ("  {0,-9} {1}" -f $name, $commands[$name].Description)
+        Write-Host ("  {0,-12} {1}" -f $name, $commands[$name].Description)
     }
 }
 

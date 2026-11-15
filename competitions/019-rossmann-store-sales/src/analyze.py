@@ -10,14 +10,19 @@ import argparse
 import numpy as np
 import pandas as pd
 from cv import SEED, windows
-from dataset import TARGET, load_train, modeling_rows
+from dataset import DATA_FILES, TARGET, load_train, modeling_rows
 from pipeline import STORE
+
+from kumite.experiments import compare_runs
+from kumite.provenance import files_sha256
 
 N_BOOTSTRAP = 2000
 
 
 def _validated(run_id: str) -> pd.DataFrame:
-    """検証された行に、予測と相対誤差を付けて返す。"""
+    """検証された行に、予測と相対誤差を付けて返す。run の記録と今のデータが同じことを確かめる。"""
+    if STORE.record(run_id).data_hash != files_sha256(DATA_FILES):
+        raise ValueError(f"{run_id} の記録の data_hash が、今のデータファイルと一致しません")
     train = modeling_rows(load_train())
     pred = STORE.load_array(run_id, "oof.npy")
     rows = train[np.isfinite(pred)].assign(pred=pred[np.isfinite(pred)])
@@ -70,6 +75,16 @@ def errors(run_id: str) -> None:
     print(f"\n相対誤差が最大の行:\n{worst.to_string(index=False, float_format='%.3f')}")
 
 
+def _same_rows(base_run_id: str, base: pd.DataFrame, run_id: str) -> pd.DataFrame:
+    """run_id の検証行を返す。評価条件（データ・分割・指標）と、検証行の (Store, Date) と並びが
+    基準と一致しなければ拒否する（店舗ごとの集計を基準の行順で行うため）。"""
+    compare_runs(STORE.record(base_run_id), STORE.record(run_id))
+    other = _validated(run_id)
+    if not other[["Store", "Date"]].equals(base[["Store", "Date"]]):
+        raise ValueError(f"{run_id} の検証行（Store, Date）が基準 {base_run_id} と一致しません")
+    return other
+
+
 def compare(base_run_id: str, run_ids: list[str]) -> None:
     """行ごとの二乗相対誤差の差を、店舗単位で再標本化して確かめる（同じ店舗の行は独立でないため）。"""
     base = _validated(base_run_id)
@@ -87,7 +102,7 @@ def compare(base_run_id: str, run_ids: list[str]) -> None:
         f"基準 {base_run_id}: RMSPE {_rmspe(base['pct']):.5f}。差は (実験 - 基準)、{N_BOOTSTRAP} 回の店舗単位 bootstrap"
     )
     for run_id in run_ids:
-        other_sums = store_sums(_validated(run_id)["pct"])
+        other_sums = store_sums(_same_rows(base_run_id, base, run_id)["pct"])
         n = counts[draws].sum(axis=1)
         diff = np.sqrt(other_sums[draws].sum(axis=1) / n) - np.sqrt(
             base_sums[draws].sum(axis=1) / n

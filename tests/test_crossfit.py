@@ -32,6 +32,30 @@ def test_cross_fit_splits_leaves_unvalidated_rows_nan() -> None:
     assert len(result.infos) == 2
 
 
+def test_cross_fit_splits_passes_expanding_window_rows_unchanged() -> None:
+    # 行は日付順でない。expanding window の分割を、そのままの行番号で fit_fold に渡すこと
+    days = np.array([3, 0, 5, 1, 4, 2, 7, 6])
+    splits: list[Split] = [
+        (np.flatnonzero(days < start), np.flatnonzero((days >= start) & (days < start + 2)))
+        for start in (2, 4, 6)
+    ]
+    seen: list[Split] = []
+
+    def fit_fold(tr: np.ndarray, va: np.ndarray) -> FoldOutput:
+        assert days[tr].max() < days[va].min()  # 学習行はすべて検証行より前
+        seen.append((tr, va))
+        return FoldOutput(days[va].astype(float), np.zeros(1))
+
+    result = cross_fit_splits(len(days), splits, fit_fold)
+
+    for (tr, va), (seen_tr, seen_va) in zip(splits, seen, strict=True):
+        np.testing.assert_array_equal(seen_tr, tr)
+        np.testing.assert_array_equal(seen_va, va)
+    # 最初の窓より前（日 0・1）の行は検証されない
+    np.testing.assert_array_equal(np.isnan(result.oof), days < 2)
+    np.testing.assert_array_equal(result.oof[days >= 2], days[days >= 2])
+
+
 def test_cross_fit_matches_cross_fit_splits_on_fold_numbers() -> None:
     folds = np.array([0, 1, 2, 0, 1, 2])
 

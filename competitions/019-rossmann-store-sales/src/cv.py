@@ -36,20 +36,36 @@ def _valid_rows(train: pd.DataFrame, test_stores: np.ndarray) -> list[np.ndarray
     ]
 
 
+def check_time_order(dates: pd.Series, splits: list[Split]) -> None:
+    """各分割で、学習行の最後の日付が検証行の最初の日付より前であることを確かめる。"""
+    for k, (tr, va) in enumerate(splits):
+        train_end, valid_start = dates.iloc[tr].max(), dates.iloc[va].min()
+        if not train_end < valid_start:
+            raise ValueError(
+                f"分割 {k}: 学習行の末尾 {train_end.date()} が検証行の先頭 {valid_start.date()} より前ではありません"
+            )
+
+
 def time_splits(train: pd.DataFrame, test_stores: np.ndarray) -> list[Split]:
     """各窓を、窓の開始日より前の全行で学習して検証する（expanding window）。"""
     starts = [start for start, _ in windows(train["Date"].max())]
-    return [
+    splits = [
         (np.flatnonzero(train["Date"] < start), valid)
         for start, valid in zip(starts, _valid_rows(train, test_stores), strict=True)
     ]
+    check_time_order(train["Date"], splits)
+    return splits
 
 
 def random_splits(train: pd.DataFrame, test_stores: np.ndarray) -> list[Split]:
     """時系列分割と同じ検証行を、ランダムに N_WINDOWS 個に分ける。学習は自分の検証行以外の全行。
 
-    検証行の前後の日・同じ日の他店舗・未来の行が学習側に入る。評価する行は時系列分割と同じなので、
-    スコアの差は「補間できること」による楽観の大きさを表す。
+    検証行の前後の日・同じ日の他店舗・未来の行が学習側に入る。評価する行は時系列分割と同じだが、
+    学習の条件は次の点がまとめて違う。スコアの差はこれらを合わせた楽観の大きさで、内訳は分けていない。
+
+    - 検証行より未来の行を学習できる
+    - 学習行が多い（約 81 万行。時系列分割は 71〜80 万行）
+    - 検証行と時間的に近い行（前後の日・同じ日の他店舗）から補間できる
     """
     valid_all = np.concatenate(_valid_rows(train, test_stores))
     assignment = np.random.default_rng(SEED).integers(0, N_WINDOWS, size=len(valid_all))

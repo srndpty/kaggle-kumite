@@ -58,7 +58,7 @@ EXPERIMENTS: dict[str, Experiment] = {
         model="lightgbm",
         hypothesis="H3 の切り分け: 学習行の統計量に自分の売上を含めると、学習時だけ特徴が強くなり悪化する",
         changed_one_thing="E04 の学習行の統計量を、学習行全体（自分の売上を含む）から作る",
-        supervised=StoreStats(out_of_block=False),
+        supervised=StoreStats(train_rows="insample"),
         target="log1p",
         params=LGBM_BASE,
     ),
@@ -95,6 +95,21 @@ EXPERIMENTS["E10"] = replace(
     hypothesis="H9（1 位解法）: 予測期間ぶん離した直近の売上の平均を加えると、店舗の最近の水準と販促への反応を捉えて改善する",
     changed_one_thing="E09 に、2 か月以上前の直近 3 か月・12 か月の店舗別・店舗 × 販促別の log 売上平均 4 列を追加",
     supervised=RecentStats(),
+)
+# --- レビュー後の追加: H3 の統計量の時間的な参照条件 ---
+# E04 の学習行の統計量は「自分の期間以外」から作るので、自分より未来の売上も入る。検証・テスト行は
+# 過去の売上だけから作るので、学習行と検証行で作り方がそろっていない。
+EXPERIMENTS["E12"] = replace(
+    EXPERIMENTS["E04"],
+    hypothesis="H3c: 統計量をどの行も「その日より前の売上」だけから作ると、学習行と検証行の作り方がそろい、E04 と同等以上になる",
+    changed_one_thing="E04 の統計量を、どの行もその日より前の学習行だけから作る（expanding window）",
+    supervised=StoreStats(train_rows="past"),
+)
+EXPERIMENTS["E13"] = replace(
+    EXPERIMENTS["E12"],
+    hypothesis="H3c: さらに予測期間（48 日）ぶん離すと、学習行の特徴の新しさが検証・テスト行（1〜48 日前まで）に近づく",
+    changed_one_thing="E12 の統計量を、その日の 48 日前より前の学習行だけから作る",
+    supervised=StoreStats(train_rows="past", gap_days=48),
 )
 # H2: 同じ実験を、同じ検証行をランダムに分ける分割で測る（run_id に R を付ける）。
 for _base in ("E02", "E03", "E04", "E05"):

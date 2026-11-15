@@ -5,14 +5,16 @@
 - 分割平均: 手前の 2 窓（分割 0・1）で early stopping したモデル 2 つの平均（提出の既定の形）
 - 学習し直し: 疑似テストより前の全行で 1 モデルを学習する。round 数は上の 2 モデルの best iteration の平均
 
-実行: uv run python competitions/019-rossmann-store-sales/src/refit_check.py E03
+提出時と同じ情報の条件にするため、暦（休業日・祝日の予定）は疑似テストの末尾までに切り詰める
+（`pipeline.pseudo_test`）。
+
+実行: uv run python competitions/019-rossmann-store-sales/src/refit_check.py E03 E09
 """
 
 import argparse
-from dataclasses import replace
 
 import numpy as np
-from pipeline import Data, Experiment, fit_split, load_data, refit, rmspe
+from pipeline import Data, Experiment, fit_split, load_data, pseudo_test, refit, rmspe
 from train import EXPERIMENTS
 
 
@@ -20,8 +22,9 @@ def check(exp: Experiment, data: Data) -> None:
     splits = data.splits("time")
     y = data.y
     (inner, (refit_train, pseudo)) = splits[:-1], splits[-1]
-    # 疑似テストの行を「テスト」として渡す（分割 0・1 の学習行・検証行はどちらも疑似テストより前）
-    held = replace(data, test=data.train.iloc[pseudo], x_test=data.x_train.iloc[pseudo])
+    # 疑似テストの行を「テスト」として渡す（分割 0・1 の学習行・検証行はどちらも疑似テストより前）。
+    # 暦は疑似テストの末尾までに切り詰める（提出時に test の末尾より先の予定が見えないのと同じ）
+    held = pseudo_test(data, pseudo)
     y_pseudo = y[pseudo]
 
     preds, rounds = [], []
@@ -46,6 +49,13 @@ def check(exp: Experiment, data: Data) -> None:
     same_rows = refit(exp, held, y, last_tr, pseudo, n_rounds)
     print(
         f"参考・分割 1 と同じ学習行で {n_rounds} round: 疑似テスト {rmspe(y_pseudo, same_rows.valid):.5f}"
+    )
+    # 参考: 学習し直しと同じ学習行で、疑似テストで early stopping した値（CV の分割 2 に当たる）。
+    # 学習し直しとの差が、検証窓で early stopping することによる CV の楽観の大きさ
+    stopped = fit_split(exp, held, y, refit_train, pseudo)
+    print(
+        f"参考・疑似テストで early stopping（best iteration {stopped.info['best_iteration']}）: "
+        f"疑似テスト {rmspe(y_pseudo, stopped.valid):.5f}"
     )
 
 

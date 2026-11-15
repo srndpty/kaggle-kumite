@@ -5,7 +5,7 @@
 
 import itertools
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Literal, Protocol
 
 import numpy as np
 import pandas as pd
@@ -113,7 +113,12 @@ class Calendar:
 
     @property
     def end(self) -> pd.Timestamp:
+        """予定が分かっている最後の日（提出時は test の末尾）。"""
         return self.timeline["Date"].max()
+
+    def until(self, as_of: pd.Timestamp) -> "Calendar":
+        """as_of より先の予定を持たない暦（予測期間の末尾が as_of の状況を train の中で再現する）。"""
+        return Calendar(self.timeline[self.timeline["Date"] <= as_of].reset_index(drop=True))
 
     def gaps(self, spec: Gaps, known_until: pd.Timestamp) -> pd.DataFrame:
         """(Store, Date) ごとの GAP_COLUMNS。known_until より先のイベントは無いものとして数える。"""
@@ -250,20 +255,70 @@ class RecentStats:
         return features(train), features(rest)
 
 
+def _past_means(
+    ref: pd.DataFrame, log_sales: np.ndarray, target: pd.DataFrame, gap_days: int
+) -> np.ndarray:
+    """target の各行（日付 d）に、ref のうち d - gap_days より前の行の log 売上の平均を、キーごとに引く。
+
+    該当する行が無ければ NaN。gap_days = 0 なら「前日まで」。
+    """
+    out = np.full((len(target), len(_STAT_KEYS)), np.nan)
+    query = target.assign(
+        _pos=np.arange(len(target)), _cut=target["Date"] - pd.Timedelta(days=gap_days)
+    ).sort_values("_cut", kind="stable")
+    for j, keys in enumerate(_STAT_KEYS.values()):
+        daily = (
+            ref[[*keys, "Date"]]
+            .assign(_y=log_sales)
+            .groupby([*keys, "Date"])["_y"]
+            .agg(["sum", "count"])
+            .reset_index()  # キー・日付の昇順
+            .rename(columns={"Date": "_d"})
+        )
+        daily[["sum", "count"]] = daily.groupby(keys)[["sum", "count"]].cumsum()
+        merged = pd.merge_asof(
+            query[[*keys, "_pos", "_cut"]],
+            daily.sort_values("_d", kind="stable"),
+            left_on="_cut",
+            right_on="_d",
+            by=keys,
+            allow_exact_matches=False,  # _cut の当日は使わない
+        )
+        out[merged["_pos"].to_numpy(), j] = (merged["sum"] / merged["count"]).to_numpy()
+    return out
+
+
+StatRows = Literal["out_of_block", "insample", "past"]
+
+
 @dataclass(frozen=True)
 class StoreStats:
-    """H3: 店舗（× 曜日 × 販促）ごとの、学習期間の log 売上の平均。
+    """H3: 店舗（× 曜日 × 販促）ごとの、log 売上の平均。売上は学習行のものだけを使う。
 
-    検証・テスト行には、学習行全体から作った値を渡す。学習行は out_of_block=True なら、
-    学習行を日付順に分けた期間ごとに「自分の期間以外」から作る（自分の売上が特徴に入らない）。
-    False なら学習行全体から作る（自分の売上が入る。切り分け用）。
+    train_rows で、学習行の特徴をどの売上から作るかを選ぶ。
+
+    - "out_of_block": 学習行を日付順に分けた期間ごとに「自分の期間以外」から作る。自分の売上は
+      入らないが、自分より未来の期間の売上は入る。検証・テスト行は学習行全体から作る
+    - "insample": 学習行全体から作る（自分の売上が入る。切り分け用）。検証・テスト行は同上
+    - "past": どの行も「その日の gap_days 日前より前の学習行」だけから作る（expanding window）。
+      学習行と検証・テスト行で作り方が同じ。gap_days = 48 なら、どの行も予測期間（48 日）以上前の
+      売上だけを使う
     """
 
-    out_of_block: bool = True
+    train_rows: StatRows = "out_of_block"
+    gap_days: int = 0
+
+    def __post_init__(self) -> None:
+        if self.gap_days < 0 or (self.gap_days and self.train_rows != "past"):
+            raise ValueError(f"gap_days（{self.gap_days}）は past でだけ 0 以上を指定できます")
 
     @property
     def name(self) -> str:
-        return "store_stats" if self.out_of_block else "store_stats_insample"
+        return {
+            "out_of_block": "store_stats",
+            "insample": "store_stats_insample",
+            "past": f"store_stats_past-gap{self.gap_days}",
+        }[self.train_rows]
 
     @property
     def columns(self) -> list[str]:
@@ -272,8 +327,13 @@ class StoreStats:
     def __call__(
         self, train: pd.DataFrame, log_sales: np.ndarray, rest: pd.DataFrame
     ) -> tuple[np.ndarray, np.ndarray]:
+        if self.train_rows == "past":
+            return (
+                _past_means(train, log_sales, train, self.gap_days),
+                _past_means(train, log_sales, rest, self.gap_days),
+            )
         f_rest = _group_means(train, log_sales, rest)
-        if not self.out_of_block:
+        if self.train_rows == "insample":
             return _group_means(train, log_sales, train), f_rest
         f_train = np.full((len(train), len(_STAT_KEYS)), np.nan)
         for ref, block in folds_to_splits(inner_blocks(train["Date"])):

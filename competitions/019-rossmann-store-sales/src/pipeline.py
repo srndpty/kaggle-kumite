@@ -86,6 +86,26 @@ def load_data() -> Data:
     )
 
 
+def pseudo_test(data: Data, rows: np.ndarray) -> Data:
+    """train の rows（末尾の期間）を test とみなした Data。提出時と同じ情報の条件にそろえる。
+
+    - 暦は rows の末尾までに切り詰める（提出時は test の末尾より先の予定が分からないのと同じ）
+    - rows より後の train 行があれば拒否する（その売上も提出時には存在しない）
+    """
+    dates = data.train["Date"]
+    as_of = dates.iloc[rows].max()
+    if (dates > as_of).any():
+        raise ValueError(f"疑似テストの末尾 {as_of.date()} より後の学習行があります")
+    held = replace(
+        data,
+        test=data.train.iloc[rows],
+        x_test=data.x_train.iloc[rows],
+        calendar=data.calendar.until(as_of),
+    )
+    assert held.calendar.end == as_of
+    return held
+
+
 def rmspe(y: np.ndarray, pred: np.ndarray) -> float:
     """Root Mean Square Percentage Error。売上 0 の行は評価しない（学習・検証行には含めていない）。"""
     return float(np.sqrt(np.mean(((y - pred) / y) ** 2)))

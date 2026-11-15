@@ -48,22 +48,21 @@ def lightgbm(x_tr, y_tr, x_va, y_va, x_te, params) -> FoldResult:
     )
     best = booster.best_iteration
     return FoldResult(
-        booster.predict(x_va, num_iteration=best),
-        booster.predict(x_te, num_iteration=best),
+        np.asarray(booster.predict(x_va, num_iteration=best)),
+        np.asarray(booster.predict(x_te, num_iteration=best)),
         {"best_iteration": best},
     )
 
 
 def logistic_regression(x_tr, y_tr, x_va, y_va, x_te, params) -> FoldResult:
     """標準化 + 多クラスロジスティック回帰。標準化は学習 fold だけで fit する。"""
-    model = make_pipeline(
-        StandardScaler(), LogisticRegression(C=params["C"], max_iter=params["max_iter"])
-    )
+    classifier = LogisticRegression(C=params["C"], max_iter=params["max_iter"])
+    model = make_pipeline(StandardScaler(), classifier)
     model.fit(x_tr, y_tr)
     return FoldResult(
         model.predict_proba(x_va),
         model.predict_proba(x_te),
-        {"n_iter": int(model[-1].n_iter_[0])},
+        {"n_iter": int(classifier.n_iter_[0])},
     )
 
 

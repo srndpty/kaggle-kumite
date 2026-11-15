@@ -8,12 +8,13 @@ OOF スコアに検証データの情報は漏れない。テスト予測には 
 
 import argparse
 import time
+from typing import cast
 
 import numpy as np
 from cv import N_SPLITS, make_folds
 from dataset import TARGET, encode_target, load_test, load_train
 from runs import Experiment, load_predictions, multi_logloss, save_run
-from scipy.optimize import minimize_scalar
+from scipy.optimize import OptimizeResult, minimize_scalar
 from scipy.special import softmax
 
 EPS = 1e-15
@@ -25,8 +26,14 @@ def apply_temperature(pred: np.ndarray, t: float) -> np.ndarray:
 
 
 def fit_temperature(y: np.ndarray, pred: np.ndarray) -> float:
-    result = minimize_scalar(
-        lambda t: multi_logloss(y, apply_temperature(pred, t)), bounds=T_BOUNDS, method="bounded"
+    # scipy の型情報では戻り値が object なので、実際の型 OptimizeResult を明示する。
+    result = cast(
+        OptimizeResult,
+        minimize_scalar(
+            lambda t: multi_logloss(y, apply_temperature(pred, t)),
+            bounds=T_BOUNDS,
+            method="bounded",
+        ),
     )
     return float(result.x)
 

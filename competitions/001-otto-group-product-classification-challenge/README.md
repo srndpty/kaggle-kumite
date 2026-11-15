@@ -4,6 +4,20 @@
 - カテゴリ: A / 難度: 2 / 計算負荷: S
 - 今回の比較実験テーマ: 多クラス分類：LogLoss・モデルの較正
 
+## コンペ概要
+
+**EC 企業の商品を、匿名化された93個の数値特徴から9つの商品カテゴリに分類するコンペ。**
+
+- 主催: Otto Group（ドイツの大手 EC・通販グループ。世界各国に子会社を持ち、膨大な数の商品を扱う）
+- 背景: 国や子会社ごとにシステムが異なるため、同じ商品が別々のカテゴリに分類されてしまうことが多い。商品分析の質は、似た商品を正しくまとめられるかに大きく左右されるため、商品を自動で正しいカテゴリに振り分けるモデルが求められた
+- 予測するもの: 各商品が9つの主要カテゴリ（ファッション、電子機器などの大分類）のどれに属するか。ラベルを当てるのではなく、9カテゴリそれぞれの確率を出す
+- 入力: 1行 = 1商品。93個の特徴量は商品に関するさまざまなイベントの回数だが、意味は伏せられている。カテゴリ名も Class_1〜Class_9 に置き換えられている
+- 開催: 2015年3月〜2015年5月18日（Featured、賞金総額 $10,000）。Public Leaderboard 上の参加は 3,509 チーム
+- 位置づけ: 特徴量の意味がわからないため、ドメイン知識が使えない。モデルの選び方・検証・確率の扱いだけで勝負する、純粋な表形式の多クラス分類
+- 参考スコア（Public Leaderboard）: 1位 0.38055、上位10% 0.42907、中央値 0.54175。当リポジトリの E01（0.45008）は 709 位相当（Late Submission なので正式な順位ではない）
+
+出典について: 主催者・背景・カテゴリの例は、Kaggle Overview の説明文を記憶に基づいて要約したもの（ページは JavaScript で描画されるため、本文を CLI では取得できなかった）。期間の終わりとチーム数・スコアは、`kaggle competitions leaderboard --download` で取得した Public Leaderboard から確認した。賞金はカタログの記載による。
+
 ## 基本情報（P0 で記入）
 
 - 評価指標: multi-class logloss（小さいほど良い）
@@ -108,7 +122,7 @@
 - [x] P2. 検証分割の設計
 - [x] P3. Baseline の固定（seed・fold・指標・前処理）
 - [x] P4. 仮説検証・Ablation（単一要因で3回以上）
-- [ ] P5. Late Submission とエラー分析（CV と外部スコアの整合性）
+- [x] P5. Late Submission とエラー分析（CV と外部スコアの整合性）
 - [ ] P6. 上位解法との照合
 - [ ] P7. 知見の保存（`report.md`）
 
@@ -119,11 +133,56 @@
 | H1 | 線形モデルや NN では、log1p 変換でカウントの裾を潰すと logloss が改善する（決定木系にはほぼ影響しない） | 非ゼロ値の中央値 1 に対して 99.9% 点は 51、歪度は最大 36.5 | 支持（線形は弱め）。E02→E03 で平均 -0.0061（4/5 fold 改善）。E01→E04 は差 1e-5 以下。NN は未検証 |
 | H2 | 誤差は Class_2・3・4 の取り違えに集中する。クラスごとの logloss に分解すると、この3クラスの寄与が件数比以上に大きい | クラス平均プロファイルの cosine 類似度は 2-3 間で 0.973、2-4 間で 0.932、3-4 間で 0.925 | 一部支持。3クラスで件数 43%・損失 59%。ただし Class_2 自体は件数比以下で、重いのは 3・4。Class_1・7 も重い |
 | H3 | 行単位の集約特徴（行合計・非ゼロ数）を加えると、木モデルの logloss も改善する | 非ゼロ数の平均は Class_5 の 9.4 から Class_8 の 24.3 まで、クラスで大きく異なる | 不支持。E01→E05 で平均 +0.0003、改善は 2/5 fold。ノイズの範囲 |
-| H4 | 木モデルの出力確率は較正がずれており、温度スケーリングなどの較正で logloss が下がる | 評価指標が logloss で、比較実験のテーマが較正のため（EDA 由来ではなく、検証用に追加した仮説） | CV 上は支持。E01→E06 で平均 -0.0025、5/5 fold 改善。Late は未確認 |
+| H4 | 木モデルの出力確率は較正がずれており、温度スケーリングなどの較正で logloss が下がる | 評価指標が logloss で、比較実験のテーマが較正のため（EDA 由来ではなく、検証用に追加した仮説） | 単一モデルでは支持、提出（5 モデル平均）では不支持。CV は -0.0025 だが Late は +0.00075（P5 参照） |
 
 ## 仮説検証（P4）
 
 比較は `dev compare 1 <基準> <run_id...>` で、同じ fold どうしの差（実験 − 基準、負なら改善）を見る。
+
+### 仮説の実装（中核コード）
+
+各実験は [src/train.py](src/train.py) の `EXPERIMENTS` に定義している。1つの実験は「特徴量セット × モデル × パラメータ」の組で、基準との違いは1要素だけにしている。コマンドはリポジトリのルートから実行する（`src` は `competitions/001-otto-group-product-classification-challenge/src` の略）。
+
+| 仮説 | run | 中核コード | 再実行 |
+|---|---|---|---|
+| H1 | E02, E03 | 特徴量 [`features.log1p`](src/features.py#L14)、モデル [`models.logistic_regression`](src/models.py#L57) | `uv run python src/train.py E03` |
+| H1 | E04 | 特徴量 [`features.log1p`](src/features.py#L14)、モデル [`models.lightgbm`](src/models.py#L34) | `uv run python src/train.py E04` |
+| H2 | （E01 の分析） | [`analyze.per_class_loss`](src/analyze.py#L17)、[`analyze.confusion`](src/analyze.py#L37) | `uv run python src/analyze.py E01` |
+| H3 | E05 | 特徴量 [`features.row_stats`](src/features.py#L19) | `uv run python src/train.py E05` |
+| H4 | E06 | [`calibrate.apply_temperature` / `fit_temperature`](src/calibrate.py#L24)、クロスフィットのループは [`calibrate.main`](src/calibrate.py#L56) | `uv run python src/calibrate.py E01 E06` |
+| P5 | — | [`averaging_check.check_outer_fold`](src/averaging_check.py#L24) | `uv run python src/averaging_check.py` |
+
+`train.py` で同じ run_id を再実行すると、`experiments.jsonl` への二重記録を防ぐためエラーになる。再実行するときは、`experiments.jsonl` から該当する行を消してから実行する。
+
+中核部分の抜粋:
+
+```python
+# H1: log1p 変換（features.py）。行ごとに完結する変換なので、CV の外で train/test に適用してよい
+def log1p(df):
+    return df[FEATURES].astype("float64").transform(np.log1p)
+
+
+# H1: 線形モデル（models.py）。標準化は Pipeline 内で学習 fold だけを使って fit する
+model = make_pipeline(StandardScaler(), LogisticRegression(C=1.0, max_iter=2000))
+
+# H2: クラス別の損失（analyze.py）。各サンプルの「正解クラスの予測確率」の -log を正解クラスごとに集計する
+sample_loss = -np.log(np.clip(oof[np.arange(len(y)), y], EPS, 1))
+contribution = [sample_loss[y == k].sum() / sample_loss.sum() for k in range(9)]
+
+# H3: 行集約特徴（features.py）
+x.assign(row_sum=x.sum(axis=1), row_nnz=(x > 0).sum(axis=1))
+
+
+# H4: 温度スケーリング（calibrate.py）。fold k の T は、k 以外の fold の OOF で決める（クロスフィット）
+def apply_temperature(pred, t):
+    return softmax(np.log(np.clip(pred, EPS, 1)) / t, axis=1)
+
+
+for fold in range(N_SPLITS):
+    tr, va = folds != fold, folds == fold
+    t = fit_temperature(y[tr], oof[tr])
+    calibrated[va] = apply_temperature(oof[va], t)
+```
 
 ### H1: log1p 変換
 
@@ -166,7 +225,8 @@
 - E01 の OOF は過信気味だった。確信度 0.7〜0.8 のビンでは正解率 0.715 に対して平均確信度 0.750。ECE は 0.0151
 - 温度 T は fold ごとに 1.098〜1.113（T > 1 は確率を穏やかにする方向）。他の fold の OOF で T を決めるクロスフィットなので、OOF スコアに検証データの情報は漏れていない
 - E01 → E06 の fold ごとの差は -0.0011 -0.0038 -0.0020 -0.0034 -0.0020。5 fold すべてで改善し、平均 -0.0025
-- 注意: テスト予測は 5 モデルの平均で、すでに確率が穏やかになっている（E01 の Late が CV より良い理由の候補）。単一モデルの OOF で決めた T をそのままかけると、テスト側では効きすぎる可能性がある。Late で確認が必要
+- 注意: テスト予測は 5 モデルの平均で、すでに確率が穏やかになっている。単一モデルの OOF で決めた T をそのままかけると、テスト側では効きすぎる可能性がある
+  - → Late で確認したところ、実際に悪化した（P5 参照）
 
 ## 実験ログ
 
@@ -180,7 +240,7 @@
 | E03 | E02 + log1p | 0.63496 | | 改善（4/5 fold） |
 | E04 | E01 + log1p | 0.47393 | | 変化なし |
 | E05 | E01 + row_sum, row_nnz | 0.47419 | | 効果なし |
-| E06 | E01 + 温度スケーリング | 0.47148 | | 改善（5/5 fold）、Late 未確認 |
+| E06 | E01 + 温度スケーリング | 0.47148 | 0.45226 | CV は改善、Late は悪化 |
 
 ### CV と Late Submission の差
 
@@ -188,9 +248,32 @@
 |---|---:|---:|---:|
 | E00 | 1.95041 | 1.94998 | 1.95125 |
 | E01 | 0.47393 | 0.45008 | 0.45151 |
+| E06 | 0.47148 | 0.45104 | 0.45226 |
 
 - E00 は CV と Late がほぼ一致する。採点の仕組みとクラス比の前提は CV と同じとみてよい
-- E01 は Late の方が CV より約 0.022 良い（Private 0.45151 と OOF 0.47393）
-  - 考えられる理由（未検証）: OOF は1つのモデルの予測だが、テスト予測は 5 fold のモデルの平均。平均すると確率が穏やかになり、logloss が下がりやすい
-  - P5 で確かめる: OOF 側でも擬似的にモデルを平均した場合の効果を測る、または全データで学習した単一モデルを提出して比べる
-- CV と Late の差は E01 と同じ設定の実験どうしではほぼ一定と見込む。比較は引き続き OOF で行い、Late は確認用とする
+- E01 は Late の方が CV より約 0.022 良い。E06 は CV では E01 より良いが、Late では E01 より 0.00075 悪い
+- 原因は下の P5 で特定した
+
+## P5: CV と Late の差の原因
+
+`src/averaging_check.py` で、train の中で提出と同じ状況を再現した。外側の各 fold を疑似テストとして取り置き、残りのデータで E01 と同じ手順（内側 4 fold の CV と early stopping）を行う。単一モデルどうしは学習データ量が同じなので、平均の効果だけを分けて測れる。
+
+| 指標（外側 5 fold の平均） | logloss |
+|---|---:|
+| 内側 OOF（単一モデル、E01 の OOF に相当） | 0.48812 |
+| 疑似テスト・単一モデル | 0.49015 |
+| 疑似テスト・4 モデル平均（E01 の提出に相当） | 0.46931 |
+| 疑似テスト・単一モデル + 温度 T | 0.48787 |
+| 疑似テスト・4 モデル平均 + 温度 T（E06 の提出に相当） | 0.47017 |
+
+- **平均の効果は -0.0208**（単一 0.49015 → 平均 0.46931）。E01 の CV と Late の差（-0.022）とほぼ同じ大きさで、差のほとんどはこれで説明できる
+- 内側 OOF と疑似テストの単一モデルの差は +0.0020。OOF は検証 fold で early stopping しているので、その分だけ楽観側に偏っている（P3 で書いた偏りの大きさの実測値）。分布の差はこれ以上は見られない
+- **温度スケーリングは、単一モデルには -0.0023 で効くが、平均予測には +0.0009 で悪化する**。E06 の CV（-0.0025）と Late（+0.00075）の結果を、両方ともほぼそのまま再現した
+  - 内側 OOF で決めた T は平均 1.093。一方、平均予測にとって最適な T は 1.026（疑似テストのラベルで求めた診断値）
+  - モデルを平均すると確率が穏やかになり、過信の大半はそれで解消される。そこにさらに T をかけると、確率を穏やかにしすぎる
+
+### わかったこと
+
+- OOF は「単一モデルの予測」、提出は「fold モデルの平均」であり、評価しているものが違う。モデル間の比較には OOF を使ってよいが、OOF の絶対値は提出スコアを約 0.02 悲観的に見積もる
+- **較正などの後処理は、提出と同じ形の予測で決め、同じ形で評価しなければならない**。単一モデルの OOF で調整すると、平均予測では逆効果になりうる
+- 今後の後処理は、この入れ子の枠組み（疑似テスト上の平均予測）で評価する

@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from dataset import CLASSES, FEATURES, OUTPUT_DIR, TARGET, encode_target, load_test, load_train
-from scipy.stats import spearmanr
+from features import log1p
 
 FIG_DIR = OUTPUT_DIR / "eda"
 
@@ -58,7 +58,7 @@ def target_distribution(train: pd.DataFrame) -> None:
 def id_order(train: pd.DataFrame, test: pd.DataFrame) -> None:
     section("id と目的変数の関係（リーク確認）")
     y = encode_target(train[TARGET])
-    rho = spearmanr(train["id"], y).statistic
+    rho = train["id"].corr(y, method="spearman")
     print(f"Spearman(id, class): {rho:.4f}")
     is_sorted = bool((y.diff().dropna() >= 0).all())
     print(f"train は class 順に並んでいるか: {is_sorted}")
@@ -124,7 +124,7 @@ def class_profiles(train: pd.DataFrame) -> None:
         print(f"  {feat}: {top[feat]:.1f}倍 → {peak_class[feat]}")
 
     # クラス平均プロファイル（log1p）の cosine 類似度。高いペアほど分離が難しい見込み。
-    means = np.log1p(x).groupby(train[TARGET]).mean().to_numpy()
+    means = log1p(train).groupby(train[TARGET]).mean().to_numpy()
     unit = means / np.linalg.norm(means, axis=1, keepdims=True)
     sim = unit @ unit.T
     iu = np.triu_indices_from(sim, k=1)
@@ -146,7 +146,7 @@ def class_profiles(train: pd.DataFrame) -> None:
 
 def correlations(train: pd.DataFrame) -> None:
     section("特徴量間の相関")
-    corr = np.log1p(train[FEATURES]).corr().to_numpy()
+    corr = log1p(train).corr().to_numpy()
     iu = np.triu_indices_from(corr, k=1)
     pairs = sorted(zip(corr[iu], iu[0], iu[1], strict=True), key=lambda t: -abs(t[0]))
     print(f"|r| > 0.5 のペア数（log1p 後）: {sum(abs(r) > 0.5 for r, _, _ in pairs)}")
@@ -158,8 +158,8 @@ def train_test_shift(train: pd.DataFrame, test: pd.DataFrame) -> None:
     section("train / test の分布差")
     nz_tr = (train[FEATURES] > 0).mean()
     nz_te = (test[FEATURES] > 0).mean()
-    mean_tr = np.log1p(train[FEATURES]).mean()
-    mean_te = np.log1p(test[FEATURES]).mean()
+    mean_tr = log1p(train).mean()
+    mean_te = log1p(test).mean()
     diff = pd.DataFrame(
         {"nz_diff": (nz_te - nz_tr).abs(), "log_mean_diff": (mean_te - mean_tr).abs()}
     )

@@ -21,6 +21,7 @@ tabular = [
     "matplotlib",
     "numpy",
     "pandas",
+    "pandas-stubs",
     "polars",
     "scikit-learn",
     "xgboost",
@@ -34,7 +35,7 @@ build-backend = "hatchling.build"
 packages = ["src/kumite"]
 
 [tool.uv]
-# CI は dev のみ (`uv sync --no-default-groups --group dev`) で軽量に保つ。
+# competitions/ も型検査するため、CI も既定グループ（dev + tabular）を入れる。
 default-groups = ["dev", "tabular"]
 
 [tool.ruff]
@@ -48,9 +49,27 @@ select = ["E", "F", "I", "UP", "B", "SIM", "PTH", "RUF"]
 ignore = ["E501", "RUF001", "RUF002", "RUF003"]
 
 [tool.pyright]
-include = ["src", "tests"]
+include = ["src", "tests", "competitions"]
 typeCheckingMode = "strict"
 pythonVersion = "3.12"
+venvPath = "."
+venv = ".venv"
+
+# コンペ用スクリプトは ML ライブラリ（型情報が不完全）を多用するため、
+# 「型が不明」系の strict ルールだけ切る。型の食い違いなど本物のエラーは検出する。
+[[tool.pyright.executionEnvironments]]
+root = "competitions"
+reportUnknownMemberType = false
+reportUnknownVariableType = false
+reportUnknownArgumentType = false
+reportUnknownParameterType = false
+reportUnknownLambdaType = false
+reportMissingParameterType = false
+reportMissingTypeArgument = false
+reportMissingTypeStubs = false
+
+[[tool.pyright.executionEnvironments]]
+root = "."
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

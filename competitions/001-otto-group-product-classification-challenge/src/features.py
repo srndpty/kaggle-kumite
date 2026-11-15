@@ -13,7 +13,7 @@ def raw(df: pd.DataFrame) -> pd.DataFrame:
 
 def log1p(df: pd.DataFrame) -> pd.DataFrame:
     # float32 だと predict_proba も float32 になり、確率の和が 1 からずれて logloss が警告を出す。
-    return np.log1p(df[FEATURES].astype("float64"))
+    return df[FEATURES].astype("float64").transform(np.log1p)
 
 
 def row_stats(df: pd.DataFrame) -> pd.DataFrame:

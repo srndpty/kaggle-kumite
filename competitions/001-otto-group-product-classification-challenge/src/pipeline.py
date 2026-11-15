@@ -18,7 +18,7 @@ from kumite.crossfit import CrossFitResult, cross_fit
 from kumite.experiments import ExperimentRecord
 from kumite.paths import REPO_ROOT
 from kumite.provenance import array_sha256, code_version, files_sha256, peak_memory_mb
-from kumite.runs import RunStore
+from kumite.runs import Reservation, RunStore
 
 COMPETITION_ID = "001"
 METRIC = "multi_logloss"
@@ -86,7 +86,7 @@ def run_cv(
 
 
 def save_run(
-    run_id: str,
+    reservation: Reservation,
     exp: Experiment,
     y: pd.Series,
     folds: np.ndarray,
@@ -108,7 +108,7 @@ def save_run(
 
     record = ExperimentRecord(
         competition_id=COMPETITION_ID,
-        run_id=run_id,
+        run_id=reservation.run_id,
         metric=METRIC,
         greater_is_better=False,
         data_version=exp.data_version,
@@ -136,7 +136,7 @@ def save_run(
         submission.to_csv(out_dir / "submission.csv", index=False)
         (out_dir / "fold_info.json").write_text(json.dumps(result.infos), encoding="utf-8")
 
-    print(f"出力: {STORE.publish(record, write)}")
+    print(f"出力: {STORE.publish(reservation, record, write)}")
 
 
 def load_predictions(run_id: str) -> tuple[np.ndarray, np.ndarray]:

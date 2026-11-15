@@ -79,7 +79,9 @@ def _compare(number: int, base_run_id: str, run_ids: list[str]) -> int:
 def _orphans(number: int, delete: bool) -> int:
     competition = find_competition(load_catalog(CATALOG_CSV), number)
     store = RunStore(COMPETITIONS_DIR / competition.dir_name)
-    found = store.discard_orphans() if delete else store.orphans()
+    found = store.orphans()
+    if delete:
+        found = store.discard_orphans(found)
     if not found:
         print("ログにない run ディレクトリ・一時ディレクトリはありません")
         return 0

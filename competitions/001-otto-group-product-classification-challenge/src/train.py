@@ -137,13 +137,13 @@ EXPERIMENTS["E16"] = Experiment(
 
 def run(run_id: str) -> None:
     exp = EXPERIMENTS[run_id]
-    with STORE.reserve(run_id):  # 学習前に run_id を予約し、重複・同時実行を拒否する
+    with STORE.reserve(run_id) as reservation:  # 学習前に run_id を予約し、重複・同時実行を拒否する
         train, test = load_train(), load_test()
         y = encode_target(train[TARGET])
         folds = make_folds(y)
         started = time.perf_counter()
         result = run_cv(exp, train, y, folds, test)
-        save_run(run_id, exp, y, folds, result, test["id"], time.perf_counter() - started)
+        save_run(reservation, exp, y, folds, result, test["id"], time.perf_counter() - started)
 
 
 def main() -> None:

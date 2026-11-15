@@ -5,6 +5,8 @@ next_experiment だけ。同じ実験をやり直すときは `E01-r2` のよう
 """
 
 import json
+import os
+import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -48,11 +50,26 @@ class ExperimentRecord:
 
 
 def append_record(log_path: Path, record: ExperimentRecord) -> None:
-    """記録を追記する。同じ run_id が既にあれば拒否する。"""
-    if log_path.exists() and any(r.run_id == record.run_id for r in read_records(log_path)):
+    """記録を 1 行加える。同じ run_id が既にあれば拒否する。
+
+    追記ではなく「既存の内容 + 新しい行」を一時ファイルに書き、`os.replace` で置き換える。
+    置き換えが唯一の確定点で、それより前に失敗すればログは元のまま。書きかけの行は残らない。
+    """
+    existing = log_path.read_bytes() if log_path.exists() else b""
+    if existing and not existing.endswith(b"\n"):
+        raise ValueError(f"{log_path} の末尾が改行で終わっていません（途中で切れた可能性）")
+    if existing and any(r.run_id == record.run_id for r in read_records(log_path)):
         raise ValueError(f"run_id {record.run_id} は {log_path} に記録済みです")
-    with log_path.open("a", encoding="utf-8", newline="\n") as f:
-        f.write(json.dumps(asdict(record), ensure_ascii=False) + "\n")
+    line = (json.dumps(asdict(record), ensure_ascii=False) + "\n").encode("utf-8")
+    tmp = log_path.with_name(f".{log_path.name}.{uuid.uuid4().hex[:8]}.tmp")
+    try:
+        with tmp.open("wb") as f:
+            f.write(existing + line)
+            f.flush()
+            os.fsync(f.fileno())
+        tmp.replace(log_path)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def read_records(log_path: Path) -> list[ExperimentRecord]:

@@ -18,6 +18,7 @@ from scipy.optimize import OptimizeResult, minimize_scalar
 from scipy.special import softmax
 
 from kumite.crossfit import CrossFitResult
+from kumite.runs import Reservation
 
 EPS = 1e-15
 T_BOUNDS = (0.2, 5.0)
@@ -47,11 +48,11 @@ def main() -> None:
     args = parser.parse_args()
     base_run_id: str = args.base_run_id
     run_id: str = args.run_id
-    with STORE.reserve(run_id):
-        calibrate(base_run_id, run_id)
+    with STORE.reserve(run_id) as reservation:
+        calibrate(base_run_id, reservation)
 
 
-def calibrate(base_run_id: str, run_id: str) -> None:
+def calibrate(base_run_id: str, reservation: Reservation) -> None:
     y = encode_target(load_train()[TARGET])
     folds = make_folds(y)
     oof, test_pred = load_predictions(base_run_id)
@@ -76,7 +77,7 @@ def calibrate(base_run_id: str, run_id: str) -> None:
     )
     result = CrossFitResult(calibrated, apply_temperature(test_pred, t_all), fold_infos)
     inputs = STORE.input_hashes(base_run_id, "oof.npy", "test.npy")
-    save_run(run_id, exp, y, folds, result, load_test()["id"], runtime, inputs)
+    save_run(reservation, exp, y, folds, result, load_test()["id"], runtime, inputs)
 
 
 if __name__ == "__main__":

@@ -27,12 +27,14 @@ def windows(train_end: pd.Timestamp) -> list[tuple[pd.Timestamp, pd.Timestamp]]:
     return [(end - (HORIZON_DAYS - 1) * day, end) for end in ends]
 
 
-def _valid_rows(train: pd.DataFrame, test_stores: np.ndarray) -> list[np.ndarray]:
-    """窓ごとの検証行。test に出る店舗だけを検証する。"""
+def _valid_rows(
+    train: pd.DataFrame, test_stores: np.ndarray, last_day: pd.Timestamp
+) -> list[np.ndarray]:
+    """last_day で終わる窓ごとの検証行。test に出る店舗だけを検証する。"""
     in_test = train["Store"].isin(test_stores)
     return [
         np.flatnonzero(in_test & train["Date"].between(start, end))
-        for start, end in windows(train["Date"].max())
+        for start, end in windows(last_day)
     ]
 
 
@@ -46,12 +48,19 @@ def check_time_order(dates: pd.Series, splits: list[Split]) -> None:
             )
 
 
-def time_splits(train: pd.DataFrame, test_stores: np.ndarray) -> list[Split]:
-    """各窓を、窓の開始日より前の全行で学習して検証する（expanding window）。"""
-    starts = [start for start, _ in windows(train["Date"].max())]
+def time_splits(
+    train: pd.DataFrame, test_stores: np.ndarray, last_day: pd.Timestamp | None = None
+) -> list[Split]:
+    """各窓を、窓の開始日より前の全行で学習して検証する（expanding window）。
+
+    窓は last_day（既定は train の末尾）で終わるようにとる。last_day を外側の検証窓の前日にすると、
+    外側の学習期間の中だけで閉じた内側の分割になる。
+    """
+    end: pd.Timestamp = train["Date"].max() if last_day is None else last_day
+    starts = [start for start, _ in windows(end)]
     splits = [
         (np.flatnonzero(train["Date"] < start), valid)
-        for start, valid in zip(starts, _valid_rows(train, test_stores), strict=True)
+        for start, valid in zip(starts, _valid_rows(train, test_stores, end), strict=True)
     ]
     check_time_order(train["Date"], splits)
     return splits
@@ -67,7 +76,7 @@ def random_splits(train: pd.DataFrame, test_stores: np.ndarray) -> list[Split]:
     - 学習行が多い（約 81 万行。時系列分割は 71〜80 万行）
     - 検証行と時間的に近い行（前後の日・同じ日の他店舗）から補間できる
     """
-    valid_all = np.concatenate(_valid_rows(train, test_stores))
+    valid_all = np.concatenate(_valid_rows(train, test_stores, train["Date"].max()))
     assignment = np.random.default_rng(SEED).integers(0, N_WINDOWS, size=len(valid_all))
     all_rows = np.arange(len(train))
     splits: list[Split] = []

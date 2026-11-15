@@ -35,7 +35,7 @@
 - [x] P4. 仮説検証・Ablation（単一要因で3回以上）
 - [x] P5. Late Submission とエラー分析（CV と外部スコアの整合性）
 - [x] P6. 上位解法との照合
-- [ ] P7. 知見の保存（`report.md`）
+- [x] P7. 知見の保存（`report.md`）
 
 ## EDA（P1）
 

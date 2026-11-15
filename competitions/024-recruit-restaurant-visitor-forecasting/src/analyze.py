@@ -66,7 +66,7 @@ def errors(run_id: str) -> None:
         top = squared.head(int(len(squared) * share)).sum() / squared.sum()
         print(f"log 誤差の大きい上位 {share:.0%} の行が二乗誤差に占める割合: {top:.3f}")
     worst = rows.reindex(squared.index[:8])[[STORE, DATE, TARGET, "pred", "err"]]
-    print(f"\n誤差の大きい行:\n{worst.round(3).to_string()}")
+    print(f"\n誤差の大きい行:\n{worst.round({'pred': 3, 'err': 3}).to_string()}")
 
 
 def _same_rows(base_run_id: str, base: pd.DataFrame, run_id: str) -> pd.DataFrame:

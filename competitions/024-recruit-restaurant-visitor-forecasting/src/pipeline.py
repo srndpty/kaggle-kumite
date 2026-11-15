@@ -3,7 +3,7 @@
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -20,7 +20,7 @@ from dataset import (
     load_test,
     load_visits,
 )
-from features import Feature, FoldContext, row_features
+from features import Feature, FoldContext, holiday_adjusted_dow, row_features
 from models import MODELS
 
 from kumite.checks import validate_regression
@@ -58,13 +58,16 @@ class Experiment:
     target: str = "raw"  # TARGETS の名前
     split: str = "time"  # cv.SPLITS の名前
     refit: bool = False  # テスト予測を、全学習行で学習し直した 1 モデルで作る
+    # 曜日: 暦どおりか、祝日を土曜・休日の前日を金曜・翌日を月曜とみなすか（特徴の dow と、統計量の曜日）
+    dow: Literal["calendar", "holiday_adjusted"] = "calendar"
     params: dict[str, Any] = field(default_factory=dict)
 
     @property
     def data_version(self) -> str:
         names = ["base", *(f.name for f in self.features)]
         submission = "refit" if self.refit else "split_mean"
-        return f"{'+'.join(names)}|target={self.target}|submission={submission}"
+        dow = "" if self.dow == "calendar" else f"|dow={self.dow}"
+        return f"{'+'.join(names)}|target={self.target}|submission={submission}{dow}"
 
 
 @dataclass(frozen=True)
@@ -106,26 +109,40 @@ def fold_inputs(
     exp: Experiment, data: Data, y: np.ndarray, train_idx: np.ndarray, valid_idx: np.ndarray
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """1 分割の (学習, 検証, テスト) の入力を作る。ラベルを使う特徴には学習行の来店数だけを渡す。"""
-    x_tr, x_va, x_te = data.x_train.iloc[train_idx], data.x_train.iloc[valid_idx], data.x_test
-    if not exp.features:
-        return x_tr, x_va, x_te
     train, valid = data.train.iloc[train_idx], data.train.iloc[valid_idx]
     test_origin, test_end = data.test[DATE].min(), data.test[DATE].max()
     # 予定が分かるのは予測期間の末尾まで。学習・検証行は検証窓の末尾まで（全行で学習し直すときは
     # 検証行が無いので test の末尾まで）
+    fit_end = valid[DATE].max() if len(valid) else test_end
+    rows = [train, valid, data.test]
+    if exp.dow == "holiday_adjusted":
+        ends = [fit_end, fit_end, test_end]
+        dows = [
+            holiday_adjusted_dow(r[DATE], data.holidays, e) for r, e in zip(rows, ends, strict=True)
+        ]
+    else:
+        dows = [r[DATE].dt.day_of_week.to_numpy() for r in rows]
+    train, valid, test = (r.assign(dow=d) for r, d in zip(rows, dows, strict=True))
+    frames = [
+        x.assign(dow=d)
+        for x, d in zip(
+            (data.x_train.iloc[train_idx], data.x_train.iloc[valid_idx], data.x_test),
+            dows,
+            strict=True,
+        )
+    ]
     ctx = FoldContext(
         train=train,
         valid=valid,
-        test=data.test,
+        test=test,
         log_y=np.log1p(y[train_idx]),
         reserves=data.reserves,
         holidays=data.holidays,
         valid_origin=valid[DATE].min() if len(valid) else test_origin,
         test_origin=test_origin,
-        fit_known_end=valid[DATE].max() if len(valid) else test_end,
+        fit_known_end=fit_end,
         test_known_end=test_end,
     )
-    frames = [x_tr, x_va, x_te]
     for feature in exp.features:
         built = feature.build(ctx)
         frames = [

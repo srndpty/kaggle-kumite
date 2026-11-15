@@ -16,6 +16,39 @@ CATEGORICAL = ["store", "genre", "pref", "city"]
 DAY = pd.Timedelta(days=1)
 
 
+def pseudo_ahead(n_rows: int) -> np.ndarray:
+    """学習行に割り当てる「予測の起点から何日先か」（0〜38 日、一様）。
+
+    検証・テスト行と同じ打ち切りを学習行にも入れるために使う。予約と統計量で同じ値になるよう、
+    どの特徴も学習行の数だけからこの関数で作る。
+    """
+    return np.random.default_rng(SEED).integers(0, HORIZON_DAYS, size=n_rows)
+
+
+def holiday_adjusted_dow(
+    dates: pd.Series, holidays: pd.Series, known_end: pd.Timestamp
+) -> np.ndarray:
+    """祝日を土曜（5）、休日の前日の平日を金曜（4）、休日の翌日の平日を月曜（0）とみなした曜日（月曜 = 0）。
+
+    休日は土日と、known_end までの祝日。known_end より先の祝日は分からないものとして扱う。
+    """
+
+    def holiday(d: pd.Series) -> np.ndarray:
+        flag = d.map(holidays).fillna(0).to_numpy(dtype=bool)
+        return flag & (d <= known_end).to_numpy()
+
+    def off(d: pd.Series) -> np.ndarray:
+        return holiday(d) | (d.dt.day_of_week >= 5).to_numpy()
+
+    dow = dates.dt.day_of_week.to_numpy()
+    weekday = dow < 5
+    adjusted = dow.copy()
+    adjusted[weekday & off(dates + DAY)] = 4
+    adjusted[weekday & off(dates - DAY) & ~off(dates + DAY)] = 0
+    adjusted[weekday & holiday(dates)] = 5
+    return adjusted
+
+
 def row_features(rows: pd.DataFrame, stores: pd.DataFrame) -> pd.DataFrame:
     """店舗の属性と日付の分解。カテゴリは店舗情報の並びで番号を振る（学習・テストで共通）。"""
     area = stores["air_area_name"].str.split(" ")
@@ -139,29 +172,41 @@ def _past_mean(
 
 @dataclass(frozen=True)
 class StoreStats:
-    """店舗・店舗 × 曜日の log1p 来店数の平均と行数。どの行も、学習行のうちその日より前の行だけから作る。
+    """店舗・店舗 × 曜日の log1p 来店数の平均と行数。学習行の来店数だけから作る。
 
-    時系列分割の検証・テスト行では「学習行すべて」と同じ（学習行はすべて窓の開始より前）。
+    曜日は行の `dow` 列（暦の曜日か、祝日で調整した曜日。`pipeline.fold_inputs` が付ける）。
+    検証・テスト行は、学習行すべて（すべて予測の起点より前）から作る。学習行は:
+
+    - train_rows="past": その日より前の学習行から作る
+    - train_rows="pseudo_origin": その日から「何日先か」（`pseudo_ahead`）だけ前の起点より前の学習行から
+      作る（検証・テスト行と同じ打ち切り。予約の `Reservations(train_rows="horizon")` と同じ日数）
     """
+
+    train_rows: Literal["past", "pseudo_origin"] = "past"
 
     @property
     def name(self) -> str:
-        return "store_stats-past"
+        return f"store_stats-{self.train_rows}"
 
     @property
     def columns(self) -> list[str]:
         return ["StoreMean", "StoreCount", "StoreDowMean", "StoreDowCount"]
 
     def build(self, ctx: FoldContext) -> Built:
-        ref = ctx.train.assign(dow=ctx.train[DATE].dt.day_of_week)
-
-        def make(rows: pd.DataFrame) -> np.ndarray:
-            query = rows.assign(dow=rows[DATE].dt.day_of_week)
-            store = _past_mean(ref, ctx.log_y, query, [STORE])
-            store_dow = _past_mean(ref, ctx.log_y, query, [STORE, "dow"])
+        def make(rows: pd.DataFrame, as_of: pd.Series) -> np.ndarray:
+            query = rows.assign(**{DATE: as_of.to_numpy()})
+            store = _past_mean(ctx.train, ctx.log_y, query, [STORE])
+            store_dow = _past_mean(ctx.train, ctx.log_y, query, [STORE, "dow"])
             return np.column_stack([*store, *store_dow])
 
-        return make(ctx.train), make(ctx.valid), make(ctx.test)
+        as_of_tr = ctx.train[DATE]
+        if self.train_rows == "pseudo_origin":
+            as_of_tr = as_of_tr - pd.to_timedelta(pseudo_ahead(len(as_of_tr)), unit="D")
+        return (
+            make(ctx.train, as_of_tr),
+            make(ctx.valid, ctx.valid[DATE]),
+            make(ctx.test, ctx.test[DATE]),
+        )
 
 
 # --- 予約（ラベルを使わない。予約日時で打ち切る） ---
@@ -214,7 +259,7 @@ class Reservations:
 
         dates = ctx.train[DATE]
         if self.train_rows == "horizon":
-            ahead_tr = np.random.default_rng(SEED).integers(0, HORIZON_DAYS, size=len(dates))
+            ahead_tr = pseudo_ahead(len(dates))
             cut_tr = dates - pd.to_timedelta(ahead_tr, unit="D")
         else:
             ahead_tr = np.zeros(len(dates), dtype=np.int64)

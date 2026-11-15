@@ -81,6 +81,19 @@ EXPERIMENTS["E07"] = replace(
     changed_one_thing="E06 のテスト予測を、全学習行で学習し直した 1 モデル（round 数は best iteration の平均）に変更",
     refit=True,
 )
+# --- P6: 上位解法の着眼点の再現（E07 に 1 つずつ足す。提出は学習し直し） ---
+EXPERIMENTS["E08"] = replace(
+    EXPERIMENTS["E07"],
+    hypothesis="H8（1 位）: 学習行の統計量も「何日先か」だけ前の起点までの来店数から作ると、検証・テスト行と作り方がそろい改善する",
+    changed_one_thing="E07 の学習行の店舗別統計量を、予約と同じ「何日先か」だけ前の起点より前の学習行から作る",
+    features=(Holidays(), StoreStats(train_rows="pseudo_origin"), Reservations()),
+)
+EXPERIMENTS["E09"] = replace(
+    EXPERIMENTS["E07"],
+    hypothesis="H9（複数の上位者）: 祝日を土曜、休日の前日の平日を金曜、翌日の平日を月曜とみなすと、少ない祝日の例から学べて改善する",
+    changed_one_thing="E07 の曜日（特徴の dow と統計量の曜日）を、祝日で調整した曜日に置き換える",
+    dow="holiday_adjusted",
+)
 # H2: 同じ実験を、同じ検証行をランダムに分ける分割で測る（run_id に R を付ける）。
 for _base in ("E02", "E03", "E04"):
     EXPERIMENTS[f"{_base}R"] = replace(

@@ -18,3 +18,4 @@ wandb/
 # 認証情報
 .env
 kaggle.json
+tmp/

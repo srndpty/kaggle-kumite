@@ -9,6 +9,7 @@ from kumite.crossfit import (
     cross_fit,
     cross_fit_splits,
     folds_to_splits,
+    mean_rounds,
     split_roles,
 )
 
@@ -96,3 +97,7 @@ def test_cross_fit_splits_rejects_invalid_splits_before_fitting() -> None:
 
     with pytest.raises(ValueError, match="重なって"):
         cross_fit_splits(N_ROWS, [(np.array([0, 1]), np.array([1, 2]))], fail)
+
+
+def test_mean_rounds_rounds_mean_best_iteration() -> None:
+    assert mean_rounds([{"best_iteration": 100}, {"best_iteration": 201}]) == 150

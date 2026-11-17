@@ -21,7 +21,14 @@ from features import GAP_COLUMNS, Calendar, Gaps, SupervisedFeature, row_feature
 from models import MODELS
 
 from kumite.checks import validate_regression
-from kumite.crossfit import CrossFitResult, FoldOutput, Split, cross_fit_splits, split_roles
+from kumite.crossfit import (
+    CrossFitResult,
+    FoldOutput,
+    Split,
+    cross_fit_splits,
+    mean_rounds,
+    split_roles,
+)
 from kumite.cv_run import Evaluation, Trial, publish_cv_run
 from kumite.provenance import array_sha256, files_sha256
 from kumite.runs import Reservation, RunStore
@@ -159,11 +166,6 @@ def fit_split(
     return FoldOutput(
         np.maximum(inverse(out.valid), 0), np.maximum(inverse(out.query), 0), out.info
     )
-
-
-def mean_rounds(infos: list[dict[str, Any]]) -> int:
-    """early stopping した各分割の best iteration の平均。学習し直すときの round 数に使う。"""
-    return round(float(np.mean([info["best_iteration"] for info in infos])))
 
 
 def refit(

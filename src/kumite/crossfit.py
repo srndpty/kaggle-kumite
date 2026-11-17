@@ -101,6 +101,11 @@ def cross_fit_splits(n_rows: int, splits: Sequence[Split], fit_fold: FitFold) ->
     return CrossFitResult(oof=oof, query=query_sum / len(splits), infos=infos)
 
 
+def mean_rounds(infos: Sequence[dict[str, Any]]) -> int:
+    """early stopping した各分割の best iteration の平均。全行で学習し直すときの round 数に使う。"""
+    return round(float(np.mean([info["best_iteration"] for info in infos])))
+
+
 def _check_fold_output(
     k: int,
     out: FoldOutput,

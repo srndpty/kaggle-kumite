@@ -18,7 +18,7 @@ Kaggle 100本ノック: 終了済みの賞金付きコンペ100題を解き、�
   - `src/`, `notebooks/` — コンペ固有のコード
   - `data/`, `outputs/` — git 管理外。データ・モデル・提出ファイルは commit しない
 - `knowledge/` — 100コンペを横断した知見カード（何がわかったか・どの条件で有効か）
-- `tests/` — `src/kumite` のテスト。コンペ固有コードのテストは、そのコンペの `src/test_*.py` に置き、`pyproject.toml` の `testpaths` に足す
+- `tests/` — `src/kumite` のテスト。コンペ固有コードのテストは、そのコンペの `src/test_*.py` に置く（`dev test` がコンペごとに別プロセスで実行する。コンペ間でモジュール名がぶつかるため）
 
 2つ以上のコンペで使うコードは `src/kumite` に移す。コンペ間でコピーしない。
 

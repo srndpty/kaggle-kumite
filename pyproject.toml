@@ -103,7 +103,6 @@ reportMissingTypeStubs = false
 root = "."
 
 [tool.pytest.ini_options]
-# コンペ固有コードのテストは、そのコンペの src/ に test_*.py として置き、ここに足す
-# （src/ のモジュールを `from features import ...` のように読むため。コンペ間でモジュール名が重なるので、
-# 同じ名前のモジュールを読むテストを持つコンペを 2 つ以上並べるときは、実行方法を見直す）
-testpaths = ["tests", "competitions/024-recruit-restaurant-visitor-forecasting/src"]
+# コンペ固有コードのテスト（competitions/*/src/test_*.py）は、コンペ間でモジュール名（dataset など）が
+# ぶつかるので、`dev test` がコンペごとに別プロセスで実行する。素の pytest は tests/ だけを見る
+testpaths = ["tests"]

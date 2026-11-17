@@ -19,7 +19,17 @@ function Invoke-Native {
 
 function Invoke-Kumite { Invoke-Native uv run python -m kumite @args }
 function Invoke-Lint { Invoke-Native uv run ruff check . }
-function Invoke-Test { Invoke-Native uv run pytest @rest }
+# 引数なしなら tests/ と、テストを持つ各コンペの src/ を別プロセスで実行する（コンペの src/ は
+# `from dataset import ...` のように読むため、同じプロセスではコンペ間のモジュール名がぶつかる）。
+# 引数があれば pytest にそのまま渡す。
+function Invoke-Test {
+    if ($rest.Count -gt 0) { Invoke-Native uv run pytest @rest; return }
+    Invoke-Native uv run pytest tests
+    Get-ChildItem "competitions/*/src/test_*.py" | ForEach-Object { $_.Directory.FullName } |
+        Sort-Object -Unique | ForEach-Object {
+            Invoke-Native uv run pytest $_
+        }
+}
 
 $commands = [ordered]@{
     help     = @{ Description = "コマンド一覧を表示"; Action = { Show-Help } }
@@ -34,7 +44,7 @@ $commands = [ordered]@{
             Invoke-Native uv run ruff format .
         }
     }
-    test     = @{ Description = "pytest を実行（追加引数はそのまま渡す）"; Action = { Invoke-Test } }
+    test     = @{ Description = "pytest を実行（tests/ と各コンペの src/ を別々に。追加引数があればそのまま渡す）"; Action = { Invoke-Test } }
     check    = @{ Description = "lint + 整形確認 + 型検査 + テスト（CI と同一）"; Action = {
             Invoke-Lint
             Invoke-Native uv run ruff format --check .

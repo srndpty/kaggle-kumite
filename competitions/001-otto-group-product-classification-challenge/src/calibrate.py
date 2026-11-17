@@ -11,38 +11,16 @@
 
 import argparse
 import time
-from typing import cast
 
 import numpy as np
 from cv import N_SPLITS, make_folds, make_inner_folds
 from dataset import TARGET, encode_target, load_test, load_train
 from pipeline import STORE, Experiment, load_predictions, multi_logloss, run_cv, save_run
-from scipy.optimize import OptimizeResult, minimize_scalar
-from scipy.special import softmax
 from train import EXPERIMENTS
 
+from kumite.calibration import apply_temperature, fit_temperature
 from kumite.crossfit import CrossFitResult
 from kumite.runs import Reservation
-
-EPS = 1e-15
-T_BOUNDS = (0.2, 5.0)
-
-
-def apply_temperature(pred: np.ndarray, t: float) -> np.ndarray:
-    return softmax(np.log(np.clip(pred, EPS, 1)) / t, axis=1)
-
-
-def fit_temperature(y: np.ndarray, pred: np.ndarray) -> float:
-    # scipy の型情報では戻り値が object なので、実際の型 OptimizeResult を明示する。
-    result = cast(
-        OptimizeResult,
-        minimize_scalar(
-            lambda t: multi_logloss(y, apply_temperature(pred, t)),
-            bounds=T_BOUNDS,
-            method="bounded",
-        ),
-    )
-    return float(result.x)
 
 
 def main() -> None:
@@ -70,11 +48,11 @@ def calibrate(base_run_id: str, reservation: Reservation) -> None:
         tr, va = np.flatnonzero(folds != fold), np.flatnonzero(folds == fold)
         y_tr = y.iloc[tr]
         inner = run_cv(base, train.iloc[tr], y_tr, make_inner_folds(y_tr), train.iloc[va])
-        t = fit_temperature(y_tr.to_numpy(), inner.oof)
+        t = fit_temperature(y_tr.to_numpy(), inner.oof, multi_logloss)
         calibrated[va] = apply_temperature(oof[va], t)
         fold_infos.append({"temperature": round(t, 4)})
         print(f"fold {fold}: T = {t:.4f}", flush=True)
-    t_all = fit_temperature(y.to_numpy(), oof)
+    t_all = fit_temperature(y.to_numpy(), oof, multi_logloss)
     runtime = time.perf_counter() - started
     print(f"テスト予測に使う温度: {t_all:.4f}")
 

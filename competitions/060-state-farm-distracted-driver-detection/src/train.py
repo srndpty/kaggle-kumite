@@ -39,6 +39,35 @@ EXPERIMENTS: dict[str, Experiment] = {
         changed_one_thing="E02 に左右反転（確率 0.5、ラベルはそのまま）を追加",
         config=ModelConfig(hflip=True),
     ),
+    "E05": Experiment(
+        model="knn_smooth",
+        hypothesis="P6（1 位・3 位）: 同じ集合の中の似た画像（同じ運転手のコマ）と予測を平均すると、"
+        "1 枚ごとの予測の揺れが均されて logloss が大きく下がる",
+        changed_one_thing="E02 の予測を、自分と 32x24 の小画像の相関で選んだ近傍 10 枚の予測の単純平均に置き換える"
+        "（近傍は同じ fold の検証画像の中、test は test の中）",
+        base="E02",
+        params={"feature": "thumb", "k": 10},
+    ),
+    "E05F": Experiment(
+        model="knn_smooth",
+        hypothesis="P6: 近傍を CNN の特徴で選ぶと（1 位は VGG16 の pool5）、画素の小画像より良い近傍になる",
+        changed_one_thing="E05 の近傍を、凍結 ResNet50 の pooled 特徴（E01 と同じ）の相関で選ぶ",
+        base="E02",
+        params={"feature": "resnet", "k": 10},
+    ),
+    "E07": Experiment(
+        model="refit",
+        hypothesis="H5・K001: 全行で学習し直した 1 モデルの提出は、5 つの fold モデルの平均と差が出る",
+        changed_one_thing="E02 の test 予測を、全行で同じ設定（5 epoch）で学習し直した 1 モデルに変更（OOF は E02 のまま）",
+        base="E02",
+    ),
+    "E07F": Experiment(
+        model="knn_smooth",
+        hypothesis="H5: 近傍の平均を足した最終形でも、学習し直しと fold 平均の差は同じ向きか",
+        changed_one_thing="E05F の元の予測を E07（全行で学習し直した 1 モデル）に変更",
+        base="E07",
+        params={"feature": "resnet", "k": 10},
+    ),
 }
 # seed の揺らぎ: 同じ設定を seed だけ変えて回す（小さい差の判断基準）
 for _seed in (1, 2):

@@ -24,6 +24,7 @@ from models import (
     linear_probe,
     logloss,
 )
+from neighbors import features, knn, smooth
 
 from kumite.checks import validate_probabilities
 from kumite.crossfit import (
@@ -46,12 +47,15 @@ INPUT_SIZE = [SIZE[1], SIZE[0]]  # (高さ, 幅)。縮小キャッシュの大�
 
 @dataclass(frozen=True)
 class Experiment:
-    model: str  # "prior" / "linear_probe" / "finetune"
+    # "prior" / "linear_probe" / "finetune" / "knn_smooth"（他 run の予測の後処理）/
+    # "refit"（OOF は base のまま、test は全行で学習し直した 1 モデル）/ "nested_finetune"（nested.py）
+    model: str
     hypothesis: str
     changed_one_thing: str
     split: str = "driver"
     config: ModelConfig = field(default_factory=ModelConfig)
     params: dict[str, Any] = field(default_factory=dict[str, Any])  # linear_probe の C など
+    base: str | None = None  # 後処理の元になる run_id（knn_smooth）
 
     @property
     def data_version(self) -> str:
@@ -60,6 +64,9 @@ class Experiment:
     def logged_params(self) -> dict[str, Any]:
         if self.model == "prior":
             return {}
+        if self.model == "knn_smooth":
+            return {"base": self.base, **self.params}
+        extra = {"base": self.base} if self.base is not None else {}
         cfg = self.config
         if self.model == "linear_probe":
             return {"backbone": cfg.backbone, "size": INPUT_SIZE, **self.params}
@@ -74,6 +81,8 @@ class Experiment:
             "hflip": cfg.hflip,
             "seed": cfg.seed,
             **cfg.extra,
+            **extra,
+            **self.params,
         }
 
 
@@ -118,6 +127,8 @@ def fit_split(
             x[train_idx], y[train_idx], x[valid_idx], x_te, exp.params["C"]
         )
         return FoldOutput(valid, test, info)
+    if exp.model == "knn_smooth":
+        return _knn_smooth(exp, data, valid_idx)
     if exp.model == "finetune":
         valid, test, info = finetune(
             exp.config,
@@ -132,9 +143,39 @@ def fit_split(
     raise ValueError(f"未知のモデル: {exp.model}")
 
 
+def _knn_smooth(exp: Experiment, data: Data, valid_idx: np.ndarray) -> FoldOutput:
+    """元の run の予測を、近傍の予測との平均に置き換える。近傍は同じ fold の検証画像の中（test は test の中）。"""
+    if exp.base is None:
+        raise ValueError("knn_smooth には base（元の run_id）が必要です")
+    if STORE_RUNS.record(exp.base).split_version != SPLITS[exp.split][0]:
+        raise ValueError(f"{exp.base} は分割が違います（OOF が別の分割の予測になる）")
+    oof, test = load_predictions(exp.base)
+    kind, k, backbone = exp.params["feature"], exp.params["k"], exp.config.backbone
+    x_va = features(kind, "train", data.train_images, backbone)[valid_idx]
+    x_te = features(kind, "test", data.test_images, backbone)
+    return FoldOutput(smooth(oof[valid_idx], knn(x_va, k)), smooth(test, knn(x_te, k)))
+
+
 def run_cv(exp: Experiment, data: Data, splits: list[Split]) -> CrossFitResult:
-    """splits で CV する。test の予測は分割ごとのモデルの平均。"""
+    """splits で CV する。test の予測は分割ごとのモデルの平均（refit は全行で学習し直した 1 モデル）。"""
+    if exp.model == "refit":
+        return _refit(exp, data, splits)
     return cross_fit_splits(len(data.y), splits, lambda tr, va: fit_split(exp, data, tr, va))
+
+
+def _refit(exp: Experiment, data: Data, splits: list[Split]) -> CrossFitResult:
+    """OOF は base の run のまま（同じ設定の fold モデル）。test は全行・同じ epoch 数で学習し直した 1 モデル。"""
+    if exp.base is None:
+        raise ValueError("refit には base（OOF を引き継ぐ run_id）が必要です")
+    if STORE_RUNS.record(exp.base).split_version != SPLITS[exp.split][0]:
+        raise ValueError(f"{exp.base} は分割が違います")
+    oof, _ = load_predictions(exp.base)
+    all_rows = np.arange(len(data.y))
+    print(f"  全行で学習: {len(all_rows)} 枚", flush=True)
+    _, test, info = finetune(
+        exp.config, data.train_images, all_rows, data.y, all_rows[:0], data.test_images
+    )
+    return CrossFitResult(oof, test, [info] + [{} for _ in splits[1:]])
 
 
 def save_run(
@@ -144,8 +185,12 @@ def save_run(
     splits: list[Split],
     result: CrossFitResult,
     runtime_sec: float,
+    extra: dict[str, np.ndarray] | None = None,
 ) -> None:
-    """予測を検査してからスコアを計算し、成果物と実験ログを保存する（kumite.cv_run）。"""
+    """予測を検査してからスコアを計算し、成果物と実験ログを保存する（kumite.cv_run）。
+
+    extra は追加で保存する配列（ファイル名 → 配列。nested.py の内側の予測など）。
+    """
     y = data.y
     validated = np.concatenate([valid for _, valid in splits])
     validate_probabilities(result.oof[validated], len(validated), N_CLASSES)
@@ -166,10 +211,13 @@ def save_run(
         model=exp.model,
         data_version=exp.data_version,
         params=exp.logged_params(),
+        inputs={} if exp.base is None else STORE_RUNS.input_hashes(exp.base, "oof.npy", "test.npy"),
     )
 
     def write_submission(out_dir: Path) -> None:
         submission(data.test, result.query).to_csv(out_dir / "submission.csv", index=False)
+        for name, array in (extra or {}).items():
+            np.save(out_dir / name, array)
 
     publish_cv_run(
         STORE_RUNS, reservation, evaluation, trial, y, splits, result, runtime_sec, write_submission

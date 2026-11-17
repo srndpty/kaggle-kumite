@@ -21,10 +21,10 @@ N_FOLDS = 5
 FoldMaker = Callable[[pd.DataFrame], np.ndarray]
 
 
-def driver_folds(train: pd.DataFrame) -> np.ndarray:
-    """運転手単位の fold 番号（クラスの比をなるべくそろえる）。"""
+def driver_folds(train: pd.DataFrame, n_folds: int = N_FOLDS) -> np.ndarray:
+    """運転手単位の fold 番号（クラスの比をなるべくそろえる）。入れ子の内側の分割にも使う。"""
     folds = np.full(len(train), -1, dtype=np.int64)
-    sgkf = StratifiedGroupKFold(n_splits=N_FOLDS, shuffle=True, random_state=SEED)
+    sgkf = StratifiedGroupKFold(n_splits=n_folds, shuffle=True, random_state=SEED)
     for k, (_, valid) in enumerate(sgkf.split(train, train["label"], train[DRIVER])):
         folds[valid] = k
     return folds

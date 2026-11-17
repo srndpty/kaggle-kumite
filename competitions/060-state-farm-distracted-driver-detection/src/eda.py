@@ -9,13 +9,7 @@ import pandas as pd
 from cache import THUMBS_NPZ
 from cv import SPLITS
 from dataset import CLASSES, DRIVER, load_test, load_train
-
-
-def _normalized(thumbs: np.ndarray) -> np.ndarray:
-    """小画像を平坦にし、画像ごとに平均 0・ノルム 1 にする（明るさの違いを除く）。"""
-    x = thumbs.reshape(len(thumbs), -1).astype(np.float32)
-    x -= x.mean(axis=1, keepdims=True)
-    return x / np.maximum(np.linalg.norm(x, axis=1, keepdims=True), 1e-6)  # 一様な画像は 0 ベクトル
+from neighbors import normalized
 
 
 def nearest(
@@ -52,7 +46,7 @@ def main() -> None:
 
     # --- 似た画像（小画像の相関で最近傍） ---
     thumbs = np.load(THUMBS_NPZ)
-    tr, te = _normalized(thumbs["train"]), _normalized(thumbs["test"])
+    tr, te = normalized(thumbs["train"]), normalized(thumbs["test"])
     flat = {
         k: int((thumbs[k].reshape(len(thumbs[k]), -1).std(axis=1) == 0).sum())
         for k in ("train", "test")

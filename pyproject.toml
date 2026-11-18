@@ -18,6 +18,10 @@ dev = [
     "ruff",
     "types-psutil>=7.2.2.20261111",
 ]
+nlp = [
+    "iterative-stratification>=0.1.9",
+    "transformers>=5.23.0",
+]
 tabular = [
     "catboost",
     "ipykernel",
@@ -45,8 +49,8 @@ build-backend = "hatchling.build"
 packages = ["src/kumite"]
 
 [tool.uv]
-# competitions/ も型検査するため、CI も既定グループ（dev + tabular + vision）を入れる。
-default-groups = ["dev", "tabular", "vision"]
+# competitions/ も型検査するため、CI も既定グループ（dev + tabular + vision + nlp）を入れる。
+default-groups = ["dev", "tabular", "vision", "nlp"]
 
 # torch は Windows（学習用の GPU 環境）では CUDA 版、Linux（CI）では CPU 版を入れる。
 [tool.uv.sources]

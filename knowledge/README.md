@@ -47,5 +47,6 @@
 | [K011](K011-group-split-vs-random-split.md) | 仮説 | グループにほぼ重複した行が集まるデータでは、ランダム分割は 19〜30 倍楽観的で、augmentation の採否も逆転する |
 | [K012](K012-test-neighbour-averaging.md) | 仮説 | test の中の近傍と予測を平均すると logloss が下がる（State Farm Private -0.050）。OOF では効果を 2 倍に見積もる |
 | [K013](K013-categorical-splits-vs-numeric.md) | 仮説 | 名義カテゴリの数値扱いがLightGBMのカテゴリ分割より良かった（Porto Seguro、3 seed平均Gini +0.016054） |
-| [K014](K014-ranking-vs-probabilities.md) | 仮説 | 順位と確率を分けて評価する。Porto Seguroの陽性重み付けはGini・LogLossとも悪化、単調変換はGini不変でもLogLoss悪化 |
+| [K014](K014-ranking-vs-probabilities.md) | 再現 | 順位と確率を分けて評価する。Porto Seguroの重み付けは両方悪化、JigsawではAUC改善でもLogLossは約2倍へ悪化 |
 | [K015](K015-feature-group-ablation.md) | 仮説 | 特徴群を除く比較実験も有効。Porto Seguroのcalc除外で3 seed平均Gini +0.002654、原因は未特定 |
+| [K016](K016-character-features-in-text.md) | 仮説 | Jigsawで文字3〜5gram追加は2 seedでmacro AUC +0.00520 / +0.00521。単語bigramは悪化 |

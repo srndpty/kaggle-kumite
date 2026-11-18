@@ -69,3 +69,11 @@ def check_label_independence(
         if a.shape != b.shape or not np.allclose(a, b, rtol=0, atol=atol):
             diff = float(np.abs(a - b).max()) if a.shape == b.shape else float("nan")
             raise AssertionError(f"出力 {i} が隠すべきラベルに依存しています（最大差 {diff:.3e}）")
+
+
+def validate_multilabel_probabilities(pred: np.ndarray, n_rows: int, n_labels: int) -> None:
+    """独立な各ラベルの確率を検査する。列の和は制約しない。"""
+    if n_rows < 1 or n_labels < 1 or pred.shape != (n_rows, n_labels):
+        raise ValueError(f"多ラベル予測の形状が不正です: {pred.shape}")
+    if not np.isfinite(pred).all() or (pred < 0).any() or (pred > 1).any():
+        raise ValueError("確率は有限な [0, 1] の値が必要です")

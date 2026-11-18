@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      # competitions/ の型検査に ML ライブラリが要るため、既定グループ（dev + tabular + vision。torch は CPU 版）を入れる。
+      # competitions/ の型検査に ML ライブラリが要るため、既定グループ（dev + tabular + vision + nlp。torch は CPU 版）を入れる。
       - run: uv sync --locked
       - run: pwsh ./dev.ps1 check
         env:

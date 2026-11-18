@@ -44,7 +44,7 @@
 | [K008](K008-reproduce-information-cutoff-in-validation.md) | 再現 | 検証でも「その時点で分かる情報の範囲」を test と同じにする（予定・予約の打ち切り）。予約は学習行にも打ち切りを入れる。ラベル由来の統計量は学習行では直前まで使う |
 | [K009](K009-log-target-for-relative-error.md) | 再現 | 相対誤差・対数誤差の指標では、目的変数を log にして学習する（RMSPE -0.009、RMSLE -0.032） |
 | [K010](K010-map-rare-days-to-common-days.md) | 仮説 | 祝日のような少数の特殊な日は、土曜などの普通の日に対応付けると学べる |
-| [K011](K011-group-split-vs-random-split.md) | 仮説 | グループにほぼ重複した行が集まるデータでは、ランダム分割は 19〜30 倍楽観的で、augmentation の採否も逆転する |
+| [K011](K011-group-split-vs-random-split.md) | 条件付き | State Farmのランダム分割は19〜30倍楽観的。SpeechではAccuracyがグループ0.8563・ランダム0.7154と逆方向で、差の大きさ・方向は条件依存 |
 | [K012](K012-test-neighbour-averaging.md) | 仮説 | test の中の近傍と予測を平均すると logloss が下がる（State Farm Private -0.050）。OOF では効果を 2 倍に見積もる |
 | [K013](K013-categorical-splits-vs-numeric.md) | 仮説 | 名義カテゴリの数値扱いがLightGBMのカテゴリ分割より良かった（Porto Seguro、3 seed平均Gini +0.016054） |
 | [K014](K014-ranking-vs-probabilities.md) | 再現 | 順位と確率を分けて評価する。Porto Seguroの重み付けは両方悪化、JigsawではAUC改善でもLogLossは約2倍へ悪化 |
@@ -52,3 +52,4 @@
 | [K016](K016-character-features-in-text.md) | 仮説 | Jigsawで文字3〜5gram追加は2 seedでmacro AUC +0.00520 / +0.00521。単語bigramは悪化 |
 | [K017](K017-customer-history-aggregation.md) | 仮説 | Home Creditで顧客内の借入・過去申込・返済履歴の単独追加がAUC約+0.0056〜+0.0057 |
 | [K018](K018-recent-history-aggregation.md) | 仮説 | Home Creditで全期間借入集約に直近365日集約を追加し、2 seedでAUC +0.000788 / +0.001562 |
+| [K019](K019-fine-grained-supervision-cv-vs-external.md) | 仮説 | Speechの31クラス学習は2seedのCV Accuracyが約+0.04だがPrivateは-0.00529。内部改善が外部へ再現しない例 |

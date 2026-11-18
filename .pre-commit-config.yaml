@@ -33,4 +33,6 @@ repos:
         entry: uv run pyright
         language: system
         types: [python]
-        pass_filenames: false
+        # commit 時は変更ファイルだけを検査。依存先への影響を含む全体検査は dev check / CI。
+        # ファイルごとの並列起動で import の解析が重複しないよう、まとめて渡す。
+        require_serial: true

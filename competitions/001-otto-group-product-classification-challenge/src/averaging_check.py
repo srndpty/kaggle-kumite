@@ -9,13 +9,14 @@ early stopping）を行う。内側 OOF（単一モデル）・疑似テスト�
 
 import numpy as np
 import pandas as pd
-from calibrate import apply_temperature, fit_temperature
 from cv import N_SPLITS, make_folds, make_inner_folds
 from dataset import CLASSES, TARGET, encode_target, load_train
 from features import raw
 from models import lightgbm
 from pipeline import multi_logloss
 from train import LGBM_BASE
+
+from kumite.calibration import apply_temperature, fit_temperature
 
 
 def check_outer_fold(x: pd.DataFrame, y: pd.Series, hold: np.ndarray) -> dict[str, float]:
@@ -32,7 +33,7 @@ def check_outer_fold(x: pd.DataFrame, y: pd.Series, hold: np.ndarray) -> dict[st
         inner_oof[va] = res.valid
         hold_preds.append(res.query)
     avg = np.mean(hold_preds, axis=0)
-    t = fit_temperature(y_in.to_numpy(), inner_oof)
+    t = fit_temperature(y_in.to_numpy(), inner_oof, multi_logloss)
     return {
         "内側OOF": multi_logloss(y_in, inner_oof),
         "単一(疑似テスト)": float(np.mean([multi_logloss(y_hold, p) for p in hold_preds])),
@@ -43,7 +44,7 @@ def check_outer_fold(x: pd.DataFrame, y: pd.Series, hold: np.ndarray) -> dict[st
         ),
         "平均+T": multi_logloss(y_hold, apply_temperature(avg, t)),
         # 疑似テストのラベルで決めた、平均予測にとって最適な T（診断用。実運用では使えない）
-        "平均に最適なT": fit_temperature(y_hold, avg),
+        "平均に最適なT": fit_temperature(y_hold, avg, multi_logloss),
     }
 
 

@@ -34,8 +34,8 @@
 
 | カード | 状態 | 要旨 |
 |---|---|---|
-| [K001](K001-oof-vs-fold-average.md) | 条件付き | OOF（単一モデル）と提出（fold 平均）は別物。Otto では平均で約 -0.02。時系列分割では平均が逆効果で、学習し直しが良い（Rossmann 約 0.004、Recruit 0.038） |
-| [K002](K002-calibrate-on-submission-form.md) | 仮説 | 較正は提出と同じ形の予測で決める。単一モデルの OOF で決めると平均予測には効きすぎる |
+| [K001](K001-oof-vs-fold-average.md) | 条件付き | OOF（単一モデル）と提出（fold 平均）は別物。Otto では平均で約 -0.02、NN の State Farm では -0.13（学習し直しの 1 本は Private +0.073）。時系列分割では平均が逆効果で、学習し直しが良い（Rossmann 約 0.004、Recruit 0.038） |
+| [K002](K002-calibrate-on-submission-form.md) | 再現 | 較正は提出と同じ形の予測で決める。単一モデルの OOF で決めると平均予測には効きすぎ、逆効果になる（Otto +0.0009、State Farm +0.028） |
 | [K003](K003-monotone-transform-by-model.md) | 条件付き | log1p は線形モデルには効くが、木モデルと標準化した MLP には効かなかった |
 | [K004](K004-cross-fold-label-leak.md) | 仮説 | 全行で作った OOF 特徴を後段の CV に使うと、外側の検証ラベルが学習側に入る |
 | [K005](K005-stacking-diversity.md) | 仮説 | 単体で弱くても誤り方の違うモデル（kNN・ExtraTrees・MLP）はスタッキングで効く |
@@ -44,3 +44,5 @@
 | [K008](K008-reproduce-information-cutoff-in-validation.md) | 再現 | 検証でも「その時点で分かる情報の範囲」を test と同じにする（予定・予約の打ち切り）。予約は学習行にも打ち切りを入れる。ラベル由来の統計量は学習行では直前まで使う |
 | [K009](K009-log-target-for-relative-error.md) | 再現 | 相対誤差・対数誤差の指標では、目的変数を log にして学習する（RMSPE -0.009、RMSLE -0.032） |
 | [K010](K010-map-rare-days-to-common-days.md) | 仮説 | 祝日のような少数の特殊な日は、土曜などの普通の日に対応付けると学べる |
+| [K011](K011-group-split-vs-random-split.md) | 仮説 | グループにほぼ重複した行が集まるデータでは、ランダム分割は 19〜30 倍楽観的で、augmentation の採否も逆転する |
+| [K012](K012-test-neighbour-averaging.md) | 仮説 | test の中の近傍と予測を平均すると logloss が下がる（State Farm Private -0.050）。OOF では効果を 2 倍に見積もる |

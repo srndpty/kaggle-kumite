@@ -18,7 +18,7 @@ Kaggle 100本ノック: 終了済みの賞金付きコンペ100題を解き、�
   - `src/`, `notebooks/` — コンペ固有のコード
   - `data/`, `outputs/` — git 管理外。データ・モデル・提出ファイルは commit しない
 - `knowledge/` — 100コンペを横断した知見カード（何がわかったか・どの条件で有効か）
-- `tests/` — `src/kumite` のテスト。コンペ固有コードのテストは、そのコンペの `src/test_*.py` に置き、`pyproject.toml` の `testpaths` に足す
+- `tests/` — `src/kumite` のテスト。コンペ固有コードのテストは、そのコンペの `src/test_*.py` に置く（`dev test` がコンペごとに別プロセスで実行する。コンペ間でモジュール名がぶつかるため）
 
 2つ以上のコンペで使うコードは `src/kumite` に移す。コンペ間でコピーしない。
 
@@ -33,7 +33,7 @@ Kaggle 100本ノック: 終了済みの賞金付きコンペ100題を解き、�
 - `dev submit <番号> <ファイル> -m <メッセージ>` / `dev submissions <番号>` / `dev compare <番号> <基準> <run_id...>` / `dev orphans <番号> [--delete]`
 
 Python は uv で管理する（`uv run ...`、依存追加は `uv add --group <group> ...`）。
-ML 依存は dependency group（`tabular` など）に分ける。既定グループ（`dev` + `tabular`）は CI でも入れる。
+ML 依存は dependency group（`tabular` など）に分ける。既定グループ（`dev` + `tabular` + `vision`）は CI でも入れる。torch は Windows では CUDA 版、Linux（CI）では CPU 版（`pyproject.toml` の `tool.uv.sources`）。
 型検査は pyright。`src/` と `tests/` は strict。`competitions/` は ML ライブラリの型情報が不完全なため
 「型が不明」系のルールだけ切っている（`pyproject.toml` の `executionEnvironments`）。型エラーは無視せず、型が付く書き方に直す。
 

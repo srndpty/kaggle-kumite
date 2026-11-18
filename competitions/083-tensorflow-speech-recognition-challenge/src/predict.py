@@ -2,6 +2,7 @@
 
 import argparse
 import json
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -11,13 +12,13 @@ from network import Features, SmallCNN, feature_batches, predict, seed_all
 from kumite.runs import RunStore
 
 
-def reproduce(run_id: str) -> None:
-    seed_all(42)
+def reproduce(run_id: str, output: Path | None = None) -> None:
     store = RunStore(ROOT)
     record = store.record(run_id)
-    _, test, _, waves, summary = load_prepared()
+    _, test, _, waves, summary = load_prepared(deep=True)
     if record.data_hash != summary["data_hash"]:
         raise ValueError("データハッシュ不一致")
+    seed_all(42)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     features = feature_batches(
         waves, Features(record.params["experiment"] == "E02").to(device), device
@@ -37,7 +38,7 @@ def reproduce(run_id: str) -> None:
         raise ValueError(f"再生成予測が不一致: 最大差{maximum}")
     if not submission(test, saved).equals(submission(test, result)):
         raise ValueError("再生成した提出ラベルが一致しません")
-    path = ROOT / "outputs" / f"{run_id}-reproduction.json"
+    path = output if output is not None else ROOT / "outputs" / f"{run_id}-reproduction.json"
     with path.open("x", encoding="utf-8") as stream:
         json.dump(
             dict(run_id=run_id, max_probability_difference=maximum, labels_equal=True), stream
@@ -48,4 +49,6 @@ def reproduce(run_id: str) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("run_id")
-    reproduce(parser.parse_args().run_id)
+    parser.add_argument("--output", type=Path)
+    args = parser.parse_args()
+    reproduce(args.run_id, args.output)

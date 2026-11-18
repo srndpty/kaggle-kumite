@@ -44,3 +44,9 @@ seed42のmacro F1・LogLossも改善したが、upのRecallは約0.0598悪化し
 | #083 Speech Recognition | E01 / E05-r2、E01-s43 / E05-s43 | 2seedのCVは約+0.04、Privateは-0.00529。採用前の固定・提出ハッシュ・予測再生成の証跡を保存 |
 
 着眼点は[4位チーム構成の本人README](https://github.com/dimart/TensorFlow-Speech-Recognition-Challenge-Solution)。31クラス学習だけを小型モデルで再現し、元の二語合成・疑似ラベル・追加未知語クラスは再現していない。
+
+## レビュー後の事後感度分析
+
+保存済みOOFの条件付き正答率と非silence内の相対クラス比率を固定し、silence比率だけを約9.949%へ変えた。E05のAccuracy差はseed42で+0.039356、seed43で+0.039661と正のまま。silence比率の差だけでPrivateの符号反転を説明できたわけではない。Private精度の推定やモデル選定には使っていない。
+
+12クラス別のAccuracy寄与では、unknownの改善寄与がseed42で+0.031711、seed43で+0.042092と大きかった。条件付き性能の分布差・他のクラス構成比・未知語・予測の平均方法は未分離。[レビュー対応](../competitions/083-tensorflow-speech-recognition-challenge/review.md)に全クラスとfold構成の集計を保存した。

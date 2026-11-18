@@ -172,3 +172,9 @@ uv run python competitions/083-tensorflow-speech-recognition-challenge/src/verif
 - 記録されたruntime合計1,377.47秒。失敗の保守的予算計上181秒を加えて約26.0分。GPU学習4時間の予算内。
 - 最終dev check成功。lint・整形・pyrightエラー0、共通113件・#002 20件・#004 31件・#024 15件・#041 25件・#060 32件・#083 18件、計254テスト。
 - 振り返りは[report.md](report.md)、知見は[K011](../../knowledge/K011-group-split-vs-random-split.md)・[K019](../../knowledge/K019-fine-grained-supervision-cv-vs-external.md)。
+
+## レビュー対応
+
+追加学習・提出なしで、cache内容のdeep照合、run／実験定義・checkpointの照合、既存foldの構成診断を追加した。OOFの12クラス別寄与、silence／非silenceの成績、silence比率を約9.949%に変えた事後感度分析も実施した。比率だけの変更ではE05の改善差は正のままで、Privateでの逆転を説明できない。
+
+既存の計測値・選定・120成果物は維持。詳細と再実行コマンドは[review.md](review.md)。レビュー後の`dev check`は全284テスト成功。

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from dataset import CLASSES, OUTPUT, ROOT, load_prepared, make_folds, submission
+from dataset import CLASSES, ROOT, load_prepared, make_folds, submission
 from network import Features, environment, feature_batches, fit_model, predict, seed_all
 from sklearn.metrics import accuracy_score, confusion_matrix, f1_score, log_loss
 from supervision import FINE_CLASSES, fine_labels
@@ -17,7 +17,7 @@ from kumite.checks import validate_probabilities
 from kumite.crossfit import FoldOutput, cross_fit_splits, folds_to_splits
 from kumite.cv_run import Evaluation, Trial, publish_cv_run
 from kumite.paths import REPO_ROOT
-from kumite.provenance import array_sha256, file_sha256
+from kumite.provenance import array_sha256
 from kumite.runs import RunStore
 
 EXPERIMENTS = {
@@ -76,11 +76,7 @@ def train(
         if remaining <= 0:
             raise TimeoutError("実行時間予算を使い切りました")
         deadline = start + remaining
-        frame, test, waves, test_waves, summary = load_prepared()
-        # cacheの内容も学習前に照合する。
-        for name in ("train", "test"):
-            if file_sha256(OUTPUT / "prepared" / f"{name}.npy") != summary["caches"][name]:
-                raise ValueError(f"{name}音声cacheのハッシュ不一致")
+        frame, test, waves, test_waves, summary = load_prepared(deep=True)
         folds = make_folds(frame, seed, random_split)
         splits = folds_to_splits(folds)
         if benchmark:

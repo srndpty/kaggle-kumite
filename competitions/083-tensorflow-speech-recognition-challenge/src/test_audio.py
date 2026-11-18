@@ -152,19 +152,21 @@ def test_actual_training_ignores_valid_labels(experiment: str) -> None:
 def test_selection_excludes_diagnostics_and_requires_complete_trials() -> None:
     from dataclasses import replace
 
+    from supervision import FINE_CLASSES
+
     template = ExperimentRecord(
         competition_id="083",
         run_id="E01",
         metric="accuracy",
         greater_is_better=True,
-        data_version="v1",
+        data_version="audio-v1",
         data_hash="data",
         split_version="speaker",
         split_hash="folds",
         seed=42,
         hypothesis="比較",
         changed_one_thing="単独変更",
-        model="CNN",
+        model="SmallCNN",
         fold_scores=[0.8, 0.8, 0.8],
         oof_score=0.8,
         code_version="code",
@@ -173,8 +175,14 @@ def test_selection_excludes_diagnostics_and_requires_complete_trials() -> None:
     records = [
         replace(
             template,
-            run_id=f"E{k:02}",
-            params={"experiment": f"E{k:02}"},
+            run_id="E05-r2" if k == 5 else f"E{k:02}",
+            params={
+                "experiment": f"E{k:02}",
+                "benchmark": False,
+                "random_split": False,
+                "classes": list(CLASSES),
+                "training_classes": list(FINE_CLASSES if k == 5 else CLASSES),
+            },
             fold_scores=[0.8 + k / 100] * 3,
         )
         for k in range(1, 6)
@@ -185,7 +193,7 @@ def test_selection_excludes_diagnostics_and_requires_complete_trials() -> None:
         params={"experiment": "E05", "random_split": True},
         fold_scores=[1.0] * 3,
     )
-    assert choose_candidate([*records, diagnostic]).run_id == "E05"
+    assert choose_candidate([*records, diagnostic]).run_id == "E05-r2"
     failure = replace(
         records[-1],
         run_id="failed",
@@ -194,7 +202,7 @@ def test_selection_excludes_diagnostics_and_requires_complete_trials() -> None:
         fold_scores=[],
         oof_score=0,
     )
-    assert choose_candidate([*records, failure]).run_id == "E05"
+    assert choose_candidate([*records, failure]).run_id == "E05-r2"
     with pytest.raises(ValueError):
         choose_candidate(records[:-1])
     with pytest.raises(ValueError):

@@ -4,9 +4,56 @@ import json
 
 import numpy as np
 import pandas as pd
-from dataset import OUTPUT, ROOT, load_prepared, make_folds
+from dataset import CLASSES, OUTPUT, ROOT, load_prepared, make_folds
 
 from kumite.runs import RunStore
+
+
+def distribution(values: np.ndarray) -> dict:
+    if len(values) == 0:
+        return {"count": 0}
+    quantiles = np.quantile(values, [0, 0.25, 0.5, 0.75, 0.95, 1])
+    return dict(
+        count=len(values),
+        mean=float(np.mean(values)),
+        std=float(np.std(values)),
+        **dict(zip(("min", "p25", "median", "p75", "p95", "max"), quantiles.tolist(), strict=True)),
+    )
+
+
+def fold_profiles(frame: pd.DataFrame, folds: np.ndarray, rms: np.ndarray) -> list[dict]:
+    """RMSは正規化した1秒窓ごとの値。元の長い背景録音のRMSを流用しない。"""
+    result = []
+    for k in range(3):
+        roles = {}
+        for role, mask in (("train", folds != k), ("valid", folds == k)):
+            rows = frame.loc[mask]
+            speech = rows.loc[rows.label != 10]
+            noise = rows.loc[rows.label == 10]
+            sources = []
+            for path, recording in noise.groupby("path"):
+                sources.append(
+                    dict(
+                        path=path,
+                        windows=len(recording),
+                        original_seconds=float(recording.samples.iloc[0] / recording.rate.iloc[0]),
+                        window_rms=distribution(rms[recording.index.to_numpy()]),
+                    )
+                )
+            speakers = {str(path).split("/")[-1].split("_nohash_")[0] for path in speech.path}
+            roles[role] = dict(
+                n_rows=len(rows),
+                n_speakers=len(speakers),
+                n_speaker_groups=int(speech.group.nunique()),
+                class_counts={name: int(np.sum(rows.label == i)) for i, name in enumerate(CLASSES)},
+                silence_windows=len(noise),
+                background_recordings=sources,
+                speech_duration_seconds=distribution((speech.samples / speech.rate).to_numpy()),
+                speech_rms=distribution(rms[speech.index.to_numpy()]),
+                silence_rms=distribution(rms[noise.index.to_numpy()]),
+            )
+        result.append(dict(fold=k, **roles))
+    return result
 
 
 def main() -> None:

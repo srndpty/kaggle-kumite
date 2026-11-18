@@ -15,7 +15,7 @@ from kumite.runs import RunStore
 def analyze(base: str, candidate: str) -> dict:
     store = RunStore(ROOT)
     comparison = compare_runs(store.record(base), store.record(candidate))
-    frame, _, waves, _, summary = load_prepared()
+    frame, _, waves, _, summary = load_prepared(deep=True)
     if store.record(base).data_hash != summary["data_hash"]:
         raise ValueError("分析対象のデータが一致しません")
     y = frame.label.to_numpy(dtype=np.int64)

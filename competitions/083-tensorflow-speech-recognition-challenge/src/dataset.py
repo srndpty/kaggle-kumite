@@ -258,12 +258,19 @@ def prepare() -> None:
     print(json.dumps(summary, ensure_ascii=False, indent=2), flush=True)
 
 
-def load_prepared() -> tuple[pd.DataFrame, pd.DataFrame, np.ndarray, np.ndarray, dict]:
+def load_prepared(
+    *, deep: bool = False
+) -> tuple[pd.DataFrame, pd.DataFrame, np.ndarray, np.ndarray, dict]:
+    """manifestを照合する。deep時は音声cacheの内容も利用前に照合する。"""
     path = OUTPUT / "prepared"
     summary = json.loads((path / "summary.json").read_text(encoding="utf-8"))
     frame, test = (pd.read_csv(path / f"{name}.csv") for name in ("train", "test"))
     if identity(frame, test) != summary["data_hash"]:
         raise ValueError("manifestのハッシュが一致しません")
+    if deep:
+        for name in ("train", "test"):
+            if file_sha256(path / f"{name}.npy") != summary["caches"][name]:
+                raise ValueError(f"{name}音声cacheのハッシュ不一致")
     arrays = [np.load(path / f"{name}.npy", mmap_mode="r") for name in ("train", "test")]
     for array, manifest in zip(arrays, (frame, test), strict=True):
         if array.dtype != np.float32 or array.shape != (len(manifest), RATE):

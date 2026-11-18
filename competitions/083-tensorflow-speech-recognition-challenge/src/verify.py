@@ -1,10 +1,13 @@
 """実験の分割・予測・成果物ハッシュと最終固定ファイルを監査する。"""
 
+import argparse
 import json
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from dataset import OUTPUT, ROOT, load_prepared, make_folds, submission
+from select_model import RUN_DEFINITIONS, validate_run_artifacts
 from train import accuracy
 
 from kumite.checks import validate_probabilities
@@ -13,9 +16,9 @@ from kumite.provenance import array_sha256, file_sha256
 from kumite.runs import RunStore
 
 
-def main() -> None:
+def main(output: Path | None = None) -> None:
     store = RunStore(ROOT)
-    frame, test, _, _, summary = load_prepared()
+    frame, test, _, _, summary = load_prepared(deep=True)
     result = {}
     for record in store.records():
         for name in record.artifacts:
@@ -23,6 +26,8 @@ def main() -> None:
         if record.run_id == "P0" or record.params.get("failed"):
             result[record.run_id] = {"artifacts": len(record.artifacts), "cv": False}
             continue
+        if record.run_id in RUN_DEFINITIONS:
+            validate_run_artifacts(store, record)
         folds = make_folds(frame, record.seed, record.params["random_split"])
         if record.data_hash != summary["data_hash"] or record.split_hash != array_sha256(folds):
             raise ValueError(f"{record.run_id}: データまたは分割ハッシュ不一致")
@@ -61,10 +66,14 @@ def main() -> None:
     result["failed_budget_charge_seconds"] = sum(
         r.params.get("budget_charge_seconds", 0) for r in store.records()
     )
-    with (OUTPUT / "audit.json").open("x", encoding="utf-8") as stream:
+    result["deep_cache_verified"] = True
+    path = output if output is not None else OUTPUT / "audit.json"
+    with path.open("x", encoding="utf-8") as stream:
         json.dump(result, stream, ensure_ascii=False, indent=2)
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output", type=Path)
+    main(parser.parse_args().output)

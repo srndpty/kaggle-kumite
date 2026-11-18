@@ -1,0 +1,11 @@
+{
+  "experiment": "E05",
+  "parent": "E01",
+  "registered_after_completed_runs": ["E02", "E03", "E04"],
+  "changed_one_thing": "unknownを20語へ細分化し31クラスで学習、推論時にunknown確率を合算する",
+  "hypothesis": "異なる語を1クラスへ押し込まず識別する補助教師情報で、12クラスAccuracyが改善する",
+  "source": "https://github.com/dimart/TensorFlow-Speech-Recognition-Challenge-Solution",
+  "fixed_coarse_class_sampler": true,
+  "epochs": 20,
+  "unreproduced": ["二語合成", "疑似ラベル", "TTA", "大規模モデル", "多段スタッキング"]
+}

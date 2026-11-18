@@ -23,3 +23,5 @@ dev download 1    # データを data/ に取得（事前に Kaggle で Rules �
 dev check         # lint + 整形確認 + 型検査 + テスト
 dev help          # コマンド一覧
 ```
+
+pre-commitは変更ファイルの整形・lint・型検査を行う。Pyrightは対象ファイルとそのimportを解析するが、変更した共通コードを使う全ファイルの型エラーまでは検出しない。commit前の`dev check`とCIでは、従来どおり全体の型検査とテストを実行する。

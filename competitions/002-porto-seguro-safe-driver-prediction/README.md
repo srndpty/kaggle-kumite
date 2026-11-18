@@ -119,6 +119,13 @@ H1・H3・H4は予想を支持せず、H2の改善は小さく未確定。とく
 
 - 各run: `oof.npy`, `test.npy`, `fold_info.json`, `folds.csv`, `metrics.json`, `submission.csv`。全13 runをRunStoreで保存。
 - 分析: `outputs/analysis/E01-E02-E03-E04-E05.json`, `E01-E04-E06.json`。読み込みはRunStoreでハッシュ照合する。
-- `dev check`: lint・整形・pyright成功、共通109件＋本コンペ7件＋Recruit15件＋State Farm32件＝163テスト成功。
+- `dev check`: lint・整形・pyright成功、共通109件＋本コンペ20件＋Recruit15件＋State Farm32件＝176テスト成功（レビュー対応後）。
 - 実行環境の制約でuvの再同期を避け、既存venvに対して `UV_NO_SYNC=1` で標準の `dev check` を実行した。依存追加はない。
 - 知見: [K013](../../knowledge/K013-categorical-splits-vs-numeric.md)、[K014](../../knowledge/K014-ranking-vs-probabilities.md)、[K015](../../knowledge/K015-feature-group-ablation.md)。
+
+## コードレビュー対応
+
+- 最終選定では、保存された実験ID・比較元・重み付け・data_version・モデル種別・seed（ログ本体とparams）を現在の実験定義と照合する。E06というrun_idでE01を実行した記録などは、選定結果の保存前に拒否する。学習と照合でdata_version・モデル種別の定義を共有した。
+- `scores()` は確率の形状・有限性・範囲を検査する。`normalized_gini()` 単独では確率範囲を制限せず、任意の有限な連続スコアを評価できる。
+- 完全重複のグループ化は特徴の完全一致だけを対象とし、特徴が異なる同一人物・契約などの潜在グループは検出しない。この範囲を `make_folds()` に明記した。
+- 既存の選定対象9 runは追加した実験定義の照合にすべて合格した。実験ログ・採用結果・保存済み成果物は変更せず、追加学習・提出は行っていない。

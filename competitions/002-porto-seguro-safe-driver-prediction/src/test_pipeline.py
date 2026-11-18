@@ -6,7 +6,7 @@ import pytest
 from cv import make_folds
 from dataset import submission
 from features import build_features
-from metrics import normalized_gini
+from metrics import normalized_gini, scores
 
 
 def test_gini_ties_and_monotone() -> None:
@@ -103,3 +103,25 @@ def test_calc_ablation_changes_only_calc_columns() -> None:
     assert cats == []
     for result in built:
         pd.testing.assert_frame_equal(result, frame.drop(columns="ps_calc_01"))
+
+
+@pytest.mark.parametrize(
+    "pred",
+    [
+        [-0.1, 0.2, 0.8, 1.0],
+        [0.0, 0.2, 0.8, 1.1],
+        [0.0, np.nan, 0.8, 1.0],
+        [0.0, 0.2, np.inf, 1.0],
+    ],
+)
+def test_scores_rejects_invalid_probabilities(pred) -> None:
+    with pytest.raises(ValueError):
+        scores(np.array([0, 0, 1, 1]), np.array(pred))
+
+
+def test_gini_accepts_non_probability_scores_and_scores_accepts_endpoints() -> None:
+    y = np.array([0, 0, 1, 1])
+    assert normalized_gini(y, np.array([-10.0, -2.0, 4.0, 20.0])) == 1
+    result = scores(y, np.array([0.0, 0.0, 1.0, 1.0]))
+    assert result["normalized_gini"] == 1
+    assert np.isfinite(result["logloss"])

@@ -34,6 +34,17 @@ class Experiment:
     weighted: bool = False
     drop_calc: bool = False
 
+    @property
+    def data_version(self) -> str:
+        return (
+            f"nan={self.missing_nan}|count={self.missing_count}"
+            f"|cat={self.categorical}|drop_calc={self.drop_calc}"
+        )
+
+    @property
+    def model(self) -> str:
+        return "prior" if self.prior else "lightgbm_binary"
+
 
 EXPERIMENTS = {
     "E00": Experiment("陽性率の定数予測を下限とする", "", "統計的 baseline", prior=True),
@@ -144,8 +155,8 @@ def run(run_id: str, experiment: str, seed: int = 42) -> None:
             Trial(
                 exp.hypothesis,
                 exp.change,
-                "prior" if exp.prior else "lightgbm_binary",
-                f"nan={exp.missing_nan}|count={exp.missing_count}|cat={exp.categorical}|drop_calc={exp.drop_calc}",
+                exp.model,
+                exp.data_version,
                 {
                     **params,
                     "experiment": experiment,

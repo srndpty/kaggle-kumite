@@ -8,6 +8,10 @@ SEED = 42
 
 
 def make_folds(x: pd.DataFrame, y: np.ndarray, seed: int = SEED) -> tuple[np.ndarray, str]:
+    """完全一致する特徴行だけをグループ化する。
+
+    特徴が異なる同一人物・契約など、潜在的なグループを検出するものではない。
+    """
     if len(y) != len(x) or not np.isin(y, [0, 1]).all():
         raise ValueError("行数またはラベルが不正です")
     if min(np.count_nonzero(y == 0), np.count_nonzero(y == 1)) < 5:

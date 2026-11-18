@@ -4,10 +4,27 @@ import json
 
 import numpy as np
 from dataset import COMPETITION_DIR, DATA_FILES
-from pipeline import STORE
+from pipeline import EXPERIMENTS, STORE
 
-from kumite.experiments import compare_runs
+from kumite.experiments import ExperimentRecord, compare_runs
 from kumite.provenance import file_sha256, files_sha256
+
+
+def validate_experiment(record: ExperimentRecord, experiment: str, seed: int) -> None:
+    """run の名前だけでなく、保存された実験定義を現在の定義と照合する。"""
+    expected = EXPERIMENTS[experiment]
+    if (
+        record.params.get("experiment") != experiment
+        or record.params.get("parent") != expected.parent
+        or record.params.get("weighted") != expected.weighted
+        or record.data_version != expected.data_version
+        or record.model != expected.model
+        or record.seed != seed
+        or record.params.get("seed") != seed
+    ):
+        raise ValueError(
+            f"run {record.run_id} の実験定義が {experiment} / seed={seed} と一致しません"
+        )
 
 
 def select() -> dict[str, object]:
@@ -20,11 +37,9 @@ def select() -> dict[str, object]:
         for seed in (42, 43, 44):
             suffix = "" if seed == 42 else f"-s{seed}"
             base, other = STORE.record(parent + suffix), STORE.record(candidate + suffix)
-            if (
-                base.seed != seed
-                or other.seed != seed
-                or base.data_hash != files_sha256(DATA_FILES)
-            ):
+            validate_experiment(base, parent, seed)
+            validate_experiment(other, candidate, seed)
+            if base.data_hash != files_sha256(DATA_FILES):
                 raise ValueError("現在のデータまたは seed が比較対象と違います")
             for record in (base, other):
                 STORE.load_array(record.run_id, "oof.npy")

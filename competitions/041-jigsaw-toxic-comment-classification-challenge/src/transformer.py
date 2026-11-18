@@ -3,6 +3,7 @@
 import argparse
 import json
 import math
+import os
 import time
 from pathlib import Path
 from typing import Any, cast
@@ -11,6 +12,7 @@ import numpy as np
 import torch
 from huggingface_hub import snapshot_download
 from transformers import AutoTokenizer, DistilBertForSequenceClassification
+from transformers import __version__ as transformers_version
 
 from kumite.crossfit import FoldOutput
 from kumite.provenance import files_sha256
@@ -48,13 +50,47 @@ def new_model(directory) -> DistilBertForSequenceClassification:
     return model
 
 
-def fit_transformer(encoded, encoded_test, y, tr, va, seed, epochs, *, max_steps=None):
-    if not torch.cuda.is_available():
+def runtime_environment(device: torch.device) -> dict[str, Any]:
+    """seedの固定と演算の決定性を分けて記録する。設定自体は変更しない。"""
+    return {
+        "torch_version": str(torch.__version__),
+        "transformers_version": transformers_version,
+        "cuda_build_version": torch.version.cuda,
+        "cudnn_version": torch.backends.cudnn.version(),
+        "device": str(device),
+        "gpu_name": torch.cuda.get_device_name(device) if device.type == "cuda" else None,
+        "deterministic_algorithms": torch.are_deterministic_algorithms_enabled(),
+        "deterministic_warn_only": torch.is_deterministic_algorithms_warn_only_enabled(),
+        "cudnn_deterministic": torch.backends.cudnn.deterministic,
+        "cudnn_benchmark": torch.backends.cudnn.benchmark,
+        "matmul_allow_tf32": torch.backends.cuda.matmul.allow_tf32,
+        "cudnn_allow_tf32": torch.backends.cudnn.allow_tf32,
+        "cublas_workspace_config": os.environ.get("CUBLAS_WORKSPACE_CONFIG"),
+    }
+
+
+def fit_transformer(
+    encoded,
+    encoded_test,
+    y,
+    tr,
+    va,
+    seed,
+    epochs,
+    *,
+    max_steps=None,
+    device: torch.device | None = None,
+):
+    device = torch.device("cuda") if device is None else device
+    use_cuda = device.type == "cuda"
+    if use_cuda and not torch.cuda.is_available():
         raise RuntimeError("E05にはCUDA GPUが必要です")
     torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
+    if use_cuda:
+        torch.cuda.manual_seed_all(seed)
+    environment = runtime_environment(device)
     model = new_model(encoded["directory"])
-    torch.nn.Module.cuda(model)
+    torch.nn.Module.to(model, device=device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=2e-5, weight_decay=0.01)
     steps = math.ceil(len(tr) / 32) * epochs
     warmup = max(1, int(steps * 0.1))
@@ -69,11 +105,11 @@ def fit_transformer(encoded, encoded_test, y, tr, va, seed, epochs, *, max_steps
         order = rng.permutation(tr)
         for start in range(0, len(order), 32):
             idx = order[start : start + 32]
-            batch = {k: encoded[k][idx].cuda() for k in ("input_ids", "attention_mask")}
+            batch = {k: encoded[k][idx].to(device) for k in ("input_ids", "attention_mask")}
             optimizer.zero_grad(set_to_none=True)
-            with torch.autocast("cuda", dtype=torch.bfloat16):
+            with torch.autocast(device.type, dtype=torch.bfloat16, enabled=use_cuda):
                 output = model(
-                    **batch, labels=torch.as_tensor(y[idx], dtype=torch.float32, device="cuda")
+                    **batch, labels=torch.as_tensor(y[idx], dtype=torch.float32, device=device)
                 )
             loss = cast(torch.Tensor, output.loss)
             loss.backward()
@@ -82,10 +118,12 @@ def fit_transformer(encoded, encoded_test, y, tr, va, seed, epochs, *, max_steps
             scheduler.step()
             completed += 1
             if max_steps is not None and completed >= max_steps:
-                torch.cuda.synchronize()
+                if use_cuda:
+                    torch.cuda.synchronize(device)
                 elapsed = time.monotonic() - started
                 del optimizer
-                torch.cuda.empty_cache()
+                if use_cuda:
+                    torch.cuda.empty_cache()
                 return FoldOutput(
                     np.empty((0, 6)),
                     np.empty((0, 6)),
@@ -93,6 +131,7 @@ def fit_transformer(encoded, encoded_test, y, tr, va, seed, epochs, *, max_steps
                         "seconds": elapsed,
                         "steps": completed,
                         "seconds_per_step": elapsed / completed,
+                        "runtime_environment": environment,
                     },
                 )
         print(f"epoch {epoch + 1}/{epochs}: {time.monotonic() - started:.1f}s", flush=True)
@@ -103,8 +142,8 @@ def fit_transformer(encoded, encoded_test, y, tr, va, seed, epochs, *, max_steps
         with torch.inference_mode():
             for start in range(0, len(indices), 64):
                 idx = indices[start : start + 64]
-                batch = {k: data[k][idx].cuda() for k in ("input_ids", "attention_mask")}
-                with torch.autocast("cuda", dtype=torch.bfloat16):
+                batch = {k: data[k][idx].to(device) for k in ("input_ids", "attention_mask")}
+                with torch.autocast(device.type, dtype=torch.bfloat16, enabled=use_cuda):
                     logits = cast(torch.Tensor, model(**batch).logits)
                 values.append(logits.float().sigmoid().cpu().numpy())
         return np.concatenate(values)
@@ -116,10 +155,12 @@ def fit_transformer(encoded, encoded_test, y, tr, va, seed, epochs, *, max_steps
     info = {
         "epochs": epochs,
         "train_steps": completed,
-        "max_gpu_memory_mb": torch.cuda.max_memory_allocated() / 2**20,
+        "max_gpu_memory_mb": torch.cuda.max_memory_allocated(device) / 2**20 if use_cuda else None,
+        "runtime_environment": environment,
     }
     del optimizer
-    torch.cuda.empty_cache()
+    if use_cuda:
+        torch.cuda.empty_cache()
     return FoldOutput(valid, test, info)
 
 

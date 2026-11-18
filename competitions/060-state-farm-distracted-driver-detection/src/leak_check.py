@@ -33,8 +33,8 @@ def main() -> None:
         raise AssertionError("ランダム分割で運転手が重ならないのは想定外です")
 
     exp = EXPERIMENTS["E01"]
-    x = backbone_features(exp.config.backbone, data.train_images, "train")
-    x_te = backbone_features(exp.config.backbone, data.test_images, "test")
+    x, _ = backbone_features(exp.config.backbone, data.train_images, "train", data.cache_manifest)
+    x_te, _ = backbone_features(exp.config.backbone, data.test_images, "test", data.cache_manifest)
     train_idx, valid_idx = folds_to_splits(SPLITS["driver"][1](data.train))[0]
     hidden = np.zeros(len(data.y), dtype=bool)
     hidden[valid_idx] = True

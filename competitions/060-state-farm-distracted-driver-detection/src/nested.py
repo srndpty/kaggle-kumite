@@ -48,8 +48,17 @@ def run() -> None:
         pseudo_each = np.full((INNER_FOLDS, n, N_CLASSES), np.nan, dtype=np.float32)
         started = time.perf_counter()
 
+        def fold_index(valid_idx: np.ndarray) -> int:
+            """検証行の集合から外側 fold の番号を引く（実行順に依存しない）。"""
+            matches = [i for i, (_, v) in enumerate(splits) if np.array_equal(v, valid_idx)]
+            if len(matches) != 1:
+                raise ValueError(f"外側 fold を特定できません（一致 {len(matches)} 件）")
+            return matches[0]
+
         def fit(train_idx: np.ndarray, valid_idx: np.ndarray) -> FoldOutput:
-            k = int((inner_fold >= 0).any(axis=1).sum())  # 何番目の外側 fold か
+            k = fold_index(valid_idx)
+            if (inner_fold[k] >= 0).any():
+                raise ValueError(f"外側 fold {k} は既に学習済みです")
             folds = driver_folds(data.train.iloc[train_idx], INNER_FOLDS)
             inner_fold[k, train_idx] = folds
             tests: list[np.ndarray] = []
@@ -97,7 +106,13 @@ def report() -> None:
     inner_fold = STORE_RUNS.load_array(RUN_ID, "inner_fold.npy")
     each = STORE_RUNS.load_array(RUN_ID, "pseudo_each.npy").astype(np.float64)
     single80 = STORE_RUNS.load_array("E02", "oof.npy")
-    x = features(str(KNN["feature"]), "train", data.train_images, EXPERIMENT.config.backbone)
+    x, _ = features(
+        str(KNN["feature"]),
+        "train",
+        data.train_images,
+        EXPERIMENT.config.backbone,
+        data.cache_manifest,
+    )
     k_nn = int(KNN["k"])
 
     rows: dict[str, np.ndarray] = {}  # 名前 → 行ごとの logloss（全行）

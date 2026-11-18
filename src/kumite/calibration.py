@@ -35,7 +35,7 @@ def fit_temperature(
     ratio = (math.sqrt(5) - 1) / 2
     a, b = hi - ratio * (hi - lo), lo + ratio * (hi - lo)
     fa, fb = f(a), f(b)
-    while hi - lo > 1e-5:
+    while hi - lo > 1e-8:  # log T の幅（T の相対誤差 1e-8 程度）
         if fa <= fb:
             hi, b, fb = b, a, fa
             a = hi - ratio * (hi - lo)

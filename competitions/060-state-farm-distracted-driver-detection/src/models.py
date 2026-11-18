@@ -5,17 +5,20 @@ augmentation は GPU 上でバッチごとに行う（画像ごとに別の乱�
 early stopping はしない（epoch 数は固定。検証 fold で epoch を選ぶ楽観を避ける）。
 """
 
+import hashlib
 import math
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
-from typing import Any
+from functools import cache
+from typing import Any, cast
 
 import numpy as np
 import timm
 import torch
 import torch.nn.functional as F
 from dataset import N_CLASSES, OUTPUT_DIR
+from integrity import check_array, verify_manifest, write_manifest
 from sklearn.linear_model import LogisticRegression
 from timm.data.config import resolve_data_config
 from torch import nn
@@ -35,6 +38,29 @@ class ModelConfig:
     hflip: bool = False  # 左右反転（右手・左手のクラスが入れ替わるので既定は使わない）
     seed: int = 42
     extra: dict[str, Any] = field(default_factory=dict[str, Any])
+
+
+# --- 学習済みの重み ---
+
+
+@cache
+def weights_identity(backbone: str) -> dict[str, str]:
+    """timm が読み込む学習済みの重みの識別子と、分類層を除いた重みの sha256（名前・型・形状・値）。"""
+    model = timm.create_model(backbone, pretrained=True, num_classes=0)
+    digest = hashlib.sha256()
+    for name, tensor in sorted(model.state_dict().items()):
+        t = tensor.detach().cpu().contiguous()
+        digest.update(f"{name}:{t.dtype}:{tuple(t.shape)};".encode())
+        digest.update(t.numpy().tobytes())
+    # timm のモデルの属性。nn.Module の型では Tensor | Module に見えるので型を明示する
+    cfg = cast(dict[str, Any], model.pretrained_cfg)
+    tag = str(cfg.get("hf_hub_id") or cfg.get("url") or "") + f"#{cfg.get('tag', '')}"
+    return {
+        "backbone": backbone,
+        "pretrained": tag,
+        "timm": timm.__version__,
+        "weights_sha256": digest.hexdigest(),
+    }
 
 
 # --- 入力 ---
@@ -202,17 +228,38 @@ def finetune(
 
 
 @torch.no_grad()
-def backbone_features(backbone: str, images: np.ndarray, name: str) -> np.ndarray:
-    """凍結した backbone の pooled 特徴。画像だけから決まる（ラベルを使わない）ので、一度作って保存する。"""
+def backbone_features(
+    backbone: str, images: np.ndarray, name: str, source: str
+) -> tuple[np.ndarray, str]:
+    """凍結した backbone の pooled 特徴と、その manifest のハッシュ。
+
+    画像だけから決まる（ラベルを使わない）ので、一度作って保存する。manifest には元の画像キャッシュの
+    manifest のハッシュ（source）・重みの識別子とハッシュ・ライブラリの版を書き、再利用のときに照合する。
+    一致しなければ使わずに止める（古い特徴を消して作り直す）。
+    """
     h, w = images.shape[1:3]
     out = FEATURE_DIR / f"{backbone}_{h}x{w}_{name}.npy"
+    manifest = out.with_suffix(".json")
+    meta = {
+        "kind": "backbone_features",
+        "split": name,
+        "images": source,
+        "n_rows": len(images),
+        "torch": torch.__version__,
+        **weights_identity(backbone),
+    }
     if out.exists():
-        return np.load(out)
-    model = timm.create_model(backbone, pretrained=True, num_classes=0).to(DEVICE)
-    feats = _forward_all(model, images, np.arange(len(images)), Normalizer(backbone), 256)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    np.save(out, feats.astype(np.float32))
-    return feats.astype(np.float32)
+        digest = verify_manifest(manifest, meta)
+        feats = np.load(out)
+    else:
+        model = timm.create_model(backbone, pretrained=True, num_classes=0).to(DEVICE)
+        feats = _forward_all(model, images, np.arange(len(images)), Normalizer(backbone), 256)
+        feats = feats.astype(np.float32)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        np.save(out, feats)
+        digest = write_manifest(manifest, meta, [out])
+    check_array(feats, (len(images), feats.shape[1]), "float32", out.name)
+    return feats, digest
 
 
 def linear_probe(

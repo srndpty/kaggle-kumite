@@ -1,12 +1,13 @@
 """実験の定義と CV の実行・保存。"""
 
 from dataclasses import dataclass, field
+from functools import cached_property
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
-from cache import CACHE_DIR, SIZE, load_array
+from cache import CACHE_DIR, SIZE, load_array, verify_cache
 from cv import SEED, SPLITS, check_driver_disjoint
 from dataset import (
     COMPETITION_DIR,
@@ -17,12 +18,14 @@ from dataset import (
     load_train,
     submission,
 )
+from integrity import check_array, check_base_run
 from models import (
     ModelConfig,
     backbone_features,
     finetune,
     linear_probe,
     logloss,
+    weights_identity,
 )
 from neighbors import features, knn, smooth
 
@@ -42,6 +45,10 @@ from kumite.runs import Reservation, RunStore
 COMPETITION_ID = "060"
 METRIC = "multi_logloss"
 STORE_RUNS = RunStore(COMPETITION_DIR)
+CACHE_INPUT = (
+    "cache/manifest"  # run の inputs に記録する、画像キャッシュの manifest のハッシュの名前
+)
+BACKBONE_MODELS = ("linear_probe", "finetune", "refit", "nested_finetune")
 INPUT_SIZE = [SIZE[1], SIZE[0]]  # (高さ, 幅)。縮小キャッシュの大きさのまま入力する
 
 
@@ -92,10 +99,18 @@ class Data:
     test: pd.DataFrame
     train_images: np.ndarray  # (枚数, H, W, 3) の uint8（memmap）。行順は train と同じ
     test_images: np.ndarray
+    cache_manifest: str  # 照合済みの画像キャッシュの manifest のハッシュ
+    # 実行中に使った派生キャッシュ（CNN 特徴など）の名前 → ハッシュ。save_run が run の inputs に記録する
+    used: dict[str, str] = field(default_factory=dict[str, str])
 
     @property
     def y(self) -> np.ndarray:
         return self.train["label"].to_numpy()
+
+    @cached_property
+    def data_hash(self) -> str:
+        """CSV と縮小 JPEG 全体のハッシュ（約 70 秒。1 回だけ計算する）。"""
+        return files_sha256(_data_files())
 
     def splits(self, name: str) -> list[Split]:
         folds = SPLITS[name][1](self.train)
@@ -105,11 +120,10 @@ class Data:
 
 
 def load_data() -> Data:
+    """CSV と、manifest を照合した画像配列（行順・作り方・形状・型・ファイルの変更の有無）を読む。"""
     train, test = load_train(), load_test()
-    images = load_array("train"), load_array("test")
-    if (len(images[0]), len(images[1])) != (len(train), len(test)):
-        raise ValueError("画像配列の枚数が CSV と一致しません。cache.py を実行し直してください")
-    return Data(train, test, *images)
+    digest = verify_cache(train, test)
+    return Data(train, test, load_array("train"), load_array("test"), digest)
 
 
 def fit_split(
@@ -121,8 +135,10 @@ def fit_split(
         prior = np.bincount(y[train_idx], minlength=N_CLASSES) / len(train_idx)
         return FoldOutput(np.tile(prior, (len(valid_idx), 1)), np.tile(prior, (len(data.test), 1)))
     if exp.model == "linear_probe":
-        x = backbone_features(exp.config.backbone, data.train_images, "train")
-        x_te = backbone_features(exp.config.backbone, data.test_images, "test")
+        backbone, source = exp.config.backbone, data.cache_manifest
+        x, h_tr = backbone_features(backbone, data.train_images, "train", source)
+        x_te, h_te = backbone_features(backbone, data.test_images, "test", source)
+        data.used.update({f"features/{backbone}_train": h_tr, f"features/{backbone}_test": h_te})
         valid, test, info = linear_probe(
             x[train_idx], y[train_idx], x[valid_idx], x_te, exp.params["C"]
         )
@@ -145,15 +161,36 @@ def fit_split(
 
 def _knn_smooth(exp: Experiment, data: Data, valid_idx: np.ndarray) -> FoldOutput:
     """元の run の予測を、近傍の予測との平均に置き換える。近傍は同じ fold の検証画像の中（test は test の中）。"""
-    if exp.base is None:
-        raise ValueError("knn_smooth には base（元の run_id）が必要です")
-    if STORE_RUNS.record(exp.base).split_version != SPLITS[exp.split][0]:
-        raise ValueError(f"{exp.base} は分割が違います（OOF が別の分割の予測になる）")
-    oof, test = load_predictions(exp.base)
+    oof, test = base_predictions(exp, data)
     kind, k, backbone = exp.params["feature"], exp.params["k"], exp.config.backbone
-    x_va = features(kind, "train", data.train_images, backbone)[valid_idx]
-    x_te = features(kind, "test", data.test_images, backbone)
-    return FoldOutput(smooth(oof[valid_idx], knn(x_va, k)), smooth(test, knn(x_te, k)))
+    x, used_tr = features(kind, "train", data.train_images, backbone, data.cache_manifest)
+    x_te, used_te = features(kind, "test", data.test_images, backbone, data.cache_manifest)
+    data.used.update(used_tr | used_te)
+    return FoldOutput(smooth(oof[valid_idx], knn(x[valid_idx], k)), smooth(test, knn(x_te, k)))
+
+
+def base_predictions(exp: Experiment, data: Data) -> tuple[np.ndarray, np.ndarray]:
+    """後処理の元になる run の (OOF, test) の確率。
+
+    元の run が今と同じ条件（コンペ・データ・分割・画像キャッシュ）で作られたことを確かめる。
+    予測の行は画像・特徴の行と番号で対応付けるので、行順が変わっていれば使えない。成果物のハッシュは
+    `RunStore.load_array` が照合する。
+    """
+    if exp.base is None:
+        raise ValueError(f"{exp.model} には base（元の run_id）が必要です")
+    splits = data.splits(exp.split)
+    check_base_run(
+        STORE_RUNS.record(exp.base),
+        competition_id=COMPETITION_ID,
+        data_hash=data.data_hash,
+        split_version=SPLITS[exp.split][0],
+        split_hash=array_sha256(split_roles(len(data.y), splits)),
+        inputs={CACHE_INPUT: data.cache_manifest},
+    )
+    oof, test = load_predictions(exp.base)
+    check_array(oof, (len(data.y), N_CLASSES), "float64", f"{exp.base}/oof.npy")
+    check_array(test, (len(data.test), N_CLASSES), "float64", f"{exp.base}/test.npy")
+    return oof, test
 
 
 def run_cv(exp: Experiment, data: Data, splits: list[Split]) -> CrossFitResult:
@@ -165,11 +202,7 @@ def run_cv(exp: Experiment, data: Data, splits: list[Split]) -> CrossFitResult:
 
 def _refit(exp: Experiment, data: Data, splits: list[Split]) -> CrossFitResult:
     """OOF は base の run のまま（同じ設定の fold モデル）。test は全行・同じ epoch 数で学習し直した 1 モデル。"""
-    if exp.base is None:
-        raise ValueError("refit には base（OOF を引き継ぐ run_id）が必要です")
-    if STORE_RUNS.record(exp.base).split_version != SPLITS[exp.split][0]:
-        raise ValueError(f"{exp.base} は分割が違います")
-    oof, _ = load_predictions(exp.base)
+    oof, _ = base_predictions(exp, data)
     all_rows = np.arange(len(data.y))
     print(f"  全行で学習: {len(all_rows)} 枚", flush=True)
     _, test, info = finetune(
@@ -200,18 +233,25 @@ def save_run(
         metric=METRIC,
         greater_is_better=False,
         score=logloss,
-        data_hash=files_sha256(_data_files()),
+        data_hash=data.data_hash,
         split_version=SPLITS[exp.split][0],
         split_hash=array_sha256(split_roles(len(y), splits)),
         seed=SEED,
     )
+    params, inputs = exp.logged_params(), {CACHE_INPUT: data.cache_manifest, **data.used}
+    if exp.model in BACKBONE_MODELS:
+        weights = weights_identity(exp.config.backbone)
+        params["pretrained"] = {k: v for k, v in weights.items() if k != "weights_sha256"}
+        inputs[f"pretrained/{exp.config.backbone}"] = weights["weights_sha256"]
+    if exp.base is not None:
+        inputs |= STORE_RUNS.input_hashes(exp.base, "oof.npy", "test.npy")
     trial = Trial(
         hypothesis=exp.hypothesis,
         changed_one_thing=exp.changed_one_thing,
         model=exp.model,
         data_version=exp.data_version,
-        params=exp.logged_params(),
-        inputs={} if exp.base is None else STORE_RUNS.input_hashes(exp.base, "oof.npy", "test.npy"),
+        params=params,
+        inputs=inputs,
     )
 
     def write_submission(out_dir: Path) -> None:

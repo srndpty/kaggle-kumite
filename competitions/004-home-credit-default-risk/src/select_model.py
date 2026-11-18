@@ -6,7 +6,9 @@ from dataclasses import asdict
 from pathlib import Path
 
 import numpy as np
-from dataset import COMPETITION_DIR, DATA_FILES
+import pandas as pd
+from cv import make_folds, split_hash
+from dataset import COMPETITION_DIR, DATA_FILES, KEY, load_data
 from pipeline import EXPERIMENTS, STORE, parameters
 
 from kumite.experiments import ExperimentRecord, compare_runs
@@ -39,6 +41,22 @@ def select(
     if EXPERIMENTS[candidate].parent != parent or candidate == "E00":
         raise ValueError("候補と直接の比較元を指定してください")
     data_hash = files_sha256(DATA_FILES)
+    train, _, _ = load_data()
+    y = train["TARGET"].to_numpy(dtype=np.int64)
+    expected_splits = {seed: make_folds(train, y, seed) for seed in (42, 43)}
+
+    def validate_split(record: ExperimentRecord) -> None:
+        folds, version = expected_splits[record.seed]
+        if record.split_version != version or record.split_hash != split_hash(folds):
+            raise ValueError("現在のデータから再生成した分割とrun記録が一致しません")
+        saved = pd.read_csv(store.artifact_path(record.run_id, "folds.csv"))
+        if (
+            list(saved.columns) != [KEY, "fold"]
+            or not np.array_equal(saved[KEY], train[KEY])
+            or not np.array_equal(saved["fold"], folds)
+        ):
+            raise ValueError("保存された分割のID・行順・foldが現在の分割と一致しません")
+
     # 同じseed42に存在する本実験をすべて比較し、最良候補以外を持ち込ませない。
     eligible = []
     for record in store.records():
@@ -52,6 +70,7 @@ def select(
             validate_record(record, str(experiment), 42)
             if record.data_hash != data_hash:
                 raise ValueError("現在のデータと異なります")
+            validate_split(record)
             eligible.append(record)
     if not eligible:
         raise ValueError("seed42の本実験がありません")
@@ -78,6 +97,7 @@ def select(
             validate_record(record, experiment, seed)
             if record.data_hash != data_hash:
                 raise ValueError("現在のデータと異なります")
+            validate_split(record)
             for name in ("oof.npy", "test.npy", "folds.csv", "submission.csv", "features.json"):
                 store.artifact_path(record.run_id, name)
             pair.append(record)

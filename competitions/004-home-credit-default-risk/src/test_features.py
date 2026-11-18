@@ -13,6 +13,7 @@ from features import (
     bureau_features,
     encode_categories,
     installment_features,
+    installment_value_summary,
     join_history,
     previous_features,
 )
@@ -69,6 +70,43 @@ def test_missing_payment_is_not_zero() -> None:
     result = installment_features(frame)
     assert result["installments_shortfall_mean"].isna().iloc[0]
     assert result["installments_underpaid_rate"].isna().iloc[0]
+
+
+@pytest.mark.parametrize(
+    "column,value,message",
+    [
+        ("AMT_PAYMENT", -1.0, "非負"),
+        ("AMT_INSTALMENT", -1.0, "非負"),
+        ("AMT_PAYMENT", np.inf, "無限大"),
+        ("DAYS_ENTRY_PAYMENT", -np.inf, "無限大"),
+        ("DAYS_INSTALMENT", np.inf, "無限大"),
+        ("DAYS_ENTRY_PAYMENT", -1.5, "整数日"),
+        ("DAYS_INSTALMENT", -2.5, "整数日"),
+    ],
+)
+def test_invalid_installment_values_rejected(column: str, value: float, message: str) -> None:
+    frame = payments()
+    frame[column] = frame[column].astype(float)
+    frame.loc[0, column] = value
+    with pytest.raises(ValueError, match=message):
+        installment_features(frame)
+
+
+def test_missing_expected_amount_with_split_payments_stays_unknown() -> None:
+    frame = payments().iloc[:3].copy()
+    frame.loc[:1, "AMT_INSTALMENT"] = np.nan
+    unknown = installment_features(frame.iloc[:2])
+    assert unknown["installments_shortfall_mean"].isna().all()
+    assert unknown["installments_underpaid_rate"].isna().all()
+    result = installment_features(frame)
+    assert result.loc[0, "installments_count"] == 2
+    assert result.loc[0, "installments_underpaid_rate"] == 0
+    assert result.loc[0, "installments_shortfall_max"] == 0
+    assert result.loc[0, "installments_late_rate"] == 0.5
+    stats = installment_value_summary(frame)
+    assert stats["AMT_INSTALMENT"]["missing"] == 2
+    assert stats["AMT_PAYMENT"]["min"] == 40
+    assert stats["AMT_PAYMENT"]["max"] == 100
 
 
 def test_bureau_update_cutoff_and_duplicate_key() -> None:

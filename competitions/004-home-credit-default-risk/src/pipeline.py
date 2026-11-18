@@ -8,7 +8,7 @@ from pathlib import Path
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
-from cv import make_folds
+from cv import make_folds, split_hash
 from dataset import COMPETITION_DIR, DATA_DIR, DATA_FILES, KEY, load_data, submission
 from features import (
     BUREAU_NUMERIC,
@@ -27,7 +27,7 @@ from kumite.checks import validate_probabilities
 from kumite.crossfit import FoldOutput, cross_fit_splits, folds_to_splits
 from kumite.cv_run import Evaluation, Trial, publish_cv_run
 from kumite.gbdt import lightgbm_binary
-from kumite.provenance import array_sha256, files_sha256
+from kumite.provenance import files_sha256
 from kumite.runs import RunStore
 
 STORE = RunStore(COMPETITION_DIR)
@@ -144,7 +144,16 @@ def run(run_id: str, experiment: str, seed: int = 42, benchmark: bool = False) -
             print(
                 f"fold {int(folds[va[0]])}: AUC={auc(y[va], out.valid):.6f} {out.info}", flush=True
             )
-            return out
+            preprocessing = {
+                "categorical_columns": cats,
+                "category_counts": {
+                    column: len(frames[0][column].cat.categories) for column in cats
+                },
+                "dtypes": {str(column): str(dtype) for column, dtype in frames[0].dtypes.items()},
+                "unknown_category": "missing",
+                "numeric_dtype": "float32",
+            }
+            return FoldOutput(out.valid, out.query, {**out.info, "preprocessing": preprocessing})
 
         result = cross_fit_splits(len(y), splits, fit)
         validated = np.sort(np.concatenate([va for _, va in splits]))
@@ -185,7 +194,7 @@ def run(run_id: str, experiment: str, seed: int = 42, benchmark: bool = False) -
                 auc,
                 files_sha256(DATA_FILES),
                 version,
-                array_sha256(np.stack([np.isin(np.arange(len(y)), va) for _, va in splits])),
+                split_hash(folds, benchmark=benchmark),
                 seed,
             ),
             Trial(

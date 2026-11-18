@@ -4,8 +4,11 @@ from dataclasses import asdict
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import pytest
 import select_model
+from cv import make_folds, split_hash
+from dataset import KEY
 from pipeline import EXPERIMENTS, parameters
 
 from kumite.experiments import ExperimentRecord
@@ -14,13 +17,16 @@ from kumite.runs import RunStore
 
 
 def fixture_store(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, delta43: float = 0.01
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, delta43: float = 0.01, split_error: str = ""
 ) -> RunStore:
     data = tmp_path / "input.txt"
     data.write_text("input", encoding="utf-8")
     monkeypatch.setattr(select_model, "DATA_FILES", (data,))
+    train = pd.DataFrame({KEY: np.arange(12), "TARGET": np.arange(12) % 2, "x": np.arange(12)})
+    monkeypatch.setattr(select_model, "load_data", lambda: (train, pd.DataFrame(), pd.DataFrame()))
     store = RunStore(tmp_path)
     for seed in (42, 43):
+        folds, version = make_folds(train, train["TARGET"].to_numpy(), seed)
         for experiment in ("E01", "E02"):
             exp = EXPERIMENTS[experiment]
             run_id = experiment if seed == 42 else f"{experiment}-s{seed}"
@@ -33,8 +39,8 @@ def fixture_store(
                     greater_is_better=True,
                     data_version=f"application-v1|history={exp.history}|missing_count={exp.missing_count}",
                     data_hash=files_sha256((data,)),
-                    split_version=f"seed{seed}",
-                    split_hash=f"hash{seed}",
+                    split_version=version + ("-wrong" if split_error == "version" else ""),
+                    split_hash="wrong" if split_error == "hash" else split_hash(folds),
                     seed=seed,
                     hypothesis=exp.hypothesis,
                     changed_one_thing=exp.change,
@@ -51,11 +57,15 @@ def fixture_store(
                     code_version="fixture",
                 )
 
-                def write(output: Path) -> None:
+                def write(output: Path, folds: np.ndarray = folds) -> None:
                     np.save(output / "oof.npy", np.array([0.1, 0.9]))
                     np.save(output / "test.npy", np.array([0.3]))
-                    (output / "folds.csv").write_text(
-                        "SK_ID_CURR,fold\n1,0\n2,1\n", encoding="utf-8"
+                    ids = train[KEY].to_numpy()
+                    if split_error == "ids":
+                        ids = ids[::-1]
+                    saved_folds = (folds + 1) % 3 if split_error == "folds" else folds
+                    pd.DataFrame({KEY: ids, "fold": saved_folds}).to_csv(
+                        output / "folds.csv", index=False
                     )
                     (output / "submission.csv").write_text(
                         "SK_ID_CURR,TARGET\n3,0.3\n", encoding="utf-8"
@@ -102,3 +112,14 @@ def test_selection_rejects_definition_change(
     record = replace(store.record("E02"), data_version="different")
     with pytest.raises(ValueError, match="実験定義"):
         select_model.validate_record(record, "E02", 42)
+
+
+@pytest.mark.parametrize("split_error", ["version", "hash", "folds", "ids"])
+def test_selection_rejects_shared_wrong_split(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, split_error: str
+) -> None:
+    # 親runと候補runの誤りが共通で、成果物ハッシュも正しく保存されていても拒否する。
+    store = fixture_store(tmp_path, monkeypatch, split_error=split_error)
+    with pytest.raises(ValueError, match="分割"):
+        select_model.select("E02", "E01", store, tmp_path / "selection.json")
+    assert not (tmp_path / "selection.json").exists()

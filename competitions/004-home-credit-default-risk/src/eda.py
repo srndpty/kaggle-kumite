@@ -4,7 +4,7 @@ import json
 
 import pandas as pd
 from dataset import COMPETITION_DIR, DATA_DIR, KEY, load_data
-from features import application_features
+from features import INSTALLMENT_VALUES, application_features, installment_value_summary
 
 
 def main() -> None:
@@ -59,6 +59,9 @@ def main() -> None:
         }
         counts.rename("history_count").to_csv(output / f"{name}_counts.csv")
     summary["history"] = histories
+    summary["installment_values"] = installment_value_summary(
+        pd.read_csv(DATA_DIR / "installments_payments.csv", usecols=INSTALLMENT_VALUES)
+    )
     (output / "summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
     )

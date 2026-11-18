@@ -20,6 +20,35 @@ INSTALLMENT_COLUMNS = [
     "AMT_INSTALMENT",
     "AMT_PAYMENT",
 ]
+INSTALLMENT_VALUES = ["AMT_INSTALMENT", "AMT_PAYMENT", "DAYS_INSTALMENT", "DAYS_ENTRY_PAYMENT"]
+
+
+def installment_value_summary(frame: pd.DataFrame) -> dict[str, dict[str, int | float | None]]:
+    """有限値の範囲と、欠損・無限大・負数・小数の件数をEDAへ残す。"""
+    result = {}
+    for column in INSTALLMENT_VALUES:
+        values = frame[column].to_numpy(dtype=np.float64)
+        finite = values[np.isfinite(values)]
+        result[column] = {
+            "min": float(finite.min()) if len(finite) else None,
+            "max": float(finite.max()) if len(finite) else None,
+            "missing": int(np.isnan(values).sum()),
+            "infinite": int(np.isinf(values).sum()),
+            "negative": int((finite < 0).sum()),
+            "fractional": int((finite % 1 != 0).sum()),
+        }
+    return result
+
+
+def validate_installment_values(frame: pd.DataFrame) -> None:
+    """金額は非負、相対日は整数日。欠損を許容し、任意の下限日は設けない。"""
+    for column, stats in installment_value_summary(frame).items():
+        if stats["infinite"]:
+            raise ValueError(f"{column} に無限大があります")
+        if column.startswith("AMT_") and stats["negative"]:
+            raise ValueError(f"{column} は非負の金額が必要です")
+        if column.startswith("DAYS_") and stats["fractional"]:
+            raise ValueError(f"{column} は整数日が必要です")
 
 
 def _aggregate(frame: pd.DataFrame, prefix: str, numeric: list[str], time: str) -> pd.DataFrame:
@@ -61,6 +90,7 @@ def previous_features(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def installment_features(frame: pd.DataFrame) -> pd.DataFrame:
+    validate_installment_values(frame)
     if frame[INSTALLMENT_KEYS].isna().any().any():
         raise ValueError("返済キーに欠損があります")
     if frame.groupby("SK_ID_PREV")[KEY].nunique().gt(1).any():

@@ -56,6 +56,13 @@ def test_training_publication_and_reservation(
     assert json.loads(store.artifact_path("smoke", "features.json").read_text(encoding="utf-8"))[
         "features"
     ] == ["x", "cat"]
+    infos = json.loads(store.artifact_path("smoke", "fold_info.json").read_text(encoding="utf-8"))
+    for info in infos:
+        preprocessing = info["preprocessing"]
+        assert preprocessing["categorical_columns"] == ["cat"]
+        assert preprocessing["category_counts"] == {"cat": 2}
+        assert preprocessing["dtypes"] == {"x": "float32", "cat": "category"}
+        assert preprocessing["unknown_category"] == "missing"
     assert store.orphans() == []
     with pytest.raises(FileExistsError):
         pipeline.run("smoke", "E01")

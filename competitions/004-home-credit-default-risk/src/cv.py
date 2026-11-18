@@ -6,6 +6,17 @@ from dataset import KEY, unique_ids
 from features import application_features
 from sklearn.model_selection import StratifiedGroupKFold, StratifiedKFold
 
+from kumite.crossfit import folds_to_splits
+from kumite.provenance import array_sha256
+
+
+def split_hash(folds: np.ndarray, *, benchmark: bool = False) -> str:
+    """保存済みrunと同じ、分割ごとの検証行マスクをハッシュ化する。"""
+    splits = folds_to_splits(folds)
+    if benchmark:
+        splits = splits[:1]
+    return array_sha256(np.stack([np.isin(np.arange(len(folds)), va) for _, va in splits]))
+
 
 def make_folds(main: pd.DataFrame, y: np.ndarray, seed: int) -> tuple[np.ndarray, str]:
     unique_ids(main)

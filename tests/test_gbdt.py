@@ -51,3 +51,21 @@ def test_fixed_rounds_without_validation_rows() -> None:
 
     assert out.valid.shape == (0,) and out.query.shape == (50,)
     assert out.info == {"rounds": 30}
+
+
+def test_binary_predictions_and_fixed_rounds() -> None:
+    from kumite.checks import validate_probabilities
+    from kumite.gbdt import lightgbm_binary
+
+    x_tr, y = _data(300, 0)
+    x_va, v = _data(100, 1)
+    y_tr, y_va = (y > np.median(y)).astype(int), (v > np.median(v)).astype(int)
+    params = {**PARAMS, "num_threads": 2, "num_boost_round": 50, "early_stopping": 5}
+    out = lightgbm_binary(x_tr, y_tr, x_va, y_va, x_va, params, ["g"])
+    validate_probabilities(np.column_stack((1 - out.valid, out.valid)), 100, 2)
+    assert 1 <= out.info["best_iteration"] <= 50
+    assert ((out.valid > 0.5) == y_va).mean() > 0.8
+    fixed = lightgbm_binary(
+        x_tr, y_tr, x_va.iloc[:0], np.zeros(0), x_va, {**params, "early_stopping": None}
+    )
+    assert fixed.valid.shape == (0,) and fixed.info == {"rounds": 50}

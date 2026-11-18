@@ -169,6 +169,18 @@ def _knn_smooth(exp: Experiment, data: Data, valid_idx: np.ndarray) -> FoldOutpu
     return FoldOutput(smooth(oof[valid_idx], knn(x[valid_idx], k)), smooth(test, knn(x_te, k)))
 
 
+def check_run_conditions(run_id: str, split: str, data: Data) -> None:
+    """保存済みの run が今と同じ条件（コンペ・データ・分割・画像キャッシュ）で作られたことを確かめる。"""
+    check_base_run(
+        STORE_RUNS.record(run_id),
+        competition_id=COMPETITION_ID,
+        data_hash=data.data_hash,
+        split_version=SPLITS[split][0],
+        split_hash=array_sha256(split_roles(len(data.y), data.splits(split))),
+        inputs={CACHE_INPUT: data.cache_manifest},
+    )
+
+
 def base_predictions(exp: Experiment, data: Data) -> tuple[np.ndarray, np.ndarray]:
     """後処理の元になる run の (OOF, test) の確率。
 
@@ -178,15 +190,7 @@ def base_predictions(exp: Experiment, data: Data) -> tuple[np.ndarray, np.ndarra
     """
     if exp.base is None:
         raise ValueError(f"{exp.model} には base（元の run_id）が必要です")
-    splits = data.splits(exp.split)
-    check_base_run(
-        STORE_RUNS.record(exp.base),
-        competition_id=COMPETITION_ID,
-        data_hash=data.data_hash,
-        split_version=SPLITS[exp.split][0],
-        split_hash=array_sha256(split_roles(len(data.y), splits)),
-        inputs={CACHE_INPUT: data.cache_manifest},
-    )
+    check_run_conditions(exp.base, exp.split, data)
     oof, test = load_predictions(exp.base)
     check_array(oof, (len(data.y), N_CLASSES), "float64", f"{exp.base}/oof.npy")
     check_array(test, (len(data.test), N_CLASSES), "float64", f"{exp.base}/test.npy")

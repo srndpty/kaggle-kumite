@@ -38,10 +38,11 @@ def features(
 
 
 @torch.no_grad()
-def knn(x: np.ndarray, k: int, batch: int = 4096) -> np.ndarray:
+def knn(x: np.ndarray, k: int, batch: int = 1024) -> np.ndarray:
     """各行に最も近い（内積が最大の）k 行の番号 (行数, k)。自分自身は除く。
 
-    類似度が同じ近傍は、行番号の小さい順に選ぶ（安定ソート）。
+    類似度が同じ近傍は、行番号の小さい順に選ぶ（安定ソート）。完全ソートは topk より重いので、batch で
+    VRAM を抑える（test 全 79,726 行・2048 次元で、batch 1024 は約 2.5 秒・ピーク 4 GiB。4096 は 14 GiB）。
     """
     if x.ndim != 2:
         raise ValueError(f"特徴は 2 次元である必要があります（{x.shape}）")

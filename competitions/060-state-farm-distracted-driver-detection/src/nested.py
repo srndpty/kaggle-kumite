@@ -18,7 +18,7 @@ from cv import driver_folds
 from dataset import DRIVER, N_CLASSES
 from models import ModelConfig, finetune, logloss, row_logloss
 from neighbors import features, knn, smooth
-from pipeline import STORE_RUNS, Experiment, load_data, save_run
+from pipeline import STORE_RUNS, Experiment, check_run_conditions, load_data, save_run
 
 from kumite.bootstrap import group_bootstrap_diff
 from kumite.calibration import apply_temperature, fit_temperature
@@ -99,8 +99,14 @@ def run() -> None:
 
 
 def report() -> None:
-    """外側 fold ごとに、温度を外側の学習行（内側 OOF）だけで決め、疑似テストに適用する。"""
+    """外側 fold ごとに、温度を外側の学習行（内側 OOF）だけで決め、疑似テストに適用する。
+
+    予測（E06N・E02）と今の画像キャッシュ・特徴を行番号で対応付けるので、両方の run が今と同じ条件で
+    作られたことを確かめる。manifest の導入前の run（README の P7 の結果）は再計算せず、記録を正とする。
+    """
     data = load_data()
+    for run_id in (RUN_ID, "E02"):
+        check_run_conditions(run_id, EXPERIMENT.split, data)
     y, drivers = data.y, data.train[DRIVER].to_numpy()
     inner_oof = STORE_RUNS.load_array(RUN_ID, "inner_oof.npy").astype(np.float64)
     inner_fold = STORE_RUNS.load_array(RUN_ID, "inner_fold.npy")

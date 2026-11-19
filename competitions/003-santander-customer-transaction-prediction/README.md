@@ -38,23 +38,26 @@ E04 と E05 は 600 本、学習率 0.1 を固定した。モデルの設定と�
 ## 再現手順
 
 規約承諾とデータアクセスを確認したうえで、リポジトリのルートから実行する。
+初回の再現では記録済みの E01〜E06 と衝突しないよう、接尾辞 `r2` を使う。再度実行するときは、`$suffix` を `r3` など全実験で未使用の値に変更する。
 
 ```powershell
 $d = 'competitions/003-santander-customer-transaction-prediction'
+$suffix = 'r2'
+$baseline = "E01-$suffix"
 dev download 3
 uv run python "$d/src/train.py" --dummy "$d/outputs/dummy.csv"
 dev submit 3 "$d/outputs/dummy.csv" -m 'P0 dummy'
 dev submissions 3
 uv run python "$d/src/train.py" --eda
-uv run python "$d/src/train.py" --run-id E01
-dev submit 3 "$d/outputs/runs/E01/submission.csv" -m 'E01 baseline'
+uv run python "$d/src/train.py" --run-id $baseline --variant E01
+dev submit 3 "$d/outputs/runs/$baseline/submission.csv" -m "$baseline baseline"
 foreach ($variant in 'E02', 'E03', 'E04', 'E05') {
-    uv run python "$d/src/train.py" --run-id $variant --variant $variant
+    uv run python "$d/src/train.py" --run-id "$variant-$suffix" --variant $variant
 }
-dev compare 3 E01 E02 E03 E04 E05
-dev compare 3 E04 E05
-uv run python "$d/src/train.py" --run-id E06 --variant E06
-dev compare 3 E01 E06
+dev compare 3 $baseline "E02-$suffix" "E03-$suffix" "E04-$suffix" "E05-$suffix"
+dev compare 3 "E04-$suffix" "E05-$suffix"
+uv run python "$d/src/train.py" --run-id "E06-$suffix" --variant E06
+dev compare 3 $baseline "E06-$suffix"
 ```
 
 P6 まで実施したら OOF AUC で候補を選ぶ。上位 2 件の差が 0.001 未満の場合は、それぞれ `--seed 43` と別 run ID で再実行し、両 seed の平均 AUC で決める。同点は seed 42 の fold 別 `predict_sec` の合計が短い方を選ぶ。提出には選んだ手法の seed 42 の成果物を使う。最終候補を確定した後に提出し、取得可能な外部スコアを比較する。

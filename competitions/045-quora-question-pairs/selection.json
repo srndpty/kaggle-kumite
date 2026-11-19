@@ -1,0 +1,41 @@
+{
+  "selected_run": "E03",
+  "selection_evidence_run": "E03",
+  "experiment": "E03",
+  "reason": "seed 42 の OOF Log Loss が最小",
+  "seed42": {
+    "E01": 0.5713422697770486,
+    "E02-cv": 0.5666425109661578,
+    "E03": 0.5474246431949135,
+    "E04": 0.5694536255141811,
+    "E05": 0.5667519366398772
+  },
+  "two_seed_mean": {},
+  "candidates": {
+    "E01": {
+      "oof_sha256": "6edf2b447e798826c32970b31f0a885cccd71a08eaab0c9e36b7ac3a5d5a4fa5",
+      "split_hash": "48440d1d533f11fd6d4797d33d5a81d5ac8b4bba4628e5072493bb3710d72252"
+    },
+    "E02-cv": {
+      "oof_sha256": "d6ea37ffdb0ac4e037e71adb0c1d4664b7627e753dddc23fb123db88f81a0f94",
+      "split_hash": "48440d1d533f11fd6d4797d33d5a81d5ac8b4bba4628e5072493bb3710d72252"
+    },
+    "E03": {
+      "oof_sha256": "e54e0eb3c8aa03487ee367b63d5c8a2cf504bf4a19ae2bf18ff28b97708116a3",
+      "split_hash": "48440d1d533f11fd6d4797d33d5a81d5ac8b4bba4628e5072493bb3710d72252"
+    },
+    "E04": {
+      "oof_sha256": "3e382c0373b66b852bb2b58d27fe7d69ffe48033b4be453584143c6ade1bce22",
+      "split_hash": "48440d1d533f11fd6d4797d33d5a81d5ac8b4bba4628e5072493bb3710d72252"
+    },
+    "E05": {
+      "oof_sha256": "2777f6fd3b27adf165ade5281c530b74d1ea6a1e6d66a33e3bf34b3618abac2e",
+      "split_hash": "48440d1d533f11fd6d4797d33d5a81d5ac8b4bba4628e5072493bb3710d72252"
+    }
+  },
+  "data_hash": "7b8856835f09c76978ebc8ef592e2e52cb9ed30f21aec4e93a6ea6930f6e0c7b",
+  "submission_sha256": "62076697e9cbdb3203c3337b48fa3d910a61da2bb7a4e63be84e7407fa98e970",
+  "experiments_sha256": "117f102fa6e9781aba4b817cc84407648d228d0ea14815de2485fc3ccf20ed64",
+  "recorded_at": "2026-11-19T19:43:10.365983+09:00",
+  "retrospective": true
+}

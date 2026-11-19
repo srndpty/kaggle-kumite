@@ -50,8 +50,11 @@ $src = 'competitions/045-quora-question-pairs/src'
 uv run python "$src/eda.py"
 uv run python "$src/train.py" E03-r2 --experiment E03
 uv run python "$src/train.py" E02-cv-r2 --experiment E02 --cv-only
-uv run python "$src/select_model.py"
 uv run python "$src/analyze.py" E03
 ```
 
 分割診断は `diagnose.py` で行う。`--node-holdout` を付けるとノード単位の補助検証になる。再実行時は `--run-id` で新しい ID を指定する。
+
+`select_model.py` は全候補の OOF を再採点し、提出 CSV と保存済み確率を照合してから、上書き禁止で `selection.json` を作る。CV の勝者に提出成果物がなければ停止する。その場合は同じ構成・seed で提出用の新しい run を作り、`--submission-run` で渡す。今回の [選定証跡](selection.json) は外部採点後の事後記録。
+
+`diagnose.py --audit-run E01-shared-r2` は保存済みの比較分割から、各条件の学習件数と陽性数、実際に共有した質問数、学習行の重複件数と検証ペアの同一性を再構成する。

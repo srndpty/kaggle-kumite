@@ -8,6 +8,7 @@ from time import perf_counter
 import numpy as np
 import pandas as pd
 from features import EXPERIMENTS, PairFeatures
+from inputs import official_data_hash
 from predict import ROOT, TEXT, read_test, write_submission
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import log_loss
@@ -18,7 +19,6 @@ from split import make_splits, question_nodes
 from kumite.checks import validate_probabilities
 from kumite.crossfit import FoldOutput, cross_fit_splits, split_roles
 from kumite.cv_run import Evaluation, Trial, publish_cv_run
-from kumite.provenance import file_sha256
 from kumite.runs import RunStore
 
 HYPOTHESES = {
@@ -87,12 +87,7 @@ def train(
             )
 
         result = cross_fit_splits(len(frame), splits, fit_fold)
-        data_hash = hashlib.sha256(
-            "".join(
-                file_sha256(root / "data" / name)
-                for name in ("train.csv", "test.csv", "sample_submission.csv")
-            ).encode()
-        ).hexdigest()
+        data_hash = official_data_hash(root)
         evaluation = Evaluation(
             root.name,
             "log_loss",

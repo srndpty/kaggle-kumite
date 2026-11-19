@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-import pandas as pd
+from inputs import read_verified_train
 from predict import ROOT
 from split import node_splits, question_nodes
 from train import fit_model, pair_text, score
@@ -20,12 +20,40 @@ from kumite.provenance import code_version
 from kumite.runs import RunStore
 
 
+def fold_evidence(
+    nodes: np.ndarray, y: np.ndarray, control: np.ndarray, shared: np.ndarray
+) -> dict[str, Any]:
+    valid = np.flatnonzero(control == 2)
+    if not np.array_equal(valid, np.flatnonzero(shared == 2)):
+        raise ValueError("診断の検証ペアが一致しません")
+    control_train = control == 1
+    shared_train = shared == 1
+    control_count = int(control_train.sum()), int(y[control_train].sum())
+    shared_count = int(shared_train.sum()), int(y[shared_train].sum())
+    if control_count != shared_count:
+        raise ValueError("診断の学習行数または陽性数が一致しません")
+    valid_nodes = nodes[valid]
+    if np.intersect1d(valid_nodes, nodes[control_train]).size:
+        raise ValueError("対照条件で検証と学習が質問を共有しています")
+    matched = np.intersect1d(valid_nodes, nodes[shared_train])
+    return {
+        "control_train": dict(zip(("rows", "positive"), control_count, strict=True)),
+        "shared_train": dict(zip(("rows", "positive"), shared_count, strict=True)),
+        "shared_question_nodes": len(matched),
+        "shared_validation_pairs": int(np.isin(valid_nodes, matched).any(axis=1).sum()),
+        "overlapping_train_rows": int((control_train & shared_train).sum()),
+        "different_train_rows": int((control_train ^ shared_train).sum()),
+        "validation_pairs": len(valid),
+        "validation_pairs_identical": True,
+    }
+
+
 def diagnose(by_node: bool) -> tuple[list[dict[str, Any]], float, np.ndarray, np.ndarray]:
-    frame = pd.read_csv(ROOT / "data" / "train.csv")
+    store = RunStore(ROOT)
+    frame = read_verified_train(ROOT, store.record("E01").data_hash)
     pairs = pair_text(frame)
     nodes = question_nodes(frame)
     y = frame["is_duplicate"].to_numpy(dtype=np.int64)
-    store = RunStore(ROOT)
     oof = store.load_array("E01", "oof.npy")
     with np.load(store.artifact_path("E01", "split.npz")) as saved:
         if not np.array_equal(saved["ids"], frame["id"].to_numpy()):
@@ -58,6 +86,7 @@ def diagnose(by_node: bool) -> tuple[list[dict[str, Any]], float, np.ndarray, np
         rows = np.sort(np.concatenate(sampled))
         sampled_roles[fold, rows] = 1
         sampled_roles[fold, valid] = 2
+        evidence = fold_evidence(nodes, y, control_roles[fold], sampled_roles[fold])
         features, model = fit_model(pairs[rows], y[rows], "E01", 42)
         pred = model.predict_proba(features.transform(pairs[valid]))[:, 1]
         control = oof[valid]
@@ -83,6 +112,7 @@ def diagnose(by_node: bool) -> tuple[list[dict[str, Any]], float, np.ndarray, np
                 "control": score(y[valid], control),
                 "shared": loss,
                 "groups": groups,
+                "comparison": evidence,
             }
         )
     if not weights:
@@ -90,13 +120,39 @@ def diagnose(by_node: bool) -> tuple[list[dict[str, Any]], float, np.ndarray, np
     return measures, float(np.average(losses, weights=weights)), sampled_roles, control_roles
 
 
+def audit_saved_run(store: RunStore, run_id: str) -> dict[str, Any]:
+    frame = read_verified_train(ROOT, store.record(run_id).data_hash)
+    y = frame["is_duplicate"].to_numpy(dtype=np.int64)
+    nodes = question_nodes(frame)
+    shared = store.load_array(run_id, "roles.npy")
+    control = store.load_array(run_id, "control_roles.npy")
+    original = json.loads(store.artifact_path(run_id, "diagnosis.json").read_text(encoding="utf-8"))
+    if shared.shape != control.shape or shared.shape != (len(original["folds"]), len(y)):
+        raise ValueError("保存済み診断の形状が一致しません")
+    for fold, (a, b) in enumerate(zip(control, shared, strict=True)):
+        entry = original["folds"][fold]
+        if entry["fold"] != fold:
+            raise ValueError("診断記録の fold が一致しません")
+        if "shortages" not in entry:
+            entry["comparison"] = fold_evidence(nodes, y, a, b)
+    return {
+        "run_id": run_id,
+        "inputs": store.input_hashes(run_id, "roles.npy", "control_roles.npy", "diagnosis.json"),
+        "folds": original["folds"],
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--node-holdout", action="store_true")
     parser.add_argument("--run-id")
+    parser.add_argument("--audit-run", help="保存済み分割から比較証跡を再構成する")
     args = parser.parse_args()
     by_node = args.node_holdout
     store = RunStore(ROOT)
+    if args.audit_run:
+        print(json.dumps(audit_saved_run(store, args.audit_run), indent=2))
+        return
     run_id = args.run_id or ("E01-shared-r2" if by_node else "E01-shared")
     with store.reserve(run_id) as reservation:
         measures, loss, roles, control_roles = diagnose(by_node)

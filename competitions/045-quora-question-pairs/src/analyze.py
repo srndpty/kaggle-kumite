@@ -4,8 +4,8 @@ import argparse
 import json
 
 import numpy as np
-import pandas as pd
 from features import NEGATION, NUMBER, TOKEN, PairFeatures
+from inputs import read_verified_train
 from predict import ROOT
 from train import pair_text, score
 
@@ -17,7 +17,7 @@ def main() -> None:
     parser.add_argument("run_id")
     args = parser.parse_args()
     store = RunStore(ROOT)
-    frame = pd.read_csv(ROOT / "data" / "train.csv")
+    frame = read_verified_train(ROOT, store.record(args.run_id).data_hash)
     labels = frame["is_duplicate"].to_numpy(dtype=np.int64)
     pairs = pair_text(frame)
     oof = store.load_array(args.run_id, "oof.npy")

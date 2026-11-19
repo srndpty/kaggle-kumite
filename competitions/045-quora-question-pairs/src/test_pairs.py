@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from features import EXPERIMENTS, PairFeatures
+from inputs import official_data_hash, read_verified_train
 from predict import write_submission
 from split import make_splits, question_nodes
 from train import fit_model
@@ -93,3 +94,11 @@ def test_small_cv_publishes_submission(tmp_path: Path) -> None:
     run = tmp_path / "outputs" / "runs" / "E01"
     assert pd.read_csv(run / "submission.csv")["test_id"].to_list() == [9, 2]
     assert np.isfinite(np.load(run / "oof.npy")).all()
+
+    verified_hash = official_data_hash(tmp_path)
+    training_file = data / "train.csv"
+    frame = pd.read_csv(training_file)
+    frame.loc[0, "is_duplicate"] = 1
+    frame.to_csv(training_file, index=False)
+    with pytest.raises(ValueError, match="公式データのハッシュ"):
+        read_verified_train(tmp_path, verified_hash)

@@ -53,3 +53,5 @@
 | [K017](K017-customer-history-aggregation.md) | 仮説 | Home Creditで顧客内の借入・過去申込・返済履歴の単独追加がAUC約+0.0056〜+0.0057 |
 | [K018](K018-recent-history-aggregation.md) | 仮説 | Home Creditで全期間借入集約に直近365日集約を追加し、2 seedでAUC +0.000788 / +0.001562 |
 | [K019](K019-fine-grained-supervision-cv-vs-external.md) | 仮説 | Speechの31クラス学習は2seedのCV Accuracyが約+0.04だがPrivateは-0.00529。内部改善が外部へ再現しない例 |
+| [K020](K020-quantile-bins-for-additive-effects.md) | 仮説 | Santander では数値特徴を分位点ビンに置換すると、ロジスティック回帰の OOF AUC が +0.02516 |
+| [K021](K021-value-frequency-in-numeric-features.md) | 仮説 | Santander では値の出現回数追加で OOF AUC +0.00554、反復値を残した列の追加で +0.00473 |

@@ -11,13 +11,15 @@
 
 Porto SeguroのE04からps_calc_*だけを除外したE06は、fold平均Gini差がseed42/43/44で+0.002020 / +0.002777 / +0.003166、平均+0.002654。上位解法の着眼点の単独アブレーションとして確認した。
 
+Mercedes-Benz の E03 では、二値特徴群を除くと5 fold すべてで R² が悪化した。匿名の二値列でも、カテゴリで表しきれない予測情報を持つ場合がある。この比較は Ridge と車両構成単位の5分割に限る。
+
 ## 適用条件
 
 カテゴリを数値として扱うLightGBM、31葉、学習率0.05、同一seed内で固定した層化5分割。欠損処理や他の特徴群は同じ。
 
 ## 未検証
 
-除外列すべてが無情報かは未確定。改善原因がノイズ・相互作用・学習round変化などのどれかは特定できない。列ごとの寄与、他モデル、別コンペでの効果、Gini差の信頼区間は未検証。
+除外列すべてが無情報かは未確定。改善原因がノイズ・相互作用・学習round変化などのどれかは特定できない。列ごとの寄与、他モデルで同じ特徴群を除く効果、Gini差の信頼区間は未検証。
 
 ## 次の検証機会
 
@@ -28,5 +30,6 @@ Porto SeguroのE04からps_calc_*だけを除外したE06は、fold平均Gini差
 | コンペ | run | 結果 |
 |---|---|---|
 | [002 Porto Seguro](../competitions/002-porto-seguro-safe-driver-prediction/README.md) | E04/E06、各-s43/-s44 | fold平均Gini差の3 seed平均+0.002654 |
+| [012 Mercedes-Benz](../competitions/012-mercedes-benz-greener-manufacturing/report.md) | E00/E03 | 二値特徴群を除くと OOF R² 0.55461 → 0.54489 |
 
 着眼点の出典: [1位本人投稿の許可転載](https://kaggler.com/2017/12/01/winners-solution-porto-seguro.html)。上位解法全体の再現ではない。

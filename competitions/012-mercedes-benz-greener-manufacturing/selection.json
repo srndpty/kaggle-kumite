@@ -1,0 +1,61 @@
+{
+  "recorded_after_external_evaluation": true,
+  "baseline_run_id": "E00",
+  "run_ids": [
+    "E00",
+    "E01",
+    "E02",
+    "E03",
+    "E04"
+  ],
+  "data_hash": "50c9e6f4ad6bda65c7a4eb4a24e16be7c2f6a41bc12bb763e4b8cd093568e5f6",
+  "split_hash": "6af20533fa9dcbd79f0ec939c17f454a7739af86c0edc940c7546f99d1b35bfb",
+  "split_version": "group-v1",
+  "bootstrap": {
+    "loss_difference": "candidate_mse - baseline_mse",
+    "sampling_unit": "vehicle_configuration",
+    "confidence_level": 0.95,
+    "n_resamples": 2000,
+    "seed": 42,
+    "eligibility": "high < 0"
+  },
+  "oof_r2": {
+    "E00": 0.5546098505818682,
+    "E01": 0.5539740665134345,
+    "E02": 0.5548906814173512,
+    "E03": 0.5448904585962954,
+    "E04": 0.5546276812068358
+  },
+  "comparisons": {
+    "E01": {
+      "point": 0.10218862838064524,
+      "low": 0.02250146432532869,
+      "high": 0.19709029410064996,
+      "share_negative": 0.0025,
+      "eligible": false
+    },
+    "E02": {
+      "point": -0.04513752280030303,
+      "low": -1.0138435024481947,
+      "high": 1.0292474661435267,
+      "share_negative": 0.5515,
+      "eligible": false
+    },
+    "E03": {
+      "point": 1.5621834283238343,
+      "low": 0.5208387528896201,
+      "high": 2.6779865619372285,
+      "share_negative": 0.001,
+      "eligible": false
+    },
+    "E04": {
+      "point": -0.0028658898501561225,
+      "low": -0.006485218421189032,
+      "high": 0.0007160626377128617,
+      "share_negative": 0.9345,
+      "eligible": false
+    }
+  },
+  "selected_run_id": "E00",
+  "submission_sha256": "fd9509fceaa47ea38e6f923aaa9b0af4f5dc073f70525725ca1c62afa0ec1e4a"
+}

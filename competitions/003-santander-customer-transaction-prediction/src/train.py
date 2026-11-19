@@ -2,6 +2,8 @@
 
 import argparse
 import json
+import re
+import warnings
 from pathlib import Path
 from time import perf_counter
 
@@ -9,6 +11,7 @@ import numpy as np
 import pandas as pd
 from features import transform
 from lightgbm import LGBMClassifier
+from sklearn.exceptions import ConvergenceWarning
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedGroupKFold, StratifiedKFold
@@ -146,7 +149,9 @@ def fold_predict(
     else:
         model = LogisticRegression(**params)
         fit_x, apply_x = transform(variant, train, apply_rows)
-        model.fit(fit_x, y)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", ConvergenceWarning)
+            model.fit(fit_x, y)
     start = perf_counter()
     proba = np.asarray(model.predict_proba(apply_x))
     predict_sec = perf_counter() - start
@@ -160,6 +165,11 @@ def write_submission(sample: pd.DataFrame, pred: np.ndarray, path: Path) -> None
 
 
 def run(data: Path, run_id: str, variant: str, seed: int) -> None:
+    if variant not in VARIANTS:
+        raise ValueError(f"未知の variant です: {variant}")
+    match = re.match(r"^(E0[1-6])(?:$|[-_])", run_id)
+    if match and match[1] != variant:
+        raise ValueError(f"run ID {run_id} と variant {variant} が一致しません")
     store = RunStore(ROOT)
     with store.reserve(run_id) as reservation:
         x, y, query, sample, _ = load_data(data)

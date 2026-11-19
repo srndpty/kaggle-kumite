@@ -8,6 +8,7 @@ import pandas as pd
 from features import log_counts
 from train import ROOT, data_hash, load_data, make_splits
 
+from kumite.checks import validate_regression
 from kumite.crossfit import split_roles
 from kumite.provenance import array_sha256
 from kumite.runs import RunStore
@@ -21,7 +22,10 @@ def analyze(store: RunStore, data: Path, run_id: str) -> pd.DataFrame:
     splits = make_splits(x, y, record.seed)
     if record.split_hash != array_sha256(split_roles(len(y), splits)):
         raise ValueError("分割が run の記録と一致しません")
-    pred = np.load(store.runs_dir / run_id / "oof.npy")
+    pred = store.load_array(run_id, "oof.npy")
+    validate_regression(pred, len(y), lower=0.0)
+    if (pred > 1).any():
+        raise ValueError("OOF 確率が [0, 1] の範囲外です")
     unseen_rate = np.empty(len(y))
     for train, valid in splits:
         _, log_frequency = log_counts(x[train], x[valid])
@@ -33,14 +37,14 @@ def analyze(store: RunStore, data: Path, run_id: str) -> pd.DataFrame:
                 [ranks <= 0.1, ranks > 0.9], ["下位10%", "上位10%"], default="中間"
             ),
             "未出現率": pd.cut(unseen_rate, [-np.inf, 0.25, 0.30, 0.35, 0.40, 1.0]),
-            "偽陽性": (ranks > 0.9) & (y == 0),
-            "偽陰性": (ranks <= 0.1) & (y == 1),
+            "上位帯の陰性数": (ranks > 0.9) & (y == 0),
+            "下位帯の陽性数": (ranks <= 0.1) & (y == 1),
         }
     )
     return rows.groupby(["順位帯", "未出現率"], observed=True).agg(
-        行数=("偽陽性", "size"),
-        偽陽性=("偽陽性", "sum"),
-        偽陰性=("偽陰性", "sum"),
+        行数=("上位帯の陰性数", "size"),
+        上位帯の陰性数=("上位帯の陰性数", "sum"),
+        下位帯の陽性数=("下位帯の陽性数", "sum"),
     )
 
 

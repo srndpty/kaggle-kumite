@@ -6,6 +6,7 @@ import pytest
 from analyze import analyze
 from features import log_counts, transform
 from scipy.sparse import csr_matrix
+from sklearn.exceptions import ConvergenceWarning
 from train import fold_predict, make_splits, model_params, run
 
 from kumite.checks import check_label_independence, shift_labels
@@ -50,6 +51,19 @@ def test_validation_labels_do_not_change_fold_predictions() -> None:
     check_label_independence(build, y, shift_labels(y, mask, 2))
 
 
+@pytest.mark.parametrize("run_id", ["E05", "E05-s43"])
+def test_run_rejects_mismatched_variant_before_reading_data(tmp_path: Path, run_id: str) -> None:
+    with pytest.raises(ValueError, match="variant"):
+        run(tmp_path, run_id, "E01", 42)
+
+
+def test_unconverged_logistic_regression_stops() -> None:
+    x = np.arange(100, dtype=float).reshape(-1, 1)
+    params = {**model_params("E01", 42), "max_iter": 1}
+    with pytest.raises(ConvergenceWarning):
+        fold_predict("E01", params, x, (x[:, 0] >= 50).astype(int), x[:2], x[:2])
+
+
 @pytest.mark.parametrize("variant", ["E01", "E02", "E03", "E04", "E05", "E06"])
 def test_run_publishes_aligned_submission(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, variant: str
@@ -69,12 +83,19 @@ def test_run_publishes_aligned_submission(
         index=False,
     )
 
-    run(tmp_path, variant, variant, 42)
+    run_id = f"{variant}-s43"
+    run(tmp_path, run_id, variant, 43)
     store = RunStore(tmp_path)
-    out = store.runs_dir / variant
+    out = store.runs_dir / run_id
     submission = pd.read_csv(out / "submission.csv")
-    assert store.record(variant).metric == "roc_auc"
+    assert store.record(run_id).metric == "roc_auc"
     assert submission["ID_code"].tolist() == ["test_1", "test_0"]
     np.testing.assert_allclose(submission["target"], np.load(out / "test.npy"))
     assert np.load(out / "oof.npy").shape == (100,)
-    assert analyze(store, tmp_path, variant)["行数"].sum() == 100
+    assert analyze(store, tmp_path, run_id)["行数"].sum() == 100
+    if variant == "E01":
+        oof = np.load(out / "oof.npy")
+        oof[0] = 1.0
+        np.save(out / "oof.npy", oof)
+        with pytest.raises(ValueError, match="ハッシュ"):
+            analyze(store, tmp_path, run_id)

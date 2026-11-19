@@ -22,6 +22,7 @@ from kumite.runs import RunStore
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data"
 SEED = 42
+SPLIT_VERSION = "group-v1"
 INTERACTION = ("X314", "X315")
 VARIANTS = {
     "interaction": ("二値特徴の交互作用で改善する", "X314 と X315 の積を追加"),
@@ -50,6 +51,7 @@ def load_data() -> tuple[pd.DataFrame, pd.DataFrame, np.ndarray, pd.DataFrame]:
     y = train["y"].to_numpy(dtype=np.float64)
     if list(x.columns) != list(test.columns) or x.isna().any().any() or test.isna().any().any():
         raise ValueError("train/test の特徴列が不一致、または欠損があります")
+    validate_binary_features(x, test)
     validate_regression(y, len(x))
     return x, test, y, sample
 
@@ -62,6 +64,17 @@ def make_splits(x: pd.DataFrame) -> tuple[np.ndarray, list[Split]]:
 
 def categorical_columns(x: pd.DataFrame) -> list[str]:
     return list(x.select_dtypes(exclude="number").columns)
+
+
+def validate_binary_features(x: pd.DataFrame, test: pd.DataFrame) -> None:
+    categories = categorical_columns(x)
+    if categories != categorical_columns(test):
+        raise ValueError("train/test のカテゴリ列が一致しません")
+    binary = [name for name in x.columns if name not in categories]
+    for name, frame in (("train", x), ("test", test)):
+        invalid = frame[binary].columns[~frame[binary].isin([0, 1]).all()]
+        if len(invalid):
+            raise ValueError(f"{name} の数値特徴に 0/1 以外の値があります: {list(invalid)}")
 
 
 def fit_fold(
@@ -111,7 +124,7 @@ def main() -> None:
         data_hash=files_sha256(
             DATA / name for name in ("train.csv", "test.csv", "sample_submission.csv")
         ),
-        split_version="group-v1",
+        split_version=SPLIT_VERSION,
         split_hash=array_sha256(split_roles(len(x), splits)),
         seed=SEED,
     )

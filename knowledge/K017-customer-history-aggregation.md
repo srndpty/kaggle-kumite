@@ -27,6 +27,7 @@ EloやAmerican Expressの取引履歴で、主表・全履歴集約・期間別�
 
 | コンペ | run | 結果 |
 |---|---|---|
+| [#015 Elo](../competitions/015-elo-merchant-category-recommendation/report.md) | E01 → E03 | 新規加盟店の取引ソースの追加で OOF RMSE −0.04385 |
 | #004 Home Credit | E01→E02 / E03 / E04 | seed42のfold平均AUC差 +0.005721 / +0.005666 / +0.005559 |
 
 [実験ログ](../competitions/004-home-credit-default-risk/experiments.jsonl) / [振り返り](../competitions/004-home-credit-default-risk/report.md)

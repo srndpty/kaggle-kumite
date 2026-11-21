@@ -5,7 +5,8 @@
 ## 検証設計
 
 - 顧客・月で直前の暦月だけを結合し、商品ごとの `0 → 1` を正解にする。欠損は未知として保持する。取得率の分母は前月が非保有で当月の状態も既知の商品・顧客に限る。候補からは保有が確認できた商品だけを外す。
-- 2016年3月・4月を拡張窓 CV（`monthly-v1`）、5月を選定後のホールドアウト、6月を本番とする。各予測の学習には前月までの取得イベントを使う。CV は24商品すべての正解が確定できる顧客を対象とし、取得ゼロなら AP は0。内部評価の対象範囲と Kaggle の対象範囲は異なり得る。
+- 2016年3月・4月を拡張窓 CV、5月を選定後のホールドアウト、6月を本番とする。各予測の学習には前月までの取得イベントを使う。CV は24商品すべての正解が確定できる顧客を対象とし、取得ゼロなら AP は0。内部評価の対象範囲と Kaggle の対象範囲は異なり得る。
+- レビュー後の `monthly-v2` は CV 用パネルを4月で切り、OOF と評価成果物のみを生成する。入力ファイル全体の SHA256 は出所の照合に使う。選定時に全候補の評価成果物から MAP@7 を再計算し、最終実行前に選定記録・採用 run・実ファイルのハッシュを照合する。最終実行では5月の検証予測と、5月までの履歴を使った6月の提出ファイルを生成する。
 - E00 の EDA では3月の採点対象は 919,070 / 925,076 行、4月は 923,414 / 928,274 行。対象者の新規取得ゼロはそれぞれ 96.98%、97.10%。両月合計の取得件数は口座引き落とし（`ind_recibo_ult1`）が 19,916 件、年金給与口座（`ind_nom_pens_ult1`）が 9,462 件、給与口座（`ind_nomina_ult1`）が 8,764 件。
 
 ## 事前仮説
@@ -21,21 +22,21 @@
 
 ## 再現
 
-リポジトリルートから実行する。各 run は初回にこの ID で実行し、再実行は別 ID で記録する。
+リポジトリルートから実行する。以下では未使用の run ID と選定ファイルを使う。コミット済みの実測ログと選定記録は初回実験の証跡。
 
 ```powershell
 dev download 34
-$src = "competitions/034-santander-product-recommendation/src"
-uv run python "$src/train.py" --run-id E00 --variant dummy
-uv run python "$src/train.py" --run-id E01 --variant baseline
-uv run python "$src/train.py" --run-id E02 --variant recent
-uv run python "$src/train.py" --run-id E03 --variant portfolio
-uv run python "$src/train.py" --run-id E04 --variant logistic
-uv run python "$src/train.py" --run-id E05 --variant seasonal
-uv run python "$src/analyze.py"
-$variant = (Get-Content competitions/034-santander-product-recommendation/selection.json -Raw | ConvertFrom-Json).variant
-uv run python "$src/train.py" --run-id E06 --variant $variant --final
-uv run python "$src/analyze.py" --summarize competitions/034-santander-product-recommendation/outputs/runs/E06/evaluation.npz
+$comp = "competitions/034-santander-product-recommendation"
+$selection = "$comp/outputs/selection-r2.json"
+uv run python "$comp/src/train.py" --run-id E01-r2 --variant baseline --cv-only
+uv run python "$comp/src/train.py" --run-id E02-r2 --variant recent --cv-only
+uv run python "$comp/src/train.py" --run-id E03-r2 --variant portfolio --cv-only
+uv run python "$comp/src/train.py" --run-id E04-r2 --variant logistic --cv-only
+uv run python "$comp/src/train.py" --run-id E05-r2 --variant seasonal --cv-only
+uv run python "$comp/src/analyze.py" --suffix=-r2 --selection "$selection"
+$variant = (Get-Content "$selection" -Raw | ConvertFrom-Json).variant
+uv run python "$comp/src/train.py" --run-id E06-r2 --variant $variant --final --selection "$selection"
+uv run python "$comp/src/analyze.py" --summarize "$comp/outputs/runs/E06-r2/evaluation.npz"
 ```
 
 ## 進捗

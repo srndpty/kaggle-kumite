@@ -1,12 +1,19 @@
 """月境界、順位、提出形式とラベル独立性を検証する。"""
 
+import json
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
 import polars as pl
 import pytest
+import train
 from model import ID, average_precision, rank, transitions, validate_ranking
-from train import predict, submission_sample, write_submission
+from train import EVALUATION_FILE, predict, submission_sample, verify_selection, write_submission
+
+from kumite.experiments import ExperimentRecord, append_record
+from kumite.provenance import file_sha256
+from kumite.runs import RunStore
 
 
 def test_missing_previous_month_and_order() -> None:
@@ -64,3 +71,96 @@ def test_submission_order_and_duplicate_ids(tmp_path: Path) -> None:
     test.write_text("ncodpers\n1\n1\n", encoding="utf-8")
     with pytest.raises(ValueError, match="不一致"):
         submission_sample(test, sample)
+
+
+def test_final_rejects_changed_selection_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = RunStore(tmp_path)
+    path = store.runs_dir / "E04" / EVALUATION_FILE
+    path.parent.mkdir(parents=True)
+    np.savez(path, ranked=np.array([[0]]))
+    digest = file_sha256(path)
+    record = ExperimentRecord(
+        competition_id="034",
+        run_id="E04",
+        metric="map_at_7",
+        greater_is_better=True,
+        data_version="test",
+        data_hash="data",
+        split_version="monthly-v2",
+        split_hash="split",
+        seed=42,
+        hypothesis="",
+        changed_one_thing="",
+        model="logistic",
+        params={"variant": "logistic"},
+        fold_scores=[1.0],
+        oof_score=1.0,
+        code_version="test",
+        artifacts={EVALUATION_FILE: digest},
+    )
+    append_record(store.log_path, record)
+    selection = tmp_path / "selection.json"
+    selection.write_text(
+        json.dumps(
+            {
+                "selected_run_id": "E04",
+                "variant": "logistic",
+                "data_hash": record.data_hash,
+                "split_hash": record.split_hash,
+                "evaluation_sha256": digest,
+                "cv_map_at_7": {"E04": record.oof_score},
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert verify_selection(store, selection, "logistic") == record
+    np.savez(path, ranked=np.array([[1]]))
+    monkeypatch.setattr(train, "ROOT", tmp_path)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "train.py",
+            "--run-id",
+            "E06",
+            "--variant",
+            "logistic",
+            "--final",
+            "--selection",
+            str(selection),
+        ],
+    )
+    with pytest.raises(ValueError, match="評価成果物"):
+        train.main()
+    assert not (store.runs_dir / "E06").exists()
+    monkeypatch.setattr(
+        RunStore, "record", lambda _store, _run: replace(record, split_hash="changed")
+    )
+    with pytest.raises(ValueError, match="採用 run"):
+        verify_selection(store, selection, "logistic")
+
+
+def test_cv_only_excludes_may_and_skips_submission(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data = tmp_path / "data"
+    data.mkdir()
+    products = [f"ind_{i:02}_ult1" for i in range(24)]
+    header = ",".join(["fecha_dato", "ncodpers", *products])
+    rows = [
+        ",".join([f"2016-{month:02}-28", "1", *([value] * 24)])
+        for month, value in ((1, "0"), (2, "0"), (3, "1"), (4, "1"), (5, "MAY"))
+    ]
+    (data / "train_ver2.csv").write_text("\n".join([header, *rows]), encoding="utf-8")
+    for filename in ("test_ver2.csv", "sample_submission.csv"):
+        (data / filename).write_bytes(b"invalid for inference")
+    monkeypatch.setattr(train, "ROOT", tmp_path)
+    monkeypatch.setattr(train, "DATA", data)
+    monkeypatch.setattr(
+        "sys.argv", ["train.py", "--run-id", "E01", "--variant", "baseline", "--cv-only"]
+    )
+    train.main()
+    record = RunStore(tmp_path).record("E01")
+    assert set(record.artifacts) == {"oof.npy", "fold_info.json", EVALUATION_FILE}
+    assert record.split_version == "monthly-v2"

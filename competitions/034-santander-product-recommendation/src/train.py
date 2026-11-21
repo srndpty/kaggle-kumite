@@ -12,7 +12,8 @@ from model import DATE, ID, map_at_7, previous_month, rank, transitions, validat
 
 from kumite.crossfit import CrossFitResult, Split, split_roles
 from kumite.cv_run import Evaluation, Trial, publish_cv_run
-from kumite.provenance import array_sha256, files_sha256
+from kumite.experiments import ExperimentRecord
+from kumite.provenance import array_sha256, file_sha256, files_sha256
 from kumite.runs import RunStore
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,6 +22,7 @@ CV_MONTHS = (201603, 201604)
 HOLDOUT = 201605
 TEST = 201606
 SEED = 42
+EVALUATION_FILE = "evaluation.npz"
 VARIANTS = {
     "dummy": ("提出の採点を確認する", "商品列名順"),
     "baseline": ("全期間の商品取得率を基準にする", "基準"),
@@ -31,7 +33,7 @@ VARIANTS = {
 }
 
 
-def load_panel(train: Path, products: list[str]) -> pl.DataFrame:
+def load_panel(train: Path, products: list[str], last_month: int) -> pl.DataFrame:
     return (
         pl.scan_csv(
             train,
@@ -41,6 +43,10 @@ def load_panel(train: Path, products: list[str]) -> pl.DataFrame:
         .select(
             pl.col(ID).str.strip_chars().cast(pl.Int32),
             pl.col(DATE).str.slice(0, 7).str.replace("-", "").cast(pl.Int32).alias("month"),
+            *products,
+        )
+        .filter(pl.col("month") <= last_month)
+        .with_columns(
             *(
                 pl.col(p).str.strip_chars().replace(["", "NA"], None).cast(pl.Int8)
                 for p in products
@@ -101,22 +107,42 @@ def predict(
     return ranked
 
 
+def verify_selection(store: RunStore, path: Path, variant: str) -> ExperimentRecord:
+    selection = json.loads(path.read_text(encoding="utf-8"))
+    selected = store.record(selection["selected_run_id"])
+    digest = selected.artifacts[EVALUATION_FILE]
+    if (
+        selected.params["variant"] != variant
+        or selection["variant"] != variant
+        or selection["data_hash"] != selected.data_hash
+        or selection["split_hash"] != selected.split_hash
+        or selection["evaluation_sha256"] != digest
+        or not np.isclose(
+            selection["cv_map_at_7"][selected.run_id], selected.oof_score, rtol=0, atol=1e-12
+        )
+    ):
+        raise ValueError("選定記録が採用 run の記録と一致しません")
+    if file_sha256(store.runs_dir / selected.run_id / EVALUATION_FILE) != digest:
+        raise ValueError("選定時の評価成果物と一致しません")
+    return selected
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--variant", required=True, choices=VARIANTS)
-    parser.add_argument("--final", action="store_true")
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--cv-only", action="store_true", help="3月・4月の OOF のみ生成する（既定）")
+    modes.add_argument("--final", action="store_true")
+    parser.add_argument("--selection", type=Path, default=ROOT / "selection.json")
     args = parser.parse_args()
     variant: str = args.variant
     store = RunStore(ROOT)
     inputs: dict[str, str] = {}
     selected = None
     if args.final:
-        selection = json.loads((ROOT / "selection.json").read_text(encoding="utf-8"))
-        selected = store.record(selection["selected_run_id"])
-        if selected.params["variant"] != variant or selection["variant"] != variant:
-            parser.error("--final には selection.json で固定した variant が必要です")
-        inputs[f"{selected.run_id}/evaluation.npz"] = selected.artifacts["evaluation.npz"]
+        selected = verify_selection(store, args.selection, variant)
+        inputs[f"{selected.run_id}/{EVALUATION_FILE}"] = selected.artifacts[EVALUATION_FILE]
     train, test, sample = (
         DATA / name for name in ("train_ver2.csv", "test_ver2.csv", "sample_submission.csv")
     )
@@ -126,11 +152,10 @@ def main() -> None:
         )
     if len(products) != 24:
         raise ValueError("商品列は24列必要です")
-    sample_ids = submission_sample(test, sample)
-    panel = load_panel(train, products)
     data_hash = files_sha256((train, test, sample))
     if selected is not None and selected.data_hash != data_hash:
         raise ValueError("最終評価のデータがモデル選定時と一致しません")
+    panel = load_panel(train, products, HOLDOUT if args.final else CV_MONTHS[-1])
 
     with store.reserve(args.run_id) as reservation:
         start = perf_counter()
@@ -139,12 +164,11 @@ def main() -> None:
             current = panel.filter(pl.col("month") == month).select(ID, *products)
             ids, owned, labels = transitions(panel, current, month, products)
             blocks.append((month, ids, owned, labels))
-        test_ids, test_owned, _ = transitions(panel, sample_ids, TEST, products)
         ids = np.concatenate([block[1] for block in blocks])
         owned = np.concatenate([block[2] for block in blocks])
         labels = np.concatenate([block[3] for block in blocks])
         months = np.repeat([block[0] for block in blocks], [len(block[1]) for block in blocks])
-        del panel, blocks
+        del blocks
         known = (labels >= 0).all(axis=1)
         splits: list[Split] = []
         infos = []
@@ -157,14 +181,19 @@ def main() -> None:
             infos.append(
                 {"month": month, "eligible": len(valid), "total": int((months == month).sum())}
             )
-        query = predict(owned, labels, months, test_owned, TEST, variant)
+        test_ids = np.empty(0, dtype=np.int32)
+        query = np.empty((0, oof.shape[1]), dtype=oof.dtype)
+        if args.final:
+            sample_ids = submission_sample(test, sample)
+            test_ids, test_owned, _ = transitions(panel, sample_ids, TEST, products)
+            query = predict(owned, labels, months, test_owned, TEST, variant)
         evaluation = Evaluation(
             ROOT.name,
             "map_at_7",
             True,
             map_at_7,
             data_hash,
-            "holdout-may-v1" if args.final else "monthly-v1",
+            "holdout-may-v1" if args.final else "monthly-v2",
             array_sha256(split_roles(len(labels), splits)),
             SEED,
         )
@@ -172,10 +201,11 @@ def main() -> None:
         trial = Trial(hypothesis, change, variant, "kaggle-v1", {"variant": variant}, inputs)
 
         def write_artifacts(out_dir: Path) -> None:
-            write_submission(out_dir / "submission.csv", test_ids, products, query)
+            if args.final:
+                write_submission(out_dir / "submission.csv", test_ids, products, query)
             valid = np.concatenate([split[1] for split in splits])
             np.savez_compressed(
-                out_dir / "evaluation.npz",
+                out_dir / EVALUATION_FILE,
                 ids=ids[valid],
                 labels=labels[valid],
                 owned=owned[valid],
@@ -194,6 +224,7 @@ def main() -> None:
             CrossFitResult(oof, query, infos),
             perf_counter() - start,
             write_artifacts,
+            save_query=args.final,
         )
 
 

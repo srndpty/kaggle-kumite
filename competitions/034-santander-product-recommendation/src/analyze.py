@@ -7,7 +7,7 @@ from pathlib import Path
 
 import numpy as np
 from model import average_precision
-from train import ROOT, SEED
+from train import EVALUATION_FILE, ROOT, SEED
 
 from kumite.bootstrap import group_bootstrap_diff
 from kumite.provenance import file_sha256
@@ -22,11 +22,15 @@ CANDIDATES = {
 }
 
 
-def select() -> None:
+def select(path: Path, suffix: str) -> None:
     store = RunStore(ROOT)
-    records = {key: store.record(key) for key in CANDIDATES}
-    baseline = records["E01"]
-    for key, variant in CANDIDATES.items():
+    candidates = {key + suffix: variant for key, variant in CANDIDATES.items()}
+    records = {key: store.record(key) for key in candidates}
+    baseline = records["E01" + suffix]
+    reference = None
+    scores: dict[str, float] = {}
+    per_row: dict[str, np.ndarray] = {}
+    for key, variant in candidates.items():
         if (
             any(
                 getattr(records[key], field) != getattr(baseline, field)
@@ -35,40 +39,46 @@ def select() -> None:
             or records[key].params["variant"] != variant
         ):
             raise ValueError(f"比較条件が一致しません: {key}")
-    best = max(CANDIDATES, key=lambda key: records[key].oof_score)
+        artifact = store.runs_dir / key / EVALUATION_FILE
+        if file_sha256(artifact) != records[key].artifacts[EVALUATION_FILE]:
+            raise ValueError(f"検証成果物のハッシュが一致しません: {key}")
+        with np.load(artifact) as data:
+            ids, labels, months = (data[field] for field in ("ids", "labels", "months"))
+            rows = (ids, labels, months)
+            if reference is None:
+                reference = rows
+            elif not all(np.array_equal(a, b) for a, b in zip(reference, rows, strict=True)):
+                raise ValueError(f"検証行が一致しません: {key}")
+            ap = average_precision(labels, data["ranked"])
+            score = float(ap.mean())
+            if not np.isclose(score, records[key].oof_score, rtol=0, atol=1e-12):
+                raise ValueError(f"再計算した MAP@7 が記録と一致しません: {key}")
+            scores[key], per_row[key] = score, ap
+    best = max(scores, key=lambda key: scores[key])
     selected = best
     interval = None
-    if best != "E01":
-        base_file = store.runs_dir / "E01" / "evaluation.npz"
-        other_file = store.runs_dir / best / "evaluation.npz"
-        for key, path in (("E01", base_file), (best, other_file)):
-            if file_sha256(path) != records[key].artifacts[path.name]:
-                raise ValueError(f"検証成果物のハッシュが一致しません: {key}")
-        with (
-            np.load(base_file) as base,
-            np.load(other_file) as other,
-        ):
-            for field in ("ids", "labels", "months"):
-                if not np.array_equal(base[field], other[field]):
-                    raise ValueError(f"検証行が一致しません: {field}")
-            interval = group_bootstrap_diff(
-                average_precision(base["labels"], base["ranked"]),
-                average_precision(other["labels"], other["ranked"]),
-                base["ids"],
-                transform=lambda ap: ap,
-                n_bootstrap=1000,
-                seed=SEED,
-            )
+    if best != baseline.run_id:
+        assert reference is not None
+        interval = group_bootstrap_diff(
+            per_row[baseline.run_id],
+            per_row[best],
+            reference[0],
+            transform=lambda ap: ap,
+            n_bootstrap=1000,
+            seed=SEED,
+        )
         if interval.low <= 0:
-            selected = "E01"
+            selected = baseline.run_id
     selection = {
         "selected_run_id": selected,
-        "variant": CANDIDATES[selected],
+        "variant": candidates[selected],
+        "data_hash": records[selected].data_hash,
+        "split_hash": records[selected].split_hash,
+        "evaluation_sha256": records[selected].artifacts[EVALUATION_FILE],
         "highest_cv_run_id": best,
-        "cv_map_at_7": {key: records[key].oof_score for key in CANDIDATES},
+        "cv_map_at_7": scores,
         "bootstrap_best_minus_baseline": asdict(interval) if interval else None,
     }
-    path = ROOT / "selection.json"
     try:
         with path.open("x", encoding="utf-8") as stream:
             stream.write(json.dumps(selection, ensure_ascii=False, indent=2) + "\n")
@@ -102,11 +112,13 @@ def summarize(path: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--summarize", type=Path)
+    parser.add_argument("--suffix", default="")
+    parser.add_argument("--selection", type=Path, default=ROOT / "selection.json")
     args = parser.parse_args()
     if args.summarize:
         summarize(args.summarize)
     else:
-        select()
+        select(args.selection, args.suffix)
 
 
 if __name__ == "__main__":

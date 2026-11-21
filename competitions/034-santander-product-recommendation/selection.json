@@ -1,6 +1,9 @@
 {
   "selected_run_id": "E04",
   "variant": "logistic",
+  "data_hash": "748d37eddfb7ac83480aec72fad7a7652807e52d575ab2f00d28d155744799d0",
+  "split_hash": "99b65217eb6e4de7c2c1285a1dcf70cad6fc9efb217e10c158bd6ba76edd6772",
+  "evaluation_sha256": "e2b9b839d2b3d5f2630dbdaf69e64f5c6ee491f690991e726b430477c5c797e9",
   "highest_cv_run_id": "E04",
   "cv_map_at_7": {
     "E01": 0.019471777541313014,

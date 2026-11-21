@@ -54,11 +54,14 @@ def publish_cv_run(
     splits: Sequence[Split],
     result: CrossFitResult,
     runtime_sec: float,
-    write_submission: Callable[[Path], None],
+    write_artifacts: Callable[[Path], None],
+    *,
+    save_query: bool = True,
 ) -> Path:
-    """分割ごと・検証行全体のスコアを計算し、`oof.npy`・`test.npy`・`fold_info.json` と提出ファイルを保存する。
+    """分割ごと・検証行全体を採点し、`oof.npy`・`fold_info.json` と追加成果物を保存する。
 
     全体のスコアは、いずれかの分割で検証された行だけで計算する。
+    `test.npy` はクエリ予測を生成した実験で保存する。
     """
     fold_scores = [evaluation.score(y[valid], result.oof[valid]) for _, valid in splits]
     validated = np.sort(np.concatenate([valid for _, valid in splits]))
@@ -94,9 +97,10 @@ def publish_cv_run(
 
     def write(out_dir: Path) -> None:
         np.save(out_dir / "oof.npy", result.oof)
-        np.save(out_dir / "test.npy", result.query)
+        if save_query:
+            np.save(out_dir / "test.npy", result.query)
         (out_dir / "fold_info.json").write_text(json.dumps(result.infos), encoding="utf-8")
-        write_submission(out_dir)
+        write_artifacts(out_dir)
 
     final = store.publish(reservation, record, write)
     print(f"出力: {final}")

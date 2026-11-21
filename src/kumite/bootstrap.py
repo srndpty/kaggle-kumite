@@ -48,15 +48,21 @@ def group_bootstrap_diff(
         raise ValueError("グループ ID に欠損があります")
     codes, uniques = pd.factorize(groups)
     n_groups = len(uniques)
-    draws = np.random.default_rng(seed).integers(0, n_groups, size=(n_bootstrap, n_groups))
+    rng = np.random.default_rng(seed)
     counts = np.bincount(codes, minlength=n_groups)
     base_sums = np.bincount(codes, weights=base_loss, minlength=n_groups)
     other_sums = np.bincount(codes, weights=other_loss, minlength=n_groups)
 
-    n = counts[draws].sum(axis=1)
-    diff = transform(other_sums[draws].sum(axis=1) / n) - transform(
-        base_sums[draws].sum(axis=1) / n
-    )
+    diff = np.empty(n_bootstrap)
+    # 顧客数が多いときも再標本を一括で確保しない。
+    batch_size = max(1, 1_000_000 // n_groups)
+    for start in range(0, n_bootstrap, batch_size):
+        stop = min(start + batch_size, n_bootstrap)
+        draws = rng.integers(0, n_groups, size=(stop - start, n_groups))
+        n = counts[draws].sum(axis=1)
+        diff[start:stop] = transform(other_sums[draws].sum(axis=1) / n) - transform(
+            base_sums[draws].sum(axis=1) / n
+        )
     low, high = np.percentile(diff, [2.5, 97.5])
     total = counts.sum()
     point = transform(np.array(other_sums.sum() / total)) - transform(

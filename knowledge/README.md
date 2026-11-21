@@ -56,3 +56,4 @@
 | [K020](K020-quantile-bins-for-additive-effects.md) | 仮説 | Santander では数値特徴を分位点ビンに置換すると、ロジスティック回帰の OOF AUC が +0.02516 |
 | [K021](K021-value-frequency-in-numeric-features.md) | 仮説 | Santander では値の出現回数追加で OOF AUC +0.00554、反復値を残した列の追加で +0.00473 |
 | [K022](K022-product-holdings-for-ranking.md) | 仮説 | #034 で前月保有商品に条件付けて順位付けすると MAP@7 が +0.00415 |
+| [K023](K023-horizontal-flips-for-segmentation.md) | 仮説 | #070 で学習時の左右反転は OOF +0.03223、推論時の反転平均は +0.01393。空マスクに効果が集中 |

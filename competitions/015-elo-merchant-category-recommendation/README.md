@@ -29,7 +29,7 @@ dev compare 15 E01 E02 E03 E04 E05
 uv run python competitions/015-elo-merchant-category-recommendation/src/select_model.py E01 E02 E03 E04 E05
 ```
 
-`train.py` は E00〜E05 を受け付ける。別 seed での再試行は `--seed` と新しい `--run-id` を指定する。成果物は `outputs/runs/<run_id>/`、実験ログは `experiments.jsonl` に保存する。
+`train.py` は E00〜E05 を受け付ける。別 seed での再試行は `--seed` と、試行名を先頭にした新しい `--run-id`（例 `E05-s43`）を指定する。選定済みの環境で監査を再実行する際は、`select_model.py --output` で新しい出力先を指定する。成果物は `outputs/runs/<run_id>/`、実験ログは `experiments.jsonl` に保存する。
 
 ## 進捗
 

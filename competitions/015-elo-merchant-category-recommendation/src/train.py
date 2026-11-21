@@ -84,6 +84,14 @@ def predict(x: pd.DataFrame, y: np.ndarray, query: pd.DataFrame, trial: str) -> 
     return probability * np.asarray(low) + (1 - probability) * np.asarray(normal)
 
 
+def fit_fold(
+    x: pd.DataFrame, y: np.ndarray, training: np.ndarray, valid: np.ndarray, trial: str
+) -> FoldOutput:
+    query = pd.concat([x.iloc[valid], x.iloc[len(y) :]])
+    predicted = predict(x.iloc[training], y[training], query, trial)
+    return FoldOutput(predicted[: len(valid)], predicted[len(valid) :])
+
+
 def run(root: Path, trial: str, run_id: str, seed: int) -> Path:
     data = root / "data"
     store = RunStore(root)
@@ -121,12 +129,7 @@ def run(root: Path, trial: str, run_id: str, seed: int) -> Path:
         x = features(data, cards, trial)
         folds = make_folds(y, seed)
 
-        def fit_fold(training: np.ndarray, valid: np.ndarray) -> FoldOutput:
-            query = pd.concat([x.iloc[valid], x.iloc[len(y) :]])
-            predicted = predict(x.iloc[training], y[training], query, trial)
-            return FoldOutput(predicted[: len(valid)], predicted[len(valid) :])
-
-        result = cross_fit(folds, fit_fold)
+        result = cross_fit(folds, lambda training, valid: fit_fold(x, y, training, valid, trial))
         validate_regression(result.oof, len(train))
         frame = submission(test, sample, result.query)
 

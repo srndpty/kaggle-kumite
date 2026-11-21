@@ -43,7 +43,7 @@ foreach ($trial in "E00", "E01", "E02", "E03", "E04", "E05") {
 uv run python "$d/src/select_model.py" "$d/outputs/selection-replay.json" --run-suffix=-r2
 ```
 
-`train.py` の引数で試行を切り替える。再実行には `--run-id` で未使用の ID を指定し、全試行で同じ接尾辞を使う。Notebook はローカルの抽出コードから組み立て、Kaggle で共有コードを実行する。E01 以降はローカルで作った fold 割り当てを Notebook に入れ、Kaggle 側で学習行の ID と順序を検証する。
+`train.py` の引数で試行を切り替える。再実行には `--run-id` で未使用の ID を指定し、全試行で同じ接尾辞を使う。Notebook はローカルの抽出コードから組み立て、Kaggle で共有コードを実行する。E01 以降はローカルで作った fold 割り当てを Notebook に入れ、Kaggle 側で読み込み後の ID・本文・感情・正解区間を、行順どおりに UTF-8 の JSON Lines でハッシュ化して照合する。
 
 ```powershell
 $env:PYTHONUTF8 = "1"

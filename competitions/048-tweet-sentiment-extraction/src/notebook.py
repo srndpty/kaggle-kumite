@@ -1,11 +1,10 @@
 """Kaggle に送る、共有実装を含む提出 Notebook を組み立てる。"""
 
 import argparse
-import hashlib
 import json
 from pathlib import Path
 
-from spans import ID, load, make_folds
+from spans import load, make_folds, training_sha256
 
 ROOT = Path(__file__).resolve().parents[1]
 SLUG = "tweet-sentiment-extraction"
@@ -15,11 +14,11 @@ def build(output: Path, owner: str, trial: str) -> None:
     output.mkdir(parents=True, exist_ok=True)
     source = (ROOT / "src" / "spans.py").read_text(encoding="utf-8")
     fold_digits = ""
-    train_id_hash = ""
+    train_hash = ""
     if trial != "E00":
         train, _, _ = load(ROOT / "data")
         fold_digits = "".join(str(fold) for fold in make_folds(train))
-        train_id_hash = hashlib.sha256("\n".join(train[ID]).encode()).hexdigest()
+        train_hash = training_sha256(train)
     inference = f"""
 import hashlib
 import platform
@@ -33,8 +32,8 @@ trial = {trial!r}
 if trial == 'E00':
     predictions = test['text'].tolist()
 else:
-    if hashlib.sha256(chr(10).join(train[ID]).encode()).hexdigest() != {train_id_hash!r}:
-        raise ValueError('学習行の ID が固定した分割と一致しません')
+    if training_sha256(train) != {train_hash!r}:
+        raise ValueError('学習データが固定した分割の作成元と一致しません')
     folds = np.fromiter(map(int, {fold_digits!r}), dtype=np.int8)
     print('fold SHA-256:', hashlib.sha256(folds.tobytes()).hexdigest())
     scores = np.mean([score_tokens(test, fit(train.loc[folds != fold], trial), trial)

@@ -1,6 +1,8 @@
 """感情を根拠づける原文の連続区間を抽出する。"""
 
 import csv
+import hashlib
+import json
 import re
 from pathlib import Path
 
@@ -22,6 +24,15 @@ def load(data: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     )
     usable = train["text"].str.strip().ne("") & train[TARGET].str.strip().ne("")
     return train.loc[usable].reset_index(drop=True), test, sample
+
+
+def training_sha256(train: pd.DataFrame) -> str:
+    """読み込み後の学習行を、文字列を保持した UTF-8 JSON Lines として識別する。"""
+    digest = hashlib.sha256()
+    for row in train[[ID, "text", "sentiment", TARGET]].itertuples(index=False, name=None):
+        encoded = json.dumps(row, ensure_ascii=False, separators=(",", ":"))
+        digest.update(encoded.encode("utf-8") + b"\n")
+    return digest.hexdigest()
 
 
 def group_key(text: str) -> str:

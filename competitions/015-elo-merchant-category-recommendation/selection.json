@@ -1,0 +1,87 @@
+{
+  "scores": {
+    "E01": 3.8406345609474393,
+    "E02": 3.833410838855481,
+    "E03": 3.7967878845347856,
+    "E04": 3.8428080908525577,
+    "E05": 3.783021727237349
+  },
+  "candidate": "E05",
+  "bootstrap": {
+    "point": -0.05761283371009007,
+    "low": -0.06346562092655758,
+    "high": -0.0517394408299575,
+    "share_negative": 1.0
+  },
+  "final_run": "E05",
+  "generated_at_utc": "2026-11-21T19:25:23.395361+00:00",
+  "baseline": "E01",
+  "compared_runs": [
+    "E01",
+    "E02",
+    "E03",
+    "E04",
+    "E05"
+  ],
+  "data_hash": "3f80f694addfee2d6a4bf373c4e7ec52948d9bf57645956452ce76acbac5a1eb",
+  "split_version": "card-extreme-v1-seed42",
+  "split_hash": "9befb205a063bfe9528611f61aaafa7cf116ec95f3a93f3530505b7950869b3b",
+  "seed": 42,
+  "submission": "outputs/runs/E05/submission.csv",
+  "submission_sha256": "4c9d378e612ff3b447d5a7a8d5cd89da6514a329641b788e9f5081a8f2879c40",
+  "rule": "OOF RMSE 最小を候補とする。対基準 runの差の95%区間がゼロを含む場合、別 seed でも改善したときだけ候補を採用する。",
+  "group_errors": {
+    "extreme": {
+      "count": 2207,
+      "rmse": 31.587721000598005,
+      "squared_error_share": 0.7620585916295379
+    },
+    "normal": {
+      "count": 199710,
+      "rmse": 1.8554975541412773,
+      "squared_error_share": 0.2379414083704621
+    },
+    "first_active_year": {
+      "2011": {
+        "count": 10,
+        "rmse": 1.7680292082559332,
+        "squared_error_share": 1.08175351365135e-05
+      },
+      "2012": {
+        "count": 282,
+        "rmse": 6.913598956080088,
+        "squared_error_share": 0.004664519562962015
+      },
+      "2013": {
+        "count": 1129,
+        "rmse": 5.239429138232905,
+        "squared_error_share": 0.010725346402105955
+      },
+      "2014": {
+        "count": 4523,
+        "rmse": 5.246435035412049,
+        "squared_error_share": 0.04308287040510348
+      },
+      "2015": {
+        "count": 14142,
+        "rmse": 4.675402553162973,
+        "squared_error_share": 0.10697894138110292
+      },
+      "2016": {
+        "count": 51277,
+        "rmse": 4.442613504389234,
+        "squared_error_share": 0.35022659118587274
+      },
+      "2017": {
+        "count": 130519,
+        "rmse": 3.27448364877924,
+        "squared_error_share": 0.48429371577042024
+      },
+      "2018": {
+        "count": 35,
+        "rmse": 1.1915908612292097,
+        "squared_error_share": 1.7197757296046203e-05
+      }
+    }
+  }
+}

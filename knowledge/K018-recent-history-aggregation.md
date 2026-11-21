@@ -30,4 +30,6 @@ Elo・American Expressなどで、全履歴を保持したまま期間集約の�
 | #004 Home Credit | E02→E06 | seed42 AUC 0.762628404→0.763416359 |
 | #004 Home Credit | E02-s43→E06-s43 | seed43 AUC 0.762301200→0.763863659 |
 
+| [#015 Elo](../competitions/015-elo-merchant-category-recommendation/report.md) | E01 → E02 / E05 | 直近1か月集約で OOF RMSE −0.00722、全14月の件数で −0.05761。月別件数による改善は極端値群に集中し、通常値群の RMSE は 1.81658 → 1.85550 |
+
 [2位本人公開README](https://github.com/KazukiOnodera/Home-Credit-Default-Risk) / [実験ログ](../competitions/004-home-credit-default-risk/experiments.jsonl)

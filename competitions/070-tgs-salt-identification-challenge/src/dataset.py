@@ -8,6 +8,13 @@ import numpy as np
 from PIL import Image
 from segmentation import SIZE
 
+from kumite.provenance import files_sha256
+
+
+def data_hash(root: Path) -> str:
+    paths = [root / name for name in ("train.csv", "depths.csv", "sample_submission.csv")]
+    return files_sha256([*paths, *sorted((root / "competition_data").glob("*/*/*.png"))])
+
 
 @dataclass(frozen=True)
 class Data:

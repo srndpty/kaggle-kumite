@@ -9,7 +9,7 @@ import pytest
 import torch
 import train
 from dataset import Data
-from models import fit, predict
+from models import fit, load_checkpoint, predict
 from segmentation import SIZE, duplicate_groups, encode, image_scores, make_folds, write_submission
 
 from kumite.checks import check_label_independence
@@ -70,9 +70,14 @@ def test_groups_and_threshold_independence(monkeypatch: pytest.MonkeyPatch) -> N
     )
 
 
-def test_cpu_epoch() -> None:
+def test_cpu_epoch(tmp_path: Path) -> None:
     torch.set_num_threads(2)
     pixels = np.zeros((2, SIZE, SIZE), dtype=np.uint8)
     device = torch.device("cpu")
     model = fit(pixels, pixels.astype(bool), device, "baseline", epochs=1)
-    assert predict(model, pixels, device).shape == pixels.shape
+    original = predict(model, pixels, device)
+    assert original.shape == pixels.shape
+    checkpoint = tmp_path / "model.pt"
+    torch.save(model.state_dict(), checkpoint)
+    restored = load_checkpoint(checkpoint, device)
+    np.testing.assert_array_equal(predict(restored, pixels, device), original)

@@ -1,5 +1,7 @@
 """小型 U-Net と fold 単位の学習・推論。"""
 
+from pathlib import Path
+
 import numpy as np
 import torch
 from segmentation import SEED, SIZE
@@ -100,3 +102,19 @@ def predict(model: UNet, images: np.ndarray, device: torch.device) -> np.ndarray
     if not np.isfinite(probabilities).all() or np.any((probabilities < 0) | (probabilities > 1)):
         raise ValueError("画素確率が不正です")
     return probabilities
+
+
+def load_checkpoint(path: Path, device: torch.device) -> UNet:
+    model = UNet().to(device).to(memory_format=torch.channels_last)
+    model.load_state_dict(torch.load(path, map_location=device, weights_only=True))
+    return model
+
+
+def segment(
+    model: UNet, images: np.ndarray, device: torch.device, threshold: float, variant: str
+) -> np.ndarray:
+    probabilities = predict(model, images, device)
+    if variant == "flip-tta":
+        reflected = predict(model, images[:, :, ::-1].copy(), device)
+        probabilities = (probabilities + reflected[:, :, ::-1]) / 2
+    return probabilities >= threshold

@@ -6,8 +6,8 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from dataset import Data, load_data
-from models import BATCH, EPOCHS, UNet, fit, predict
+from dataset import Data, data_hash, load_data
+from models import BATCH, EPOCHS, fit, load_checkpoint, predict, segment
 from segmentation import (
     SEED,
     choose_threshold,
@@ -19,7 +19,7 @@ from segmentation import (
 
 from kumite.crossfit import FoldOutput, cross_fit, folds_to_splits
 from kumite.cv_run import Evaluation, Trial, publish_cv_run
-from kumite.provenance import array_sha256, files_sha256
+from kumite.provenance import array_sha256
 from kumite.runs import RunStore
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -47,14 +47,12 @@ def run(run_id: str, variant: str, baseline: str | None) -> None:
     data = load_data(data_dir)
     groups = duplicate_groups(data.train)
     folds = make_folds(data.masks, groups, 5)
-    versions = [data_dir / name for name in ("train.csv", "depths.csv", "sample_submission.csv")]
-    versions += sorted((data_dir / "competition_data").glob("*/*/*.png"))
     evaluation = Evaluation(
         "070",
         "mean_iou_precision",
         True,
         score,
-        files_sha256(versions),
+        data_hash(data_dir),
         "coverage-group-v1",
         array_sha256(folds),
         SEED,
@@ -81,20 +79,16 @@ def run(run_id: str, variant: str, baseline: str | None) -> None:
         if baseline is None:
             model = fit(data.train[train], data.masks[train], device, variant)
         else:
-            model = UNet().to(device).to(memory_format=torch.channels_last)
             checkpoint = store.artifact_path(baseline, checkpoints[fold])
-            model.load_state_dict(torch.load(checkpoint, map_location=device))
+            model = load_checkpoint(checkpoint, device)
         models.append({name: value.cpu() for name, value in model.state_dict().items()})
         threshold = calibrate(data, train, groups, device) if variant == "threshold" else 0.5
 
-        def segment(images: np.ndarray) -> np.ndarray:
-            probabilities = predict(model, images, device)
-            if variant == "flip-tta":
-                reflected = predict(model, images[:, :, ::-1].copy(), device)
-                probabilities = (probabilities + reflected[:, :, ::-1]) / 2
-            return probabilities >= threshold
-
-        return FoldOutput(segment(data.train[valid]), segment(data.test), {"threshold": threshold})
+        return FoldOutput(
+            segment(model, data.train[valid], device, threshold, variant),
+            segment(model, data.test, device, threshold, variant),
+            {"threshold": threshold},
+        )
 
     with store.reserve(run_id) as reservation:
         started = time.monotonic()

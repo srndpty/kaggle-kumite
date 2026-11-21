@@ -69,3 +69,14 @@ dev compare 70 E00 E01 E02 E03 E04
 分割の seed は42。実験ログは `experiments.jsonl`、モデルと予測は `outputs/runs/` に保存する。最終候補は OOF 首位とベースラインを比較し、画像別スコア差の重複グループ単位 bootstrap 95% 区間の下限が正なら採用する。比較は `uv run python "$src/analyze.py" E00 E01 E02 E03 E04` で再現できる。
 
 外部評価と誤りの内訳は [report.md](report.md) を参照。
+
+## 選定と提出の監査
+
+先に保存済みの run を用意し、次のコマンドをリポジトリのルートで実行する。
+
+```powershell
+uv run python "$src/analyze.py" E00 E01 E02 E03 E04 --selection "$src/../outputs/selection.json"
+uv run python "$src/replay.py" E03
+```
+
+`analyze.py` は現行データと保存済みの分割・OOF を照合し、再採点結果から選定する。指定先に選定証跡を新規作成する。[selection.json](selection.json) は Late Submission 完了後に作成した監査記録で、作成時刻を UTC で保持する。`replay.py` は学習時と同じ CUDA 推論設定で保存済み重みを読み、OOF・テスト投票・提出 CSV を照合する。

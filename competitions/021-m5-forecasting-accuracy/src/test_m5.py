@@ -1,11 +1,17 @@
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
+import train
 from dataset import HORIZON, Sales, submission, validate_prediction
 from metric import Hierarchy, Scorer
 from model import BASE_WIDTH, SERIES_BUCKETS, Features, seasonal, training_batches, training_origins
+
+from kumite.experiments import ExperimentRecord
+from kumite.provenance import array_sha256
+from kumite.runs import RunStore
 
 
 def example() -> Sales:
@@ -33,6 +39,64 @@ def example() -> Sales:
         }
     )
     return Sales(series, units, calendar, np.array([[3.0], [np.nan]]), np.zeros(58, dtype=int))
+
+
+@pytest.mark.parametrize("changed", [None, "average", "levels", "params", "origins", "series"])
+def test_selection_replays_evidence(
+    changed: str | None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data = example()
+    store = RunStore(tmp_path)
+    monkeypatch.setattr(train, "STORE", store)
+    monkeypatch.setattr(train, "ORIGINS", (30,))
+    monkeypatch.setattr(train, "EXPERIMENTS", {"E01": train.EXPERIMENTS["E01"]})
+    monkeypatch.setattr(train, "input_hash", lambda *_: "data")
+    monkeypatch.setattr(train, "load_sales", lambda: data)
+    origins = np.array([30], dtype=np.int32)
+    actual = data.actual(31, 58)
+    prediction = seasonal(data, 30)
+    scores = Scorer.at(data, Hierarchy.from_series(data.series), 30).score(actual, prediction)
+    model, params = train.experiment_settings("E01")
+    record = ExperimentRecord(
+        competition_id="021",
+        run_id="E01",
+        metric="WRMSSE",
+        greater_is_better=False,
+        data_version="base",
+        data_hash="data",
+        split_hash=array_sha256(origins),
+        split_version=train.SPLIT_VERSION,
+        seed=train.SEED,
+        model=model,
+        params=params,
+        hypothesis="",
+        changed_one_thing="",
+        code_version="test",
+        fold_scores=[float(scores.mean())],
+        oof_score=float(scores.mean()),
+    )
+    if changed == "average":
+        record = replace(record, oof_score=record.oof_score + 1)
+    if changed == "params":
+        record = replace(record, params={**params, "num_boost_round": train.ROUNDS + 1})
+
+    def save(path: Path) -> None:
+        np.save(path / "origins.npy", origins + 1 if changed == "origins" else origins)
+        series = data.series.iloc[::-1] if changed == "series" else data.series
+        series.to_csv(path / "series.csv", index=False)
+        np.save(path / "predictions.npy", prediction[None])
+        np.save(path / "level_scores.npy", (scores + 1 if changed == "levels" else scores)[None])
+
+    with store.reserve("E01") as reservation:
+        store.publish(reservation, record, save)
+    if changed is None:
+        assert train.select(["E01"])["selected"] == "E01"
+    else:
+        message = {"params": "実験設定", "origins": "起点", "series": "系列 ID"}.get(
+            changed, "再採点"
+        )
+        with pytest.raises(ValueError, match=message):
+            train.select(["E01"])
 
 
 def test_wrmsse_hand_calculation() -> None:

@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 from dataset import (
     COMMON_FILES,
     DATA,
@@ -62,6 +63,21 @@ def forecast(data: Sales, origin: int, run: str) -> np.ndarray:
     return seasonal(data, origin) if group == "seasonal" else predict(data, origin, group)
 
 
+def experiment_settings(experiment: str) -> tuple[str, dict[str, str | int | float | bool]]:
+    group = EXPERIMENTS[experiment][0]
+    if group == "seasonal":
+        return "seasonal_naive", {"experiment": experiment}
+    return "lightgbm", {
+        "experiment": experiment,
+        **PARAMS,
+        "num_boost_round": ROUNDS,
+        "first_train_origin": FIRST_TRAIN_ORIGIN,
+        "train_stride": STRIDE,
+        "series_buckets": SERIES_BUCKETS,
+        "feature_group": group,
+    }
+
+
 def run_cv(experiment: str, run_id: str) -> None:
     with STORE.reserve(run_id) as reservation:
         started = time.perf_counter()
@@ -82,18 +98,7 @@ def run_cv(experiment: str, run_id: str) -> None:
         windows = np.array(ORIGINS, dtype=np.int32)
         scores = np.vstack(levels)
         group, hypothesis, change = EXPERIMENTS[experiment]
-        params: dict[str, str | int | float | bool] = {"experiment": experiment}
-        if group != "seasonal":
-            params.update(
-                {
-                    **PARAMS,
-                    "num_boost_round": ROUNDS,
-                    "first_train_origin": FIRST_TRAIN_ORIGIN,
-                    "train_stride": STRIDE,
-                    "series_buckets": SERIES_BUCKETS,
-                    "feature_group": group,
-                }
-            )
+        model, params = experiment_settings(experiment)
         record = ExperimentRecord(
             competition_id="021",
             run_id=run_id,
@@ -106,7 +111,7 @@ def run_cv(experiment: str, run_id: str) -> None:
             seed=SEED,
             hypothesis=hypothesis,
             changed_one_thing=change,
-            model="seasonal_naive" if group == "seasonal" else "lightgbm",
+            model=model,
             params=params,
             fold_scores=scores.mean(axis=1).tolist(),
             oof_score=float(scores.mean()),
@@ -133,24 +138,69 @@ def select(run_ids: list[str]) -> dict:
         or any("cv_run" in r.params for r in records)
     ):
         raise ValueError("各実験の CV 記録が1件ずつ必要です")
-    if len({(r.data_hash, r.split_hash, r.split_version) for r in records}) != 1:
-        raise ValueError("CV の入力または分割が一致しません")
-    best = min(records, key=lambda r: (r.oof_score, r.params["experiment"]))
+    data_hash = input_hash(VALIDATION_FILE)
+    origins = np.array(ORIGINS, dtype=np.int32)
+    split_hash = array_sha256(origins)
+    for record in records:
+        experiment = record.params["experiment"]
+        model, params = experiment_settings(experiment)
+        if (
+            record.model != model
+            or record.params != params
+            or record.seed != SEED
+            or record.data_version != EXPERIMENTS[experiment][0]
+            or (record.competition_id, record.metric, record.greater_is_better)
+            != ("021", "WRMSSE", False)
+        ):
+            raise ValueError(f"{record.run_id}: 実験設定が一致しません")
+        if (record.data_hash, record.split_hash, record.split_version) != (
+            data_hash,
+            split_hash,
+            SPLIT_VERSION,
+        ):
+            raise ValueError(f"{record.run_id}: CV の入力または分割が一致しません")
+
+    data = load_sales()
+    hierarchy = Hierarchy.from_series(data.series)
+    scorers = [Scorer.at(data, hierarchy, origin) for origin in ORIGINS]
+    actual = [data.actual(origin + 1, origin + HORIZON) for origin in ORIGINS]
+    comparisons = {}
+    for record in records:
+        run_id = record.run_id
+        if not np.array_equal(STORE.load_array(run_id, "origins.npy"), origins):
+            raise ValueError(f"{run_id}: 保存済みの起点が一致しません")
+        series = pd.read_csv(STORE.artifact_path(run_id, "series.csv"))
+        if not series.equals(data.series):
+            raise ValueError(f"{run_id}: 系列 ID または行順が一致しません")
+        predictions = STORE.load_array(run_id, "predictions.npy")
+        if predictions.shape != (len(ORIGINS), len(data.series), HORIZON):
+            raise ValueError(f"{run_id}: 保存済み予測の形状が一致しません")
+        scores = np.vstack(
+            [
+                scorer.score(y, pred)
+                for scorer, y, pred in zip(scorers, actual, predictions, strict=True)
+            ]
+        )
+        folds = scores.mean(axis=1).tolist()
+        average = float(scores.mean())
+        if (
+            not np.array_equal(scores, STORE.load_array(run_id, "level_scores.npy"))
+            or folds != record.fold_scores
+            or average != record.oof_score
+        ):
+            raise ValueError(f"{run_id}: 再採点と保存済みスコアが一致しません")
+        comparisons[run_id] = {
+            "wrmsse": average,
+            "folds": folds,
+            "level_wrmsse": scores.mean(axis=0).tolist(),
+        }
+    best = min(records, key=lambda r: (comparisons[r.run_id]["wrmsse"], r.params["experiment"]))
     return {
         "selected": best.run_id,
         "experiment": best.params["experiment"],
-        "data_hash": best.data_hash,
-        "split_hash": best.split_hash,
-        "comparisons": {
-            r.run_id: {
-                "wrmsse": r.oof_score,
-                "folds": r.fold_scores,
-                "level_wrmsse": STORE.load_array(r.run_id, "level_scores.npy")
-                .mean(axis=0)
-                .tolist(),
-            }
-            for r in records
-        },
+        "data_hash": data_hash,
+        "split_hash": split_hash,
+        "comparisons": comparisons,
     }
 
 
@@ -158,8 +208,6 @@ def finalize(run_id: str, selection_path: Path) -> None:
     selection = json.loads(selection_path.read_text(encoding="utf-8"))
     if selection != select(list(selection["comparisons"])):
         raise ValueError("選定結果と CV 記録が一致しません")
-    if selection["data_hash"] != input_hash(VALIDATION_FILE):
-        raise ValueError("選定後に CV の入力データが変わりました")
     best = STORE.record(selection["selected"])
     with STORE.reserve(run_id) as reservation:
         started = time.perf_counter()

@@ -61,3 +61,4 @@
 | [K025](K025-identity-weighting-bias-auc.md) | 仮説 | #042 の属性言及ありの陰性を2倍に重み付けすると、OOF BPSN は +0.05288、BNSP は −0.04093 |
 | [K026](K026-image-summary-with-tabular.md) | 仮説 | #016 の掲載表に幅・高さ・縦横比・明度などの画像統計を追加すると OOF QWK +0.01143 |
 | [K027](K027-qwk-threshold-calibration.md) | 仮説 | #016 の内側 OOF 閾値調整で QWK +0.11453、2段階以上の誤分類率は15.87%から24.35% |
+| [K028](K028-evaluate-all-hierarchy-levels.md) | 仮説 | #021 では LightGBM が商品×店舗の WRMSSE を約0.072下げた一方、12階層平均では季節ナイーブより約0.008高かった |

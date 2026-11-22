@@ -59,3 +59,5 @@
 | [K023](K023-horizontal-flips-for-segmentation.md) | 仮説 | #070 で学習時の左右反転は OOF +0.03223、推論時の反転平均は +0.01393。空マスクに効果が集中 |
 | [K024](K024-extreme-value-mixture-regression.md) | 仮説 | Elo でまれな極端値が二乗誤差の約78%を占めた。同じ特徴での群別回帰の確率加重は OOF RMSE +0.00217 |
 | [K025](K025-identity-weighting-bias-auc.md) | 仮説 | #042 の属性言及ありの陰性を2倍に重み付けすると、OOF BPSN は +0.05288、BNSP は −0.04093 |
+| [K026](K026-image-summary-with-tabular.md) | 仮説 | #016 の掲載表に幅・高さ・縦横比・明度などの画像統計を追加すると OOF QWK +0.01143 |
+| [K027](K027-qwk-threshold-calibration.md) | 仮説 | #016 の内側 OOF 閾値調整で QWK +0.11453、2段階以上の誤分類率は15.87%から24.35% |

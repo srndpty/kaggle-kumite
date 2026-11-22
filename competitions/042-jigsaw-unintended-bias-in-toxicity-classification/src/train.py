@@ -18,9 +18,11 @@ from dataset import (
     load_train,
     make_folds,
     submission,
+    train_content_hash,
     validate,
     validate_folds,
 )
+from evidence import METRIC, notebook_sources, source_hashes
 from joblib import Parallel, delayed
 from metrics import IDENTITIES, breakdown, score
 from model import MODEL_PARAMS, predict_fold
@@ -33,7 +35,6 @@ from kumite.provenance import array_sha256, code_version, files_sha256
 from kumite.runs import RunStore
 
 ROOT = Path(__file__).resolve().parents[1]
-METRIC = "Jigsaw bias AUC"
 TRIALS = {
     "E00": ("定数 0.5", "公式採点経路を確認する"),
     "E01": ("単語 unigram TF-IDF", "本文の単語で有害性を順位付けできる"),
@@ -126,6 +127,10 @@ def run(root: Path, trial: str, run_id: str, baseline: str = "E01", jobs: int = 
             )
 
         labels, groups = labels_and_groups(train)
+        notebook_evidence = {
+            "train_content_sha256": train_content_hash(train),
+            "source_sha256": source_hashes(notebook_sources()),
+        }
         if trial == "E01":
             folds, inputs = make_folds(labels, groups), {}
         else:
@@ -158,6 +163,8 @@ def run(root: Path, trial: str, run_id: str, baseline: str = "E01", jobs: int = 
             ),
         )
         result = cross_fit_splits(len(labels), splits, lambda _training, _valid: next(outputs))
+        if source_hashes(notebook_sources()) != notebook_evidence["source_sha256"]:
+            raise ValueError("学習中に Notebook のソースが変更されました")
         validate(result.oof, len(train))
         frame = submission(test, sample, result.query)
 
@@ -166,6 +173,9 @@ def run(root: Path, trial: str, run_id: str, baseline: str = "E01", jobs: int = 
             pd_folds.to_csv(out / "folds.csv", index=False)
             frame.to_csv(out / "submission.csv", index=False)
             (out / "eda.json").write_text(json.dumps(eda, indent=2), encoding="utf-8")
+            (out / "notebook_evidence.json").write_text(
+                json.dumps(notebook_evidence, indent=2), encoding="utf-8"
+            )
             (out / "metrics.json").write_text(
                 json.dumps(breakdown(labels, result.oof), indent=2), encoding="utf-8"
             )

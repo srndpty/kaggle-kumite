@@ -1,17 +1,20 @@
 """採用 run を固定した後、公開済みの公式テストラベルで比較する。"""
 
 import argparse
+import hashlib
 import json
+import math
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from dataset import FILES, load_train, validate
+from evidence import checked_folds, checked_oof
 from metrics import IDENTITIES, breakdown
 from model import predict_ensemble
 from train import ROOT
 
-from kumite.provenance import array_sha256, file_sha256, files_sha256
+from kumite.provenance import file_sha256, files_sha256
 from kumite.runs import RunStore
 
 
@@ -20,19 +23,16 @@ def predict_refit(
     run_ids: tuple[str, ...],
     train: pd.DataFrame,
     query: np.ndarray,
-    split_hash: str,
 ) -> dict[str, np.ndarray]:
     text = train["comment_text"].to_numpy()
     labels = train[["target", *IDENTITIES]].to_numpy() >= 0.5
     target = train["target"].to_numpy()
     predictions = {}
     for run_id in run_ids:
-        frame = pd.read_csv(store.artifact_path(run_id, "folds.csv"), dtype={"fold": "int8"})
-        folds = frame["fold"].to_numpy()
-        if not frame["id"].equals(train["id"]) or array_sha256(folds) != split_hash:
-            raise ValueError(f"{run_id} の学習行順または分割が選定記録と一致しません")
+        record = store.record(run_id)
+        folds = checked_folds(store, record, train["id"])
         print(f"{run_id}: Public 用推論", flush=True)
-        trial = store.record(run_id).params["trial"]
+        trial = record.params["trial"]
         predictions[run_id] = predict_ensemble(text, labels, target, folds, query, trial, jobs=3)
     return predictions
 
@@ -50,30 +50,48 @@ def predict_saved(
 
 
 def evaluate(root: Path, split: str) -> dict:
-    selection = json.loads((root / "outputs" / "selection.json").read_text(encoding="utf-8"))
+    raw = (root / "outputs" / "selection.json").read_bytes()
+    selection = json.loads(raw)
     store = RunStore(root)
     selected = store.record(selection["selected"])
     if selected.artifacts["submission.csv"] != selection["submission_hash"]:
         raise ValueError("採用 run の提出ファイルが選定記録と一致しません")
     run_ids = tuple(dict.fromkeys((selection["baseline"], selection["selected"])))
     data = root / "data"
+    data_hash = files_sha256(data / name for name in FILES)
+    if data_hash != selection["data_hash"]:
+        raise ValueError("公式データが選定記録と一致しません")
+    train = load_train(data)
+    train_labels = train[["target", *IDENTITIES]].to_numpy() >= 0.5
+    hashes = selection["oof_hashes"]
+    required = {*run_ids, selection["best_candidate"]}
+    if set(hashes) != set(selection["scores"]) or not required <= hashes.keys():
+        raise ValueError("選定記録の OOF 一覧が不正です")
+    for run_id, digest in hashes.items():
+        record = store.record(run_id)
+        if record.artifacts["oof.npy"] != digest:
+            raise ValueError(f"{run_id} の OOF ハッシュが選定記録と一致しません")
+        _, score = checked_oof(
+            store, record, data_hash, selection["split_hash"], train["id"], train_labels
+        )
+        if not math.isclose(score, selection["scores"][run_id], rel_tol=0, abs_tol=1e-12):
+            raise ValueError(f"{run_id} の OOF スコアが選定記録と一致しません")
+    for run_id in run_ids:
+        store.artifact_path(run_id, "submission.csv")
     source = data / f"test_{split}_expanded.csv"
     columns = ["id", "toxicity", *IDENTITIES]
     external = pd.read_csv(source, usecols=columns).set_index("id")
     if not external.index.is_unique or external["toxicity"].isna().any():
         raise ValueError("公式テストに ID の重複またはラベルの欠損があります")
     if split == "public":
-        if files_sha256(data / name for name in FILES) != selection["data_hash"]:
-            raise ValueError("公式学習データが選定記録と一致しません")
         query = pd.read_csv(source, usecols=["id", "comment_text"], keep_default_na=False)
         if not external.index.equals(pd.Index(query["id"])):
             raise ValueError("Public テストの本文とラベルの順序が一致しません")
         predictions = predict_refit(
             store,
             run_ids,
-            load_train(data),
+            train,
             query["comment_text"].to_numpy(),
-            selection["split_hash"],
         )
 
     else:
@@ -84,7 +102,12 @@ def evaluate(root: Path, split: str) -> dict:
     for run_id, prediction in predictions.items():
         validate(prediction, len(external))
         results[run_id] = breakdown(labels, prediction)
-    return {"data_file": source.name, "data_sha256": file_sha256(source), "results": results}
+    return {
+        "selection_sha256": hashlib.sha256(raw).hexdigest(),
+        "data_file": source.name,
+        "data_sha256": file_sha256(source),
+        "results": results,
+    }
 
 
 if __name__ == "__main__":

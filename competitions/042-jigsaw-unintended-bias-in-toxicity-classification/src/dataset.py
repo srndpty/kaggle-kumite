@@ -1,5 +1,6 @@
 """公式 CSV の読み込み、分割、提出 ID の検証。"""
 
+import hashlib
 from pathlib import Path
 
 import numpy as np
@@ -10,12 +11,25 @@ from sklearn.model_selection import StratifiedGroupKFold
 FILES = ("train.csv", "test.csv", "sample_submission.csv")
 SEED = 42
 SPLIT_VERSION = "normalized-text-group-3fold-v1-seed42"
+TRAIN_COLUMNS = ["id", "comment_text", "target", *IDENTITIES]
+
+
+def train_content_hash(train: pd.DataFrame) -> str:
+    """使用列を固定順・固定表現で直列化し、行順と本文・注釈を照合する。"""
+    digest = hashlib.sha256()
+    for start in range(0, len(train), 50_000):
+        chunk = train.iloc[start : start + 50_000][TRAIN_COLUMNS]
+        serialized = chunk.to_csv(
+            index=False, header=start == 0, lineterminator="\n", float_format="%.9g", na_rep=""
+        )
+        digest.update(serialized.encode("utf-8"))
+    return digest.hexdigest()
 
 
 def load_train(data: Path) -> pd.DataFrame:
     train = pd.read_csv(
         data / FILES[0],
-        usecols=["id", "comment_text", "target", *IDENTITIES],
+        usecols=TRAIN_COLUMNS,
         dtype={column: "float32" for column in ("target", *IDENTITIES)},
         keep_default_na=False,
         na_values={column: [""] for column in ("target", *IDENTITIES)},

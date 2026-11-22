@@ -62,4 +62,8 @@ uv run python "$src/external.py" private
 
 `select_model.py` は OOF の比較と本文グループ単位のペアブートストラップで採用 run を固定する。`external.py` は選定記録を検証してから公式の公開済みテストラベルで採点する。配布版の `test.csv` は Private と ID が一致する。Public は同じ fold のモデルを再学習して本文を予測する。
 
+選定に渡す run ID は実験番号を先頭に置く（例 `E03-r2`）。選定と外部評価では、実験番号、指標と最適化方向、データと fold、再計算した OOF を照合する。外部評価結果には参照した選定 JSON の SHA256 を記録する。
+
 提出用 Notebook は `uv run python "$src/kaggle_notebook.py" <Kaggleユーザー名> <run_id> <新規出力先>` で生成する。Windows では `$env:PYTHONUTF8 = '1'` を設定してから `kaggle kernels push -p <出力先>` で非公開 Notebook を実行する。完了したバージョンを `kaggle competitions submit jigsaw-unintended-bias-in-toxicity-classification -k <ユーザー名/Notebook名> -v <バージョン> -f submission.csv -m <説明>` で提出する。
+
+学習 run は、学習に使う列の内容と Notebook に同梱するソースのハッシュを `notebook_evidence.json` に保存する。生成時と Notebook 実行時に照合する。証跡導入前の学習 run からの新規生成には、同じ設定を新しい run ID で学習して証跡を取得する。提出済みの E03-r2 Notebook v1 は当時の公式結果の証跡として参照できる。

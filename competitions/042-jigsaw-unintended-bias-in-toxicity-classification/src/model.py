@@ -10,7 +10,7 @@ from sklearn.linear_model import LogisticRegression
 
 from kumite.text_features import build_features
 
-Prediction = tuple[np.ndarray, np.ndarray, dict[str, int]]
+Prediction = tuple[np.ndarray, np.ndarray, dict[str, int | float | bool | list[float]]]
 
 
 class ModelParams(TypedDict):
@@ -59,11 +59,29 @@ def predict_fold(
     iterations = model.n_iter_
     if iterations is None:
         raise RuntimeError("学習の反復数を取得できません")
+    valid = model.predict_proba(x_valid)[:, 1]
+    info: dict[str, int | float | bool | list[float]] = {
+        "iterations": int(iterations.max()),
+        "features": int(np.size(model.coef_)),
+    }
+    if trial in {"E01", "E05"}:
+        logits = model.decision_function(x_train)
+        loss = binary_loss(logits, outcomes)
+        info.update(
+            coefficient_l2=float(np.linalg.norm(model.coef_)),
+            training_bce=float(np.average(loss, weights=weights)),
+            validation_quantiles=np.quantile(valid, [0.1, 0.5, 0.9]).tolist(),
+            near_constant_validation=bool(np.ptp(np.quantile(valid, [0.1, 0.9])) < 0.01),
+        )
     return (
-        model.predict_proba(x_valid)[:, 1],
+        valid,
         model.predict_proba(x_test)[:, 1],
-        {"iterations": int(iterations.max()), "features": int(np.size(model.coef_))},
+        info,
     )
+
+
+def binary_loss(logits: np.ndarray, target: np.ndarray) -> np.ndarray:
+    return np.logaddexp(0, logits) - target * logits
 
 
 def predict_ensemble(

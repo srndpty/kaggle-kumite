@@ -7,9 +7,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
-from dataset import FILES, SEED, labels_and_groups, load_train, validate
-from metrics import IDENTITIES, aggregate, score
+from dataset import FILES, SEED, labels_and_groups, load_train
+from evidence import checked_oof
+from metrics import IDENTITIES, aggregate
 from train import ROOT
 
 from kumite.provenance import files_sha256
@@ -106,6 +106,8 @@ def bootstrap(
 
 
 def select(root: Path, base_id: str, candidate_ids: list[str]) -> dict:
+    if not candidate_ids or len({base_id, *candidate_ids}) != len(candidate_ids) + 1:
+        raise ValueError("基準と候補には異なる run ID が必要です")
     data = root / "data"
     data_hash = files_sha256(data / name for name in FILES)
     store = RunStore(root)
@@ -120,19 +122,10 @@ def select(root: Path, base_id: str, candidate_ids: list[str]) -> dict:
     hashes: dict[str, str] = {}
     for run_id in (base_id, *candidate_ids):
         record = records[run_id]
-        if (record.data_hash, record.split_version, record.split_hash) != (
-            data_hash,
-            base.split_version,
-            base.split_hash,
-        ):
-            raise ValueError(f"{run_id} のデータまたは分割が E01 と異なります")
+        predictions[run_id], scores[run_id] = checked_oof(
+            store, record, data_hash, base.split_hash, train["id"], labels
+        )
         hashes[run_id] = record.artifacts["oof.npy"]
-        path = store.artifact_path(run_id, "folds.csv")
-        if not pd.read_csv(path, usecols=["id"])["id"].equals(train["id"]):
-            raise ValueError(f"{run_id} の OOF の行順が一致しません")
-        predictions[run_id] = store.load_array(run_id, "oof.npy")
-        validate(predictions[run_id], len(train))
-        scores[run_id] = score(labels, predictions[run_id])
 
     best = max(candidate_ids, key=scores.__getitem__)
     delta = scores[best] - scores[base_id]
@@ -142,6 +135,7 @@ def select(root: Path, base_id: str, candidate_ids: list[str]) -> dict:
         interval = bootstrap(labels, groups, predictions[base_id], predictions[best])
         if interval[0] > 0:
             selected = best
+    store.artifact_path(selected, "submission.csv")
     return {
         "created_at": datetime.now(UTC).isoformat(),
         "data_hash": data_hash,

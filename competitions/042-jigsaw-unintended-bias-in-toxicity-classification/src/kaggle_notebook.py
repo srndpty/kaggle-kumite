@@ -7,10 +7,10 @@ import zlib
 from base64 import b85encode
 from pathlib import Path
 
-import pandas as pd
+from dataset import load_train, train_content_hash
+from evidence import checked_folds, notebook_sources, source_hashes
 from train import ROOT, TRIALS
 
-from kumite.paths import REPO_ROOT
 from kumite.provenance import array_sha256
 from kumite.runs import RunStore
 
@@ -48,6 +48,8 @@ def main():
     model = import_module("model")
     data = next(Path("/kaggle/input").rglob("sample_submission.csv")).parent
     train = dataset.load_train(data)
+    if dataset.train_content_hash(train) != TRAIN_CONTENT_HASH:
+        raise ValueError("ローカル run と Notebook の学習内容が一致しません")
     test, sample = dataset.load_query(data)
     labels = train[["target", *metrics.IDENTITIES]].to_numpy() >= 0.5
     target = train["target"].to_numpy()
@@ -65,6 +67,12 @@ def main():
 
 with TemporaryDirectory() as folder:
     root = Path(folder)
+    hashes = {
+        name: hashlib.sha256(content.encode("utf-8")).hexdigest()
+        for name, content in SOURCES.items()
+    }
+    if hashes != SOURCE_HASHES:
+        raise ValueError("Notebook の埋め込みソースが実験時の記録と一致しません")
     for name, content in SOURCES.items():
         path = root / name
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -85,25 +93,26 @@ def export(owner: str, run_id: str, output: Path) -> Path:
         trial = record.params["trial"]
         if trial not in TRIALS or trial == "E00":
             raise ValueError(f"{run_id} の実験設定を Notebook に変換できません")
-        split = pd.read_csv(
-            store.artifact_path(run_id, "folds.csv"), usecols=["id", "fold"], dtype={"fold": "int8"}
+        if "notebook_evidence.json" not in record.artifacts:
+            raise ValueError(
+                f"{run_id} は学習時の Notebook 証跡がありません。新しい run が必要です"
+            )
+        manifest = json.loads(
+            store.artifact_path(run_id, "notebook_evidence.json").read_text(encoding="utf-8")
         )
-        folds = split["fold"].to_numpy()
-        if array_sha256(folds) != record.split_hash:
-            raise ValueError("Notebook に使う分割が実験ログと一致しません")
+        sources = notebook_sources()
+        if source_hashes(sources) != manifest["source_sha256"]:
+            raise ValueError("現在のソースが実験時の記録と一致しません")
+        train = load_train(ROOT / "data")
+        if train_content_hash(train) != manifest["train_content_sha256"]:
+            raise ValueError("現在の学習内容が実験時の記録と一致しません")
+        folds = checked_folds(store, record, train["id"])
         fold_bytes = b85encode(zlib.compress(folds.tobytes())).decode("ascii")
-        id_hash = array_sha256(split["id"].to_numpy())
-        source_dir = Path(__file__).resolve().parent
-        sources = {
-            name: (source_dir / name).read_text(encoding="utf-8")
-            for name in ("dataset.py", "metrics.py", "model.py")
-        }
-        sources["kumite/__init__.py"] = ""
-        sources["kumite/text_features.py"] = (
-            REPO_ROOT / "src" / "kumite" / "text_features.py"
-        ).read_text(encoding="utf-8")
+        id_hash = array_sha256(train["id"].to_numpy())
         source = (
             f"TRIAL = {trial!r}\nSPLIT_HASH = {record.split_hash!r}\nID_HASH = {id_hash!r}\n"
+            f"TRAIN_CONTENT_HASH = {manifest['train_content_sha256']!r}\n"
+            f"SOURCE_HASHES = {manifest['source_sha256']!r}\n"
             f"FOLD_BYTES = {fold_bytes!r}\nSOURCES = {sources!r}\n" + TRAINING
         )
     name = f"kumite-042-{run_id.lower().replace('_', '-')}"

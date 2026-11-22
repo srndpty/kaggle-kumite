@@ -1,0 +1,23 @@
+{
+  "verified_at": "2026-11-22T05:05:11+09:00",
+  "run_id": "E02",
+  "selection_sha256": "4b41d1964279cb472513421dd0b3454225b675c35a55d5134c548d881bb2498f",
+  "oof_sha256": "29c4bba079a78b4fee038062a9709dec31d9858d1e73116222af705bbb755efb",
+  "oof_jaccard": 0.6434785650072803,
+  "local_submission_csv_sha256": "7f57fe4501b9e1ae7e2bc50db77a06709f80ee3dccd7a34b62434268f9490737",
+  "kaggle_notebook": {
+    "slug": "shion5/kumite-tweet-sentiment-e02",
+    "version": 2,
+    "uploaded_ipynb_sha256": "13a907be85a79644a881ad6bdac21c5efeff3a8a4dcaae614d67b006593245f0",
+    "code_cells_sha256": "48b715e94e58638a7b290808dc96aff178013717d436521df0c3ae647f38007b",
+    "fold_sha256": "29fff834bdbdb5765379512846f85a3883ff8a4f64c05cbf735643e8a71c5839",
+    "output_csv_sha256": "ed07bf6be08fa5a4f53163a68492a23e15cc7474d8f9a15aae99fb94f0e8a6f8",
+    "matching_output_rows": 3534
+  },
+  "kaggle_submission": {
+    "description": "Kumite E02 fixed CV folds",
+    "submitted_at_utc": "2026-11-21T19:52:04.657000Z",
+    "public_score": 0.64928,
+    "private_score": 0.64991
+  }
+}

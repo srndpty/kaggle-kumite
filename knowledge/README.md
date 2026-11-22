@@ -49,7 +49,7 @@
 | [K013](K013-categorical-splits-vs-numeric.md) | 仮説 | 名義カテゴリの数値扱いがLightGBMのカテゴリ分割より良かった（Porto Seguro、3 seed平均Gini +0.016054） |
 | [K014](K014-ranking-vs-probabilities.md) | 再現 | 順位と確率を分けて評価する。Porto Seguroの重み付けは両方悪化、JigsawではAUC改善でもLogLossは約2倍へ悪化 |
 | [K015](K015-feature-group-ablation.md) | 仮説 | 特徴群を除く比較実験も有効。Porto Seguroのcalc除外で3 seed平均Gini +0.002654、原因は未特定 |
-| [K016](K016-character-features-in-text.md) | 仮説 | Jigsawで文字3〜5gram追加は2 seedでmacro AUC +0.00520 / +0.00521。単語bigramは悪化 |
+| [K016](K016-character-features-in-text.md) | 再現 | 文字3〜5-gram 追加で Jigsaw の macro AUC が +0.00520 / +0.00521、#048 の範囲抽出の Jaccard が +0.00707 |
 | [K017](K017-customer-history-aggregation.md) | 仮説 | Home Creditで顧客内の借入・過去申込・返済履歴の単独追加がAUC約+0.0056〜+0.0057 |
 | [K018](K018-recent-history-aggregation.md) | 仮説 | Home Creditで全期間借入集約に直近365日集約を追加し、2 seedでAUC +0.000788 / +0.001562 |
 | [K019](K019-fine-grained-supervision-cv-vs-external.md) | 仮説 | Speechの31クラス学習は2seedのCV Accuracyが約+0.04だがPrivateは-0.00529。内部改善が外部へ再現しない例 |

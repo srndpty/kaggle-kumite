@@ -11,6 +11,7 @@ def main() -> None:
         public, seasonal(public, PUBLIC_ORIGIN), private, seasonal(private, PRIVATE_ORIGIN)
     )
     path = ROOT / "outputs" / "p0-dummy.csv"
+    path.parent.mkdir(parents=True, exist_ok=True)
     csv.to_csv(path, index=False)
     print(path)
 

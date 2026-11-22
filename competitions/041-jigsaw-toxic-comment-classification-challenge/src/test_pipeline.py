@@ -5,11 +5,11 @@ import pandas as pd
 import pytest
 from cv import make_folds, text_key
 from dataset import LABELS, submission
-from features import build_features
 from metrics import macro_auc
 from transformer import cpu_smoke
 
 from kumite.checks import check_label_independence, validate_multilabel_probabilities
+from kumite.text_features import build_features
 
 
 def test_duplicate_groups():

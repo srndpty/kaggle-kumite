@@ -49,7 +49,7 @@
 | [K013](K013-categorical-splits-vs-numeric.md) | 仮説 | 名義カテゴリの数値扱いがLightGBMのカテゴリ分割より良かった（Porto Seguro、3 seed平均Gini +0.016054） |
 | [K014](K014-ranking-vs-probabilities.md) | 再現 | 順位と確率を分けて評価する。Porto Seguroの重み付けは両方悪化、JigsawではAUC改善でもLogLossは約2倍へ悪化 |
 | [K015](K015-feature-group-ablation.md) | 仮説 | 特徴群を除く比較実験も有効。Porto Seguroのcalc除外で3 seed平均Gini +0.002654、原因は未特定 |
-| [K016](K016-character-features-in-text.md) | 再現 | 文字3〜5-gram 追加で Jigsaw の macro AUC が +0.00520 / +0.00521、#048 の範囲抽出の Jaccard が +0.00707 |
+| [K016](K016-character-features-in-text.md) | 再現 | 文字3〜5-gram 追加で #041 の macro AUC が約 +0.0052、#048 の範囲抽出の Jaccard が +0.00707、#042 の属性別 AUC を含む合成スコアが +0.01954 |
 | [K017](K017-customer-history-aggregation.md) | 仮説 | Home Creditで顧客内の借入・過去申込・返済履歴の単独追加がAUC約+0.0056〜+0.0057 |
 | [K018](K018-recent-history-aggregation.md) | 仮説 | Home Creditで全期間借入集約に直近365日集約を追加し、2 seedでAUC +0.000788 / +0.001562 |
 | [K019](K019-fine-grained-supervision-cv-vs-external.md) | 仮説 | Speechの31クラス学習は2seedのCV Accuracyが約+0.04だがPrivateは-0.00529。内部改善が外部へ再現しない例 |
@@ -58,3 +58,4 @@
 | [K022](K022-product-holdings-for-ranking.md) | 仮説 | #034 で前月保有商品に条件付けて順位付けすると MAP@7 が +0.00415 |
 | [K023](K023-horizontal-flips-for-segmentation.md) | 仮説 | #070 で学習時の左右反転は OOF +0.03223、推論時の反転平均は +0.01393。空マスクに効果が集中 |
 | [K024](K024-extreme-value-mixture-regression.md) | 仮説 | Elo でまれな極端値が二乗誤差の約78%を占めた。同じ特徴での群別回帰の確率加重は OOF RMSE +0.00217 |
+| [K025](K025-identity-weighting-bias-auc.md) | 仮説 | #042 の属性言及ありの陰性を2倍に重み付けすると、OOF BPSN は +0.05288、BNSP は −0.04093 |

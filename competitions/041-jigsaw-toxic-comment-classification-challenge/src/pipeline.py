@@ -8,7 +8,6 @@ import numpy as np
 import pandas as pd
 from cv import make_folds
 from dataset import COMPETITION_DIR, DATA_FILES, LABELS, load_data, submission
-from features import build_features
 from metrics import macro_auc, scores
 from models import fit_linear
 from transformer import fit_transformer, prepare
@@ -18,6 +17,7 @@ from kumite.crossfit import FoldOutput, cross_fit, folds_to_splits
 from kumite.cv_run import Evaluation, Trial, publish_cv_run
 from kumite.provenance import array_sha256, files_sha256
 from kumite.runs import RunStore
+from kumite.text_features import build_features
 
 STORE = RunStore(COMPETITION_DIR)
 EXPERIMENTS = {

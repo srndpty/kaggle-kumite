@@ -57,10 +57,14 @@ $env:MKL_NUM_THREADS = '1'
 uv run python "$d/src/train.py" description --run-id E05
 uv run python "$d/src/select_model.py" E02 E03 E04 E05 --output "$d/outputs/selection-recheck.json"
 uv run python "$d/src/export_notebook.py" dummy "$d/outputs/kaggle-dummy/PetFinder.ipynb"
-uv run python "$d/src/export_notebook.py" baseline "$d/outputs/kaggle-baseline/PetFinder.ipynb"
-uv run python "$d/src/export_notebook.py" threshold "$d/outputs/kaggle-final/PetFinder.ipynb"
+uv run python "$d/src/export_notebook.py" E01 "$d/outputs/kaggle-baseline/PetFinder.ipynb"
+uv run python "$d/src/export_notebook.py" E03 "$d/outputs/kaggle-final/PetFinder.ipynb"
 ```
 
 Kaggle Notebook は非公開で作成し、コンペを入力に指定して実行する。採点は完走した Notebook の版と `submission.csv` を `kaggle competitions submit petfinder-adoption-prediction -k <NotebookのID> -v <版> -f submission.csv -m <実験名>` で指定する。選定記録は提出前に固定した。実験ログの `late_score` には Private QWK を記録する。
 
 E03 は保存済みの E01 連続予測を再利用する。分割・データ・パラメータ・成果物のハッシュを照合し、内側 OOF を外側 fold ごとに別プロセスで学習する。
+
+Notebook 生成時に E01 の検証成果物から学習 PetID の順序と fold 割当を取得し、生成元 run、コード、学習入力、分割のハッシュを記録する。Notebook は埋め込まれた割当を使い、学習入力や分割の照合に失敗したら停止する。公開配布のテスト ID を含む場合はテスト一式も照合する。Kaggle の採点時は公式仕様に従い、公開配布と ID が重ならない差し替えテストを受け付ける。
+
+`--local` を付けて E03 Notebook を生成し、専用ディレクトリでセルを実行すると、公式入力一式を照合して `submission.csv`、`test_scores.npy`、`replay.json` を出力する。`uv run python "$d/src/audit_replay.py" <実行出力ディレクトリ> <生成したNotebook> <監査JSONの出力先>` で、保存済み E03 との予測差とスコア分布を集計できる。

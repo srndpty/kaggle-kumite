@@ -47,3 +47,11 @@ E03 の2段階以上の誤分類は実測クラス0で54.39%と最大だった�
 2026-11-23 JST に、非公開 Notebook のバージョン1で E03 の最終採点が完了した。Private QWK は 0.34235（E01 比 +0.10691）で、ローカル CV と改善方向が一致した。Kaggle に表示された Public は両方とも 0.00000 だった。
 
 E03 の Notebook とローカルで、公開配布テストの3,972 ID・行順は一致し、予測クラスは351件で異なった。分割ハッシュも異なり、Kaggle の scikit-learn は 1.6.1、ローカルは 1.9.1 だった。CatBoost は両方とも 1.2.10。Kaggle は Python 3.13.18、NumPy 2.1.3、pandas 2.3.3、SciPy 1.16.3。ローカルは Python 3.12.9、NumPy 2.5.4、pandas 3.1.1、SciPy 1.18.1。予測差の要因別の寄与は未検証。[最終 Notebook](https://www.kaggle.com/code/shion5/kumite-petfinder-e03-final)
+
+## 固定分割での再現検証
+
+レビュー後の検証 run `E03-replay-v1` では、E01 に保存済みの学習 PetID 順と fold を Notebook に埋め込み、実行前に入力と分割をハッシュで照合した。同じ公式入力を使ったローカル Notebook の再学習では、保存済み E03 と公開テスト3,972件の予測クラスがすべて一致し、連続予測の最大絶対差は 0 だった。この検証は Late Submission の採点履歴とは別に記録した。[再現検証とスコア分布](replay-e03.json)
+
+非公開の Kaggle 検証 Notebook でも、同じ公式入力・保存済み fold で再学習し、公開テスト3,972件の予測クラスがすべて一致した。連続予測の最大絶対差は 0 で、提出用の4閾値も一致した。Late Submission のスコアは前節の版による採点値である。[Kaggle 検証 Notebook](https://www.kaggle.com/code/shion5/kumite-petfinder-e03-review-replay)
+
+閾値推定に使う外側 OOF の連続スコアは単一モデルの出力で、公開テストには5モデル平均を使う。保存済み E03 の平均はそれぞれ 2.50496 と 2.56413、標準偏差は 0.46361 と 0.48029 だった。共通の提出用閾値でクラス4の比率は 23.00% と 28.88% だった。分布差には予測の平均化と評価対象の違いがともに含まれる。[fold 別の分位点・閾値・クラス比率](replay-e03.json)

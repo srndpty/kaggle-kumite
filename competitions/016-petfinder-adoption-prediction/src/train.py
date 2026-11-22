@@ -5,6 +5,7 @@ import json
 from hashlib import sha256
 from pathlib import Path
 from time import perf_counter
+from typing import TypedDict
 
 import numpy as np
 import pandas as pd
@@ -39,6 +40,13 @@ from kumite.provenance import array_sha256, file_sha256, files_sha256
 from kumite.runs import RunStore
 
 ROOT = Path(__file__).resolve().parents[1]
+RUN_VARIANTS = dict(
+    zip(
+        ("E01", "E02", "E03", "E04", "E05"),
+        ("baseline", "regression", "threshold", "image", "description"),
+        strict=True,
+    )
+)
 TRIALS = {
     "dummy": ("定数予測で採点経路を確認する", "クラス2の定数予測"),
     "baseline": ("表特徴による基準", "表特徴と固定閾値"),
@@ -85,21 +93,67 @@ def baseline_scores(
     return oof["score"].to_numpy(), np.load(files[1]), inputs
 
 
-def prepare(root: Path, variant: str):
+class FrozenSplit(TypedDict):
+    pet_ids: list[str]
+    public_test_ids: list[str]
+    folds: list[int]
+    split_hash: str
+    train_hash: str
+    data_hash: str
+    allow_replaced_test: bool
+
+
+def training_hash(path: Path, images: dict[str, str]) -> str:
+    return sha256(json.dumps([file_sha256(path), images], sort_keys=True).encode()).hexdigest()
+
+
+def checked_folds(
+    train: pd.DataFrame,
+    test_ids: pd.Series,
+    groups: np.ndarray,
+    frozen: FrozenSplit,
+    train_hash: str,
+    data_hash: str,
+) -> np.ndarray:
+    if train[ID].tolist() != frozen["pet_ids"]:
+        raise ValueError("保存済み fold と学習 PetID の順序が一致しません")
+    replaced = frozen["allow_replaced_test"] and set(frozen["public_test_ids"]).isdisjoint(test_ids)
+    if train_hash != frozen["train_hash"] or (data_hash != frozen["data_hash"] and not replaced):
+        raise ValueError("保存済み入力データのハッシュが一致しません")
+    folds = np.asarray(frozen["folds"], dtype=np.int64)
+    if array_sha256(folds) != frozen["split_hash"] or folds.shape != (len(train),):
+        raise ValueError("保存済み fold のハッシュまたは形状が一致しません")
+    split = folds_to_splits(folds)
+    if len(split) != 5 or any(
+        np.intersect1d(groups[fit], groups[valid]).size for fit, valid in split
+    ):
+        raise ValueError("保存済み fold のグループ分割が無効です")
+    return folds
+
+
+def prepare(root: Path, variant: str, *, frozen: FrozenSplit | None = None, audit: bool = False):
     train, test, sample, paths = read_data(root)
     include_images = variant == "image"
     train_images, train_hashes, unreadable = image_features(
-        image_paths(root, "train"), train[ID], summarize=include_images or variant == "eda"
+        image_paths(root, "train"), train[ID], summarize=include_images or variant == "eda" or audit
     )
-    test_images, test_hashes, _ = image_features(
+    test_images, test_hashes, test_unreadable = image_features(
         image_paths(root, "test"), test[ID], summarize=include_images
     )
     groups = connected_groups(train, train_hashes)
-    y = train[TARGET].to_numpy()
-    folds = make_folds(y, groups, 5)
+    if (include_images and (unreadable or test_unreadable)) or (audit and unreadable):
+        raise ValueError(
+            f"読み取れない画像があります（学習 {unreadable}、テスト {test_unreadable}）"
+        )
     data_hash = sha256(
         json.dumps([files_sha256(paths), train_hashes, test_hashes], sort_keys=True).encode()
     ).hexdigest()
+    train_hash = training_hash(paths[0], train_hashes)
+    folds = (
+        make_folds(train[TARGET].to_numpy(), groups, 5)
+        if frozen is None
+        else checked_folds(train, test[ID], groups, frozen, train_hash, data_hash)
+    )
     x, query = tabular(train), tabular(test)
     if include_images:
         x, query = x.join(train_images), query.join(test_images)
@@ -107,6 +161,8 @@ def prepare(root: Path, variant: str):
         x["Description"] = train["Description"].fillna("")
         query["Description"] = test["Description"].fillna("")
     assignments = train[[ID, GROUP, TARGET, "PhotoAmt"]].assign(group=groups, fold=folds)
+    if audit:
+        assignments["readable_images"] = train_images["readable_images"]
     if variant == "eda":
         outputs = ROOT / "outputs"
         outputs.mkdir(exist_ok=True)
@@ -131,8 +187,8 @@ def prepare(root: Path, variant: str):
                 indent=2,
             )
         )
-        print(pd.crosstab(folds, y))
-    return assignments, test[ID], sample, x, query, data_hash
+        print(pd.crosstab(folds, train[TARGET]))
+    return assignments, test[ID], sample, x, query, data_hash, train_hash
 
 
 def main() -> None:
@@ -150,7 +206,7 @@ def main() -> None:
     store = RunStore(ROOT)
     with store.reserve(args.run_id) as reserved:
         started = perf_counter()
-        assignments, ids, sample, x, query, data_hash = prepare(args.data, variant)
+        assignments, ids, sample, x, query, data_hash, _ = prepare(args.data, variant)
         y = assignments[TARGET].to_numpy()
         groups = assignments["group"].to_numpy()
         folds = assignments["fold"].to_numpy()

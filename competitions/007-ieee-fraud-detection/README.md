@@ -29,24 +29,33 @@
 
 ## 再現手順
 
+リポジトリ直下で実行する。各回に新しい接頭辞を作り、履歴・再学習元・選定候補を同じ回の run ID でそろえる。採点まで再現する場合は提出コマンドも実行する。
+
 ```powershell
+$comp = 'competitions/007-ieee-fraud-detection'
+$replay = "replay-$([guid]::NewGuid().ToString('N'))"
+$selection = "$comp/outputs/${replay}-selection.json"
+
 ./dev.ps1 download 7
-uv run python competitions/007-ieee-fraud-detection/src/eda.py
-uv run python competitions/007-ieee-fraud-detection/src/dummy.py
-./dev.ps1 submit 7 competitions/007-ieee-fraud-detection/outputs/runs/E00/submission.csv -m "Kaggle Kumite P0 E00"
-uv run python competitions/007-ieee-fraud-detection/src/train.py E01 base
-uv run python competitions/007-ieee-fraud-detection/src/train.py baseline-v1 base --source E01
-./dev.ps1 submit 7 competitions/007-ieee-fraud-detection/outputs/runs/baseline-v1/submission.csv -m "Kaggle Kumite E01 baseline-v1"
-uv run python competitions/007-ieee-fraud-detection/src/train.py E02 identity
-uv run python competitions/007-ieee-fraud-detection/src/train.py E03 history
-uv run python competitions/007-ieee-fraud-detection/src/train.py E04 clock
-uv run python competitions/007-ieee-fraud-detection/src/train.py E01-s43 base --seed 43
-uv run python competitions/007-ieee-fraud-detection/src/train.py E02-s43 identity --seed 43
-uv run python competitions/007-ieee-fraud-detection/src/train.py E03-s43 history --seed 43
-uv run python competitions/007-ieee-fraud-detection/src/train.py E04-s43 clock --seed 43
-uv run python competitions/007-ieee-fraud-detection/src/train.py E05 relative_amount
-uv run python competitions/007-ieee-fraud-detection/src/select_run.py E01 E02 E03 E04 E05 E01-s43 E02-s43 E03-s43 E04-s43 --output competitions/007-ieee-fraud-detection/outputs/selection-replay.json
-uv run python competitions/007-ieee-fraud-detection/src/train.py final-v1 --selection competitions/007-ieee-fraud-detection/outputs/selection-replay.json
-./dev.ps1 submit 7 competitions/007-ieee-fraud-detection/outputs/runs/final-v1/submission.csv -m "Kaggle Kumite E05 final-v1"
+uv run python "$comp/src/eda.py"
+uv run python "$comp/src/dummy.py" "$replay-E00"
+./dev.ps1 submit 7 "$comp/outputs/runs/$replay-E00/submission.csv" -m "$replay E00"
+
+uv run python "$comp/src/train.py" "$replay-E01" base
+uv run python "$comp/src/train.py" "$replay-baseline" base --source "$replay-E01"
+./dev.ps1 submit 7 "$comp/outputs/runs/$replay-baseline/submission.csv" -m "$replay baseline"
+
+uv run python "$comp/src/train.py" "$replay-E02" identity
+uv run python "$comp/src/train.py" "$replay-E03" history
+uv run python "$comp/src/train.py" "$replay-E04" clock
+uv run python "$comp/src/train.py" "$replay-E01-s43" base --seed 43
+uv run python "$comp/src/train.py" "$replay-E02-s43" identity --seed 43
+uv run python "$comp/src/train.py" "$replay-E03-s43" history --seed 43
+uv run python "$comp/src/train.py" "$replay-E04-s43" clock --seed 43
+uv run python "$comp/src/train.py" "$replay-E05" relative_amount
+
+uv run python "$comp/src/select_run.py" "$replay-E01" "$replay-E02" "$replay-E03" "$replay-E04" "$replay-E05" "$replay-E01-s43" "$replay-E02-s43" "$replay-E03-s43" "$replay-E04-s43" --output $selection
+uv run python "$comp/src/train.py" "$replay-final" --selection $selection
+./dev.ps1 submit 7 "$comp/outputs/runs/$replay-final/submission.csv" -m "$replay final"
 ./dev.ps1 submissions 7
 ```

@@ -1,5 +1,6 @@
 """P0 の定数提出を生成する。"""
 
+import argparse
 from pathlib import Path
 
 import pandas as pd
@@ -14,9 +15,16 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def main() -> None:
-    store = RunStore(ROOT)
-    source = ROOT / "data" / "sample_submission.csv"
-    with store.reserve("E00") as reservation:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("run_id", nargs="?", default="E00")
+    args = parser.parse_args()
+    generate(ROOT, args.run_id)
+
+
+def generate(root: Path, run_id: str) -> None:
+    store = RunStore(root)
+    source = root / "data" / "sample_submission.csv"
+    with store.reserve(run_id) as reservation:
         sample = pd.read_csv(source)
         check_ids(sample)
         if list(sample) != [ID, TARGET]:
@@ -24,7 +32,7 @@ def main() -> None:
         sample[TARGET] = 0.5
         record = ExperimentRecord(
             competition_id="7",
-            run_id="E00",
+            run_id=reservation.run_id,
             metric="ROC AUC",
             greater_is_better=True,
             data_version="sample-v1",

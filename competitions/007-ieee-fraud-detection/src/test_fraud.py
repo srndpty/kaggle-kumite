@@ -16,6 +16,7 @@ from dataset import (
     make_splits,
     relative_amount,
 )
+from dummy import generate
 from select_run import selection
 from train import run, submission
 
@@ -77,6 +78,22 @@ def test_submission_matches_sample_order_and_rejects_nonfinite() -> None:
     assert result[TARGET].tolist() == [0.9, 0.2]
     with pytest.raises(ValueError, match="確率"):
         submission(sample, ids, np.array([0.2, np.inf]))
+
+
+def test_dummy_replay_preserves_recorded_run(tmp_path: Path) -> None:
+    data = tmp_path / "data"
+    data.mkdir()
+    pd.DataFrame({ID: [42], TARGET: [0.0]}).to_csv(data / "sample_submission.csv", index=False)
+    store = RunStore(tmp_path)
+    generate(tmp_path, "E00")
+    previous_log = store.log_path.read_bytes()
+
+    generate(tmp_path, "replay-1-E00")
+
+    assert store.log_path.read_bytes().startswith(previous_log)
+    assert [record.run_id for record in store.records()] == ["E00", "replay-1-E00"]
+    replay = pd.read_csv(store.runs_dir / "replay-1-E00" / "submission.csv")
+    assert replay.to_dict("list") == {ID: [42], TARGET: [0.5]}
 
 
 def test_run_and_refit_with_synthetic_data(tmp_path: Path) -> None:

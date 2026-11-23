@@ -99,6 +99,7 @@ def cv(
     y = labels.to_numpy()
     runspec = evaluation(folds, row)
     splits = folds_to_splits(folds)
+    model_source = MODEL.read_bytes()
     inputs: dict[str, str] = {}
     baseline_oof = None
     if baseline is not None:
@@ -110,9 +111,13 @@ def cv(
             != (runspec.data_hash, runspec.split_hash, runspec.split_version)
         ):
             raise ValueError("E03 の比較元は同じ分割の E01 を指定してください")
+        if verified_source(store, baseline) != model_source:
+            raise ValueError(
+                "E03 と比較元の推論ソースが異なります。現在の実装で E01 を再実行してください"
+            )
         baseline_oof = store.load_array(baseline, "oof.npy")
         validate_multilabel_probabilities(baseline_oof, *y.shape)
-        inputs[f"{baseline}/oof.npy"] = record.artifacts["oof.npy"]
+        inputs = store.input_hashes(baseline, "inference.py", "oof.npy")
     model_name = {"E00": "定数確率", "E04": "MLP"}.get(trial, "L2 LogisticRegression")
     hypothesis = "P0 と同じ処理群 0.01・対照群 0" if trial == "E00" else HYPOTHESES[trial]
     change = "化合物単位から行シャッフルへ変更" if row else hypothesis
@@ -154,7 +159,6 @@ def cv(
         ).to_csv(output / "fold_label_counts.csv", index_label="fold")
 
     with store.reserve(run_id) as reservation:
-        model_source = MODEL.read_bytes()
         start = perf_counter()
         result = cross_fit_splits(len(y), splits, fit)
         validate_multilabel_probabilities(result.oof, *y.shape)

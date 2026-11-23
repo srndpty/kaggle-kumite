@@ -193,3 +193,56 @@ def test_validation_labels_do_not_change_predictions() -> None:
         return [predict(frame.iloc[:2], y[:2], frame.iloc[2:], "E03")]
 
     check_label_independence(build, labels, altered)
+
+
+@pytest.mark.parametrize("same_source", [True, False])
+def test_e03_checks_baseline_source_before_using_oof(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, same_source: bool
+) -> None:
+    from types import SimpleNamespace
+
+    import train
+
+    from kumite.runs import RunStore
+
+    model = tmp_path / "model.py"
+    model.write_bytes(b"# current source")
+    monkeypatch.setattr(train, "MODEL", model)
+    monkeypatch.setattr(
+        train,
+        "evaluation",
+        lambda *_: SimpleNamespace(
+            data_hash="data", split_hash="split", split_version=train.VERSION
+        ),
+    )
+    monkeypatch.setattr(
+        RunStore,
+        "record",
+        lambda *_: SimpleNamespace(
+            params={"trial": "E01"},
+            data_hash="data",
+            split_hash="split",
+            split_version=train.VERSION,
+        ),
+    )
+    monkeypatch.setattr(
+        train, "verified_source", lambda *_: model.read_bytes() if same_source else b"# old source"
+    )
+
+    def load_oof(*_: object) -> np.ndarray:
+        raise RuntimeError("OOF を読み込んだ")
+
+    monkeypatch.setattr(RunStore, "load_array", load_oof)
+    error = RuntimeError if same_source else ValueError
+    message = "OOF を読み込んだ" if same_source else "E01 を再実行"
+    with pytest.raises(error, match=message):
+        train.cv(
+            RunStore(tmp_path),
+            pd.DataFrame(),
+            pd.DataFrame(np.zeros((10, 1))),
+            np.arange(10),
+            "E03",
+            "E03-review",
+            False,
+            "E01-review",
+        )

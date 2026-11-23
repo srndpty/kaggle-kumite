@@ -15,6 +15,7 @@ import pandas as pd
 from model import FILES, TRAIN_FILES, load_training
 from train import DATA, selected_run, verify_run
 
+from kumite.kaggle_notebook import write_cpu_notebook
 from kumite.provenance import file_sha256
 
 DUMMY = """
@@ -35,37 +36,13 @@ sample.to_csv('submission.csv', index=False)
 
 
 def build(output: Path, owner: str, trial: str, source: str) -> None:
-    output.mkdir(parents=True, exist_ok=True)
-    notebook = {
-        "cells": [
-            {
-                "cell_type": "code",
-                "id": "inference",
-                "metadata": {},
-                "source": source.splitlines(keepends=True),
-                "execution_count": None,
-                "outputs": [],
-            }
-        ],
-        "metadata": {
-            "kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"}
-        },
-        "nbformat": 4,
-        "nbformat_minor": 5,
-    }
-    metadata = {
-        "id": f"{owner}/kumite-moa-{trial.lower()}",
-        "title": f"Kumite MoA {trial}",
-        "code_file": "submit.ipynb",
-        "language": "python",
-        "kernel_type": "notebook",
-        "is_private": True,
-        "enable_gpu": False,
-        "enable_internet": False,
-        "competition_sources": ["lish-moa"],
-    }
-    for name, value in (("submit.ipynb", notebook), ("kernel-metadata.json", metadata)):
-        (output / name).write_text(json.dumps(value, indent=2), encoding="utf-8")
+    write_cpu_notebook(
+        output,
+        source,
+        kernel_id=f"{owner}/kumite-moa-{trial.lower()}",
+        title=f"Kumite MoA {trial}",
+        competition="lish-moa",
+    )
 
 
 def verified_weights(

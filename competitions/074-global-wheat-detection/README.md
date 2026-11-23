@@ -53,7 +53,6 @@
 | E03 | 明度・コントラストの拡張 | 0.462752 | | 基準より +0.017696 |
 | E04 | NMS IoU 0.50 → 0.65 | 0.406032 | | 基準より −0.039024 |
 | E05 | 水平反転推論と矩形融合 | 0.463676 | | 基準より +0.018619 |
-| E02 | 入力解像度 512 → 768 px | 0.486631 | | 基準より +0.041575 |
 
 初回の `E00` は Windows の一時ディレクトリ権限によって学習開始前に中断した。`E00-r2` は同じ設定での再実行。
 
@@ -96,6 +95,10 @@ uv run python "$d/src/train.py" E05 E05 --baseline E00-r2
 
 [選定記録](selection.json) に従い、主分割で最も高い `E02` を最終構成に固定した。 [振り返り](report.md)
 
-最終評価は非公開 Notebook `shion5/kumite-wheat-e02-cpu` の版1を使用した。GPU の実行待ちが続いたため、生成物の `enable_gpu` を `false`、推論デバイスを CPU に切り替えて実行した。提出には選定時と同じ E02 の構成と、全学習画像で再学習した同一の重みを使った。 [最終 Notebook](https://www.kaggle.com/code/shion5/kumite-wheat-e02-cpu)
+最終評価は非公開 CPU Notebook の版1を使用した。当時は GPU の待ち時間を受けて CPU に切り替えた。現在は `export.py <Kaggleユーザー名> E02 <新規出力先> --selection <選定JSON> --device cpu` で、公開テストの推論と Notebook を同じデバイス設定で生成できる。学習は CUDA を使用する。選定時と最終学習前に保存済み OOF 予測を再採点する。 [実際に採点した Notebook の証跡](submission-evidence.json)
+
+証跡の `selection_sha256` は提出前の選定ファイルのバイト列に対応する。現在の `selection.json` を、キー順を維持した `json.dumps(..., indent=2)`、UTF-8、CRLF、末尾改行なしで再シリアライズすると同じハッシュを得られる。
+
+提出 CSV は JPEG とサンプル提出の ID を照合し、テンプレート順で生成する。Kaggle が公開テンプレートを保持したまま JPEG 一式を非公開テストへ差し替える場合に限り、公開テンプレートのハッシュと JPEG ID の完全な非重複を確認して、非公開 JPEG の ID 順で出力する。
 
 最終 Late Submission は **Public 0.6054 / Private 0.5343**。ベースラインとの差は Public +0.0595 / Private +0.0552。 [提出履歴](https://www.kaggle.com/competitions/global-wheat-detection/submissions)

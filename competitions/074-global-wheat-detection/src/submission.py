@@ -1,6 +1,7 @@
 """検出結果を原画像座標の提出 CSV に書く。"""
 
 import csv
+import hashlib
 from pathlib import Path
 
 import torch
@@ -8,8 +9,30 @@ from model import build_model, detect
 from PIL import Image
 
 
+def submission_images(sample: Path, *, hidden_template_sha256: str | None = None) -> list[Path]:
+    with sample.open(encoding="utf-8", newline="") as stream:
+        reader = csv.DictReader(stream)
+        if reader.fieldnames != ["image_id", "PredictionString"]:
+            raise ValueError("Unexpected submission columns")
+        ids = [row["image_id"] for row in reader]
+    images = {path.stem: path for path in (sample.parent / "test").glob("*.jpg")}
+    if not ids or not all(ids) or len(set(ids)) != len(ids) or not images:
+        raise ValueError("Missing or duplicate submission IDs")
+    if set(ids) == images.keys():
+        return [images[key] for key in ids]
+    # Kaggle の採点時は公開サンプルを保持したまま test 画像が差し替わる。
+    if (
+        hidden_template_sha256 is not None
+        and hashlib.sha256(sample.read_bytes()).hexdigest() == hidden_template_sha256
+        and len(images) > len(ids)
+        and images.keys().isdisjoint(ids)
+    ):
+        return [images[key] for key in sorted(images)]
+    raise ValueError("Test JPEG IDs do not match submission template")
+
+
 def write_submission(
-    test: Path,
+    sample: Path,
     checkpoint: Path,
     output: Path,
     size: int,
@@ -17,10 +40,9 @@ def write_submission(
     device: torch.device,
     *,
     flip_fusion: bool = False,
+    hidden_template_sha256: str | None = None,
 ) -> None:
-    images = sorted(test.glob("*.jpg"))
-    if not images:
-        raise ValueError("No test JPEGs found")
+    images = submission_images(sample, hidden_template_sha256=hidden_template_sha256)
     model = build_model(size, nms, pretrained=False).to(device)
     model.load_state_dict(torch.load(checkpoint, map_location=device, weights_only=True))
     with output.open("w", encoding="utf-8", newline="") as stream:

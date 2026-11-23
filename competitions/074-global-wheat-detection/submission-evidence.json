@@ -1,0 +1,13 @@
+{
+  "competition": "global-wheat-detection",
+  "run_id": "E02",
+  "kernel_id": "shion5/kumite-wheat-e02-cpu",
+  "kernel_version": 1,
+  "device": "cpu",
+  "notebook_sha256": "c9286e1dbb9bd5dd06048a5f69b8a2bf408a0108ff7e2cc30d90e1d154070db8",
+  "weights_sha256": "abbb9a2863f140f72f4eb83d03c57fce43b3ef86a530aa7ae73f547471a1637c",
+  "selection_sha256": "a41582cf2f68aa28dce69c5cdfc148d82e69c945dbe1c501067787f3a334fada",
+  "submission_description": "Kumite Wheat final E02",
+  "public_score": 0.6054,
+  "private_score": 0.5343
+}

@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from dataset import Sample, split_images
-from metric import image_score
+from metric import image_score, match_counts
 from model import fuse_views
 
 
@@ -35,6 +35,34 @@ def test_threshold_and_missing_boxes() -> None:
     assert image_score(truth, empty, np.empty(0)) == 0.0
     assert image_score(empty, boxes, np.array([1.0])) == 0.0
     assert image_score(empty, empty, np.empty(0)) is None
+
+
+def test_matching_against_scalar_reference() -> None:
+    truth = [[0.0, 0.0, 10.0, 10.0], [4.0, 0.0, 14.0, 10.0]]
+    predictions = [[1.0, 0.0, 11.0, 10.0], [0.0, 0.0, 10.0, 10.0], [0.0, 0.0, 5.0, 10.0]]
+    scores = [0.8, 0.8, 0.3]
+    thresholds = (0.50, 0.55, 0.60, 0.65, 0.70, 0.75)
+
+    def iou(a: list[float], b: list[float]) -> float:
+        width = max(0.0, min(a[2], b[2]) - max(a[0], b[0]))
+        height = max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
+        intersection = width * height
+        union = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - intersection
+        return intersection / union
+
+    reference = []
+    for threshold in thresholds:
+        available = truth.copy()
+        for index in sorted(range(len(scores)), key=lambda i: -scores[i]):
+            if available:
+                nearest = max(available, key=lambda box: iou(box, predictions[index]))
+                if iou(nearest, predictions[index]) > threshold:
+                    available.remove(nearest)
+        reference.append(len(truth) - len(available))
+    assert (
+        match_counts(np.array(truth), np.array(predictions), np.array(scores), thresholds)
+        == reference
+    )
 
 
 def test_source_split_keeps_every_source_in_one_fold() -> None:

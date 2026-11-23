@@ -12,6 +12,7 @@ import pandas as pd
 import torch
 from dataset import DATA, OUTPUT, ROOT, SEED, SPLIT_VERSION, prepare
 from model import BATCH_SIZE, N_CLASSES, Images, class_weights, ensemble, network, predict
+from submission_input import submission_inputs
 from torch import nn
 from torch.utils.data import DataLoader
 
@@ -36,6 +37,11 @@ def accuracy(y: np.ndarray, probabilities: np.ndarray) -> float:
     return float(np.mean(y == probabilities.argmax(axis=1)))
 
 
+def training_hash(official: pd.DataFrame) -> str:
+    paths = (DATA / "train_images" / str(name) for name in official["image_id"])
+    return files_sha256([DATA / "train.csv", *paths])
+
+
 def cv(trial: str, run_id: str, baseline: str | None = None) -> None:
     if (trial == "E05") != (baseline is not None):
         raise ValueError("E05 だけが --baseline を必要とします")
@@ -55,7 +61,7 @@ def cv(trial: str, run_id: str, baseline: str | None = None) -> None:
         "accuracy",
         True,
         accuracy,
-        files_sha256([DATA / "train.csv", *paths]),
+        training_hash(official),
         SPLIT_VERSION,
         file_sha256(split_file),
         SEED,
@@ -73,6 +79,8 @@ def cv(trial: str, run_id: str, baseline: str | None = None) -> None:
         ):
             raise ValueError("再利用する E01 のデータまたは分割が一致しません")
         inputs = STORE.input_hashes(baseline, *names)
+    train_horizontal_flip = trial == "E03"
+    inference_horizontal_flip = trial == "E05"
     configuration = Trial(
         hypothesis,
         change,
@@ -86,7 +94,8 @@ def cv(trial: str, run_id: str, baseline: str | None = None) -> None:
             "lr": 0.0003,
             "weight_decay": 0.0001,
             "weights": "IMAGENET1K_V1",
-            "flip": trial == "E05",
+            "train_horizontal_flip": train_horizontal_flip,
+            "inference_horizontal_flip": inference_horizontal_flip,
             "model_source_sha256": file_sha256(Path(__file__).with_name("model.py")),
         },
         inputs,
@@ -108,7 +117,11 @@ def cv(trial: str, run_id: str, baseline: str | None = None) -> None:
                 shutil.copyfile(STORE.artifact_path(baseline, name), checkpoint)
                 checkpoints.append(checkpoint)
                 probability = ensemble(
-                    [checkpoint], [paths[i] for i in valid], size, device, flip=True
+                    [checkpoint],
+                    [paths[i] for i in valid],
+                    size,
+                    device,
+                    flip=inference_horizontal_flip,
                 )
             else:
                 torch.manual_seed(SEED + len(checkpoints))
@@ -118,7 +131,7 @@ def cv(trial: str, run_id: str, baseline: str | None = None) -> None:
                 loss_fn = nn.CrossEntropyLoss(weight=weight)
                 scaler = torch.amp.GradScaler("cuda")
                 loader = DataLoader(
-                    Images([paths[i] for i in train], target.tolist(), size, trial == "E03"),
+                    Images([paths[i] for i in train], target.tolist(), size, train_horizontal_flip),
                     batch_size=BATCH_SIZE,
                     shuffle=True,
                     num_workers=4,
@@ -163,7 +176,14 @@ def cv(trial: str, run_id: str, baseline: str | None = None) -> None:
         )
 
 
+def recorded_inference_flip(params: dict[str, object]) -> bool:
+    # 既存 run の flip は推論時反転を表す。
+    return params.get("inference_horizontal_flip", params.get("flip")) is True
+
+
 def select(run_ids: list[str], output: Path) -> None:
+    if output.exists():
+        raise FileExistsError(f"選定記録が既にあります: {output}")
     split = OUTPUT / f"{SPLIT_VERSION}.csv"
     labels = pd.read_csv(split)["label"].to_numpy()
     candidates = []
@@ -195,11 +215,13 @@ def select(run_ids: list[str], output: Path) -> None:
         "run_id": run_id,
         "trial": trial,
         "size": record.params["size"],
-        "flip": record.params.get("flip", False),
+        "inference_horizontal_flip": recorded_inference_flip(record.params),
+        "submission_input": submission_inputs(DATA / "sample_submission.csv")[2],
         "split_hash": record.split_hash,
         "weights": STORE.input_hashes(run_id, *(f"fold-{i}.pt" for i in range(3))),
     }
-    output.write_text(json.dumps(selection, indent=2) + "\n", encoding="utf-8")
+    with output.open("x", encoding="utf-8") as stream:
+        stream.write(json.dumps(selection, indent=2) + "\n")
 
 
 def selected_weights(selection_file: Path) -> tuple[dict[str, object], list[Path]]:
@@ -207,9 +229,10 @@ def selected_weights(selection_file: Path) -> tuple[dict[str, object], list[Path
     run_id = str(selection["run_id"])
     record = STORE.record(run_id)
     if (
-        selection["trial"] != record.params["trial"]
+        not isinstance(selection["submission_input"], dict)
+        or selection["trial"] != record.params["trial"]
         or selection["size"] != record.params["size"]
-        or selection["flip"] != record.params.get("flip", False)
+        or selection["inference_horizontal_flip"] is not recorded_inference_flip(record.params)
         or selection["split_hash"] != record.split_hash
         or record.params["model_source_sha256"] != file_sha256(Path(__file__).with_name("model.py"))
     ):
@@ -217,21 +240,28 @@ def selected_weights(selection_file: Path) -> tuple[dict[str, object], list[Path
     names = [f"fold-{i}.pt" for i in range(3)]
     if selection["weights"] != STORE.input_hashes(run_id, *names):
         raise ValueError("選定記録と重みが一致しません")
+    official = pd.read_csv(DATA / "train.csv", dtype={"image_id": str})
+    official = official.sort_values("image_id", ignore_index=True)
+    if training_hash(official) != record.data_hash:
+        raise ValueError("公式学習入力が run のハッシュと一致しません")
     return selection, [STORE.artifact_path(run_id, name) for name in names]
 
 
 def final(selection_file: Path, output: Path) -> None:
     selection, checkpoints = selected_weights(selection_file)
-    sample = pd.read_csv(DATA / "sample_submission.csv")
-    if list(sample.columns) != ["image_id", "label"] or not sample["image_id"].is_unique:
-        raise ValueError("サンプル提出の列または ID が不正です")
-    paths = [DATA / "test_images" / str(name) for name in sample["image_id"]]
+    write_submission(selection, checkpoints, output)
+
+
+def write_submission(selection: dict[str, object], checkpoints: list[Path], output: Path) -> None:
+    sample, paths, _ = submission_inputs(
+        DATA / "sample_submission.csv", selection["submission_input"]
+    )
     probability = ensemble(
         checkpoints,
         paths,
         int(str(selection["size"])),
         torch.device("cpu"),
-        selection["flip"] is True,
+        selection["inference_horizontal_flip"] is True,
     )
     validate_probabilities(probability, len(sample), N_CLASSES)
     sample["label"] = probability.argmax(axis=1)

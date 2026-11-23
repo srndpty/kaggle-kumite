@@ -23,18 +23,13 @@ submission.to_csv('/kaggle/working/submission.csv', index=False)
 """
 
 INFERENCE = """
-def submit(sample_path, weights_dir, output, device='cpu'):
+def submit(sample_path, weights_dir, output, device='cpu', *, allow_hidden=False):
     import hashlib
-    import pandas as pd
-
-    sample = pd.read_csv(sample_path)
-    if list(sample.columns) != ['image_id', 'label'] or not sample['image_id'].is_unique:
-        raise ValueError('Unexpected submission template')
+    sample, images, _ = submission_inputs(sample_path, PUBLIC_INPUT, allow_hidden=allow_hidden)
     files = [weights_dir / name for name in EXPECTED]
     for path in files:
         if hashlib.sha256(path.read_bytes()).hexdigest() != EXPECTED[path.name]:
             raise ValueError(f'Checkpoint hash mismatch: {path.name}')
-    images = [sample_path.parent / 'test_images' / name for name in sample['image_id']]
     probability = ensemble(files, images, SIZE, torch.device(device), FLIP)
     if (probability.shape != (len(images), N_CLASSES)
         or not np.isfinite(probability).all()
@@ -85,7 +80,7 @@ def build(
 
 def export(owner: str, output: Path, selection_file: Path, gpu: bool = False) -> None:
     from dataset import DATA
-    from train import final, selected_weights
+    from train import selected_weights, write_submission
 
     from kumite.provenance import file_sha256
 
@@ -96,8 +91,11 @@ def export(owner: str, output: Path, selection_file: Path, gpu: bool = False) ->
     expected = {path.name: file_sha256(path) for path in checkpoints}
     model_path = Path(__file__).with_name("model.py")
     source = model_path.read_text(encoding="utf-8")
+    input_path = model_path.with_name("submission_input.py")
+    source += "\n" + input_path.read_text(encoding="utf-8")
+    source += f"\nPUBLIC_INPUT = {selection['submission_input']!r}\n"
     source += f"\nSIZE = {int(str(selection['size']))}\nEXPECTED = {expected!r}\n"
-    source += f"FLIP = {bool(selection.get('flip', False))!r}\n" + INFERENCE
+    source += f"FLIP = {bool(selection['inference_horizontal_flip'])!r}\n" + INFERENCE
     namespace: dict[str, object] = {}
     exec(compile(source, "cassava-notebook", "exec"), namespace)
     submit = namespace["submit"]
@@ -106,7 +104,7 @@ def export(owner: str, output: Path, selection_file: Path, gpu: bool = False) ->
     device = "cuda" if gpu else "cpu"
     with TemporaryDirectory() as temporary:
         reference, replay = Path(temporary) / "reference.csv", Path(temporary) / "replay.csv"
-        final(selection_file, reference)
+        write_submission(selection, checkpoints, reference)
         submit(DATA / "sample_submission.csv", checkpoints[0].parent, replay, device)
         if reference.read_bytes() != replay.read_bytes():
             raise ValueError("Notebook とローカル提出の再現結果が一致しません")
@@ -117,7 +115,7 @@ sample, = (
     if (path.parent / 'test_images').is_dir()
 )
 weights, = (path.parent for path in root.rglob('fold-0.pt'))
-submit(sample, weights, Path('/kaggle/working/submission.csv'), {device!r})
+submit(sample, weights, Path('/kaggle/working/submission.csv'), {device!r}, allow_hidden=True)
 """
     weights_dir = output / "weights"
     weights_dir.mkdir(parents=True, exist_ok=True)
@@ -139,6 +137,7 @@ submit(sample, weights, Path('/kaggle/working/submission.csv'), {device!r})
         "model_source_sha256": file_sha256(model_path),
         "notebook_sha256": file_sha256(output / "kernel" / "submit.ipynb"),
         "weights": expected,
+        "submission_input": selection["submission_input"],
     }
     (output / "evidence.json").write_text(json.dumps(evidence, indent=2), encoding="utf-8")
 

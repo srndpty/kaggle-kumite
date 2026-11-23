@@ -64,6 +64,10 @@ uv run python "$d/src/train.py" final "$d/outputs/selection-r2.json" "$d/outputs
 
 E01 は CPU、E04 は `--gpu` を指定して提出用 Notebook を生成した。公開サンプルで、E04 の GPU 推論はローカル CPU 推論と同じ提出 CSV を生成した。
 
+最終推論と Notebook 生成の前に、公式学習ラベルと学習 JPEG を run のデータハッシュと照合する。選定記録には公開サンプル CSV と対応する全 JPEG の SHA256 を保存し、ローカルと Notebook の両方で照合する。Kaggle が公開 ID と重ならない非公開テストへ差し替えた場合、Notebook は提出 ID と画像ファイル集合の完全一致を検査する。非公開画像の既知ハッシュは配布されていない。
+
+`select` は既存ファイルへの書き込みを拒否する。再選定時は新しい `--output` を指定する。既存 run の `flip` は推論時水平反転を表し、E03 の学習時水平反転は実験番号と変更点に記録されている。新規 run では `train_horizontal_flip` と `inference_horizontal_flip` を個別に記録する。既存の E04 選定記録には公開入力の証跡と新しいキー名を追加した。
+
 E04 の Late Submission は Public **0.8534**、Private **0.8528**。E01 は Public **0.8326**、Private **0.8227**。実験ログの `late_score` には Private Accuracy を記録した。 [Kaggle 提出履歴](https://www.kaggle.com/competitions/cassava-leaf-disease-classification/submissions)
 
 [振り返り](report.md) · [K023 左右反転](../../knowledge/K023-horizontal-flips-for-segmentation.md) · [K032 クラス重み](../../knowledge/K032-class-weighting-and-per-class-recall.md)

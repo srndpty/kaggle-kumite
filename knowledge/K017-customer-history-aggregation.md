@@ -29,5 +29,6 @@ EloやAmerican Expressの取引履歴で、主表・全履歴集約・期間別�
 |---|---|---|
 | [#015 Elo](../competitions/015-elo-merchant-category-recommendation/report.md) | E01 → E03 | 新規加盟店の取引ソースの追加で OOF RMSE −0.04385 |
 | #004 Home Credit | E01→E02 / E03 / E04 | seed42のfold平均AUC差 +0.005721 / +0.005666 / +0.005559 |
+| [#007 IEEE-CIS Fraud Detection](../competitions/007-ieee-fraud-detection/report.md) | E01 → E05 | カード近似キーの過去平均額に対する取引額の比率を追加し、時系列 CV の平均 AUC は +0.003303。キー欠損の集団では低下。全行再学習では Public +0.001907、Private −0.001518。 |
 
 [実験ログ](../competitions/004-home-credit-default-risk/experiments.jsonl) / [振り返り](../competitions/004-home-credit-default-risk/report.md)

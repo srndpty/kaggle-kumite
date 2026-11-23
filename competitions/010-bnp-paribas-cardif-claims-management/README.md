@@ -51,10 +51,10 @@ uv run python $script --eda
 foreach ($variant in 'E00','E01','E02','E03','E04') {
     uv run python $script --variant $variant
 }
-uv run python competitions/010-bnp-paribas-cardif-claims-management/src/select_model.py
+uv run python competitions/010-bnp-paribas-cardif-claims-management/src/select_model.py --output competitions/010-bnp-paribas-cardif-claims-management/outputs/selection-replay.json
 ```
 
-既存 run を再実行する場合は別の `--run-id` を指定する。実験ログは
+E03 の現行実装は E03-r2 として保存する。旧 E03 の再現には修正前のコードを使う。既存 run の再学習には別の `--run-id` を指定する。選定の再実行には記録済みの候補の成果物と未使用の出力パスが必要。実験ログは
 `experiments.jsonl`、分割・OOF・提出ファイルは `outputs/runs/` に保存する。
 
 ## 結果
@@ -66,7 +66,13 @@ uv run python competitions/010-bnp-paribas-cardif-claims-management/src/select_m
 | E02 | 0.473885 | — | — |
 | E03 | 0.473723 | — | — |
 | E04 | 0.474063 | — | — |
+| E03-r2 | 0.473723 | — | — |
 
 E00 を基準とする行単位のペア bootstrap で、Log Loss 差の 95% 区間が
 全体に負の候補だけを採用する。条件を満たす候補がなく E00 を採用した。
 最終評価には同一 E00 ファイルの採点済みスコアを使用した。
+
+初回の選定結果は [selection.json](selection.json) に保存した。レビュー後は、
+入力 CSV、固定 fold、実験設定、OOF の SHA256 と再計算スコアを照合し、
+E03-r2 を含む結果を [selection-review.json](selection-review.json) に保存した。
+既存の選定記録と同じパスへの出力は拒否する。

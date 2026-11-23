@@ -1,0 +1,82 @@
+{
+  "selected": "E00",
+  "selected_at": "2026-11-23T13:57:55+09:00",
+  "data_hash": "fdf79c2e7a6caf7ecdd4964fdc893e6ff367d54aaa9f86c46dae9661bd477676",
+  "split_hash": "f7dc0495312a2c12cbdf9173a26d5b0ed86a55b473c2b9c42daa74aa59c9847d",
+  "bootstrap_draws": 2000,
+  "bootstrap_seed": 42,
+  "runs": {
+    "E00": {
+      "oof_sha256": "5d6b5545820239533fee12a1e61b1f9ad2271b38a5e1941887a8bcccf13c9c7c",
+      "log_loss": 0.4736240934520574,
+      "delta": 0.0,
+      "ci95": [
+        0.0,
+        0.0
+      ],
+      "with_missing": 0.4599068133295078,
+      "without_missing": 0.5482247442199104,
+      "with_categorical_missing": 0.45784480161697916
+    },
+    "E01": {
+      "oof_sha256": "2359b09d50a155ded9128c24385d716578d8f1d67f6d3fc00c87450989439f01",
+      "log_loss": 0.4734121367163277,
+      "delta": -0.00021195673572971252,
+      "ci95": [
+        -0.0006084336442449794,
+        0.00016837114942075935
+      ],
+      "with_missing": 0.4595892043668998,
+      "without_missing": 0.5485873711341311,
+      "with_categorical_missing": 0.4575299274114386
+    },
+    "E02": {
+      "oof_sha256": "c82e311743dfd5a34a44bd99f775a6c5a042167da0cd19ef441654e8cea3a6c1",
+      "log_loss": 0.47388531422743563,
+      "delta": 0.00026122077537821253,
+      "ci95": [
+        -9.129887582400159e-05,
+        0.0006186912406611729
+      ],
+      "with_missing": 0.46030963392331814,
+      "without_missing": 0.5477158824053527,
+      "with_categorical_missing": 0.4582783859729679
+    },
+    "E03": {
+      "oof_sha256": "dffcef116b99ada157a2f8a4afb0bbb2515c50090e5197f2fd0c2a6ca59f9e82",
+      "log_loss": 0.473722739508074,
+      "delta": 9.864605601656029e-05,
+      "ci95": [
+        -0.00030970180523944566,
+        0.0005154363743759837
+      ],
+      "with_missing": 0.4599606270450815,
+      "without_missing": 0.5485672084193636,
+      "with_categorical_missing": 0.4579017213637103
+    },
+    "E04": {
+      "oof_sha256": "0a0c43ede0882e7c6e20f421a3cd2a8e3a5b049cfba7ce10ad6157c77674c9ab",
+      "log_loss": 0.474063425910031,
+      "delta": 0.00043933245797356246,
+      "ci95": [
+        9.768687266237114e-05,
+        0.0007891282794245761
+      ],
+      "with_missing": 0.46036780967162694,
+      "without_missing": 0.5485462588713677,
+      "with_categorical_missing": 0.4582767335857221
+    },
+    "E03-r2": {
+      "oof_sha256": "dffcef116b99ada157a2f8a4afb0bbb2515c50090e5197f2fd0c2a6ca59f9e82",
+      "log_loss": 0.473722739508074,
+      "delta": 9.864605601656029e-05,
+      "ci95": [
+        -0.00030970180523944566,
+        0.0005154363743759837
+      ],
+      "with_missing": 0.4599606270450815,
+      "without_missing": 0.5485672084193636,
+      "with_categorical_missing": 0.4579017213637103
+    }
+  }
+}

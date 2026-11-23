@@ -13,12 +13,13 @@ from sklearn.metrics import log_loss
 from sklearn.model_selection import StratifiedGroupKFold, StratifiedKFold
 
 from kumite.checks import validate_probabilities
-from kumite.crossfit import FoldOutput, cross_fit_splits, split_roles
+from kumite.crossfit import FoldOutput, Split, cross_fit_splits, split_roles
 from kumite.cv_run import Evaluation, Trial, publish_cv_run
 from kumite.provenance import array_sha256, files_sha256
 from kumite.runs import RunStore
 
 SEED = 42
+SPLIT_VERSION = "stratified-duplicates-v1"
 FILES = ("train.csv", "test.csv", "sample_submission.csv")
 VARIANTS = {
     "E00": ("基準", "数値中央値・カテゴリ欠損"),
@@ -73,9 +74,9 @@ def transform(train: pd.DataFrame, apply: pd.DataFrame, variant: str):
         train[name] = train[name].astype(dtype)
         original = apply[name]
         apply[name] = original.where(original.isin(levels)).astype(dtype)
-        if variant == "E03" and train[name].isna().any():
+        if variant == "E03":
             marker = "__missing__"
-            if marker in levels or original.eq(marker).any():
+            if marker in levels:
                 raise ValueError("カテゴリ欠損用の予約値が入力にあります")
             train[name] = train[name].cat.add_categories([marker]).fillna(marker)
             apply[name] = apply[name].cat.add_categories([marker]).mask(original.isna(), marker)
@@ -94,16 +95,28 @@ def score(y: np.ndarray, pred: np.ndarray) -> float:
     return float(log_loss(y, pred, labels=[0, 1]))
 
 
+def make_splits(x: pd.DataFrame, y: np.ndarray) -> list[Split]:
+    groups = pd.util.hash_pandas_object(x, index=False)
+    if groups.is_unique:
+        return list(StratifiedKFold(5, shuffle=True, random_state=SEED).split(x, y))
+    splitter = StratifiedGroupKFold(5, shuffle=True, random_state=SEED)
+    return list(splitter.split(x, y, groups))
+
+
+def data_hash(data: Path) -> str:
+    return files_sha256(data / name for name in FILES)
+
+
 def run(data: Path, run_id: str, variant: str) -> None:
+    if run_id == "E03":
+        raise ValueError("修正後の E03 は E03-r2 など別の run ID を使ってください")
+    params = {"variant": variant, **make_model().get_params()}
+    if variant == "E03":
+        params["missing_category_policy"] = "always-reserve"
     store = RunStore(ROOT)
     with store.reserve(run_id) as reservation:
         x, y, query, sample = load(data)
-        groups = pd.util.hash_pandas_object(x, index=False)
-        if groups.is_unique:
-            splits = list(StratifiedKFold(5, shuffle=True, random_state=SEED).split(x, y))
-        else:
-            splitter = StratifiedGroupKFold(5, shuffle=True, random_state=SEED)
-            splits = list(splitter.split(x, y, groups))
+        splits = make_splits(x, y)
         roles = split_roles(len(y), splits)
 
         def fit(train: np.ndarray, valid: np.ndarray) -> FoldOutput:
@@ -129,8 +142,8 @@ def run(data: Path, run_id: str, variant: str) -> None:
                 "LogLoss",
                 False,
                 score,
-                files_sha256(data / name for name in FILES),
-                "stratified-duplicates-v1",
+                data_hash(data),
+                SPLIT_VERSION,
                 array_sha256(roles),
                 SEED,
             ),
@@ -138,7 +151,7 @@ def run(data: Path, run_id: str, variant: str) -> None:
                 *VARIANTS[variant],
                 "LightGBM",
                 "kaggle-v1",
-                {"variant": variant, **make_model().get_params()},
+                params,
             ),
             y,
             splits,
@@ -174,7 +187,8 @@ def main() -> None:
             )
         )
     else:
-        run(args.data, args.run_id or args.variant, args.variant)
+        default_id = "E03-r2" if args.variant == "E03" else args.variant
+        run(args.data, args.run_id or default_id, args.variant)
 
 
 if __name__ == "__main__":

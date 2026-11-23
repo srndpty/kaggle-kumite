@@ -107,12 +107,17 @@ def data_hash(data: Path) -> str:
     return files_sha256(data / name for name in FILES)
 
 
-def run(data: Path, run_id: str, variant: str) -> None:
-    if run_id == "E03":
-        raise ValueError("修正後の E03 は E03-r2 など別の run ID を使ってください")
+def model_params(variant: str) -> dict:
     params = {"variant": variant, **make_model().get_params()}
     if variant == "E03":
         params["missing_category_policy"] = "always-reserve"
+    return params
+
+
+def run(data: Path, run_id: str, variant: str) -> None:
+    if run_id == "E03":
+        raise ValueError("修正後の E03 は E03-r2 など別の run ID を使ってください")
+    params = model_params(variant)
     store = RunStore(ROOT)
     with store.reserve(run_id) as reservation:
         x, y, query, sample = load(data)

@@ -46,16 +46,23 @@ E04 の着想は 1 位解法。差の特徴だけを検証し、学習・検証�
 
 ```powershell
 dev download 10
-$script = "competitions/010-bnp-paribas-cardif-claims-management/src/train.py"
-uv run python $script --eda
+$root = "competitions/010-bnp-paribas-cardif-claims-management"
+$tag = "replay1" # 再実行するたびに未使用の値に変更
+uv run python "$root/src/train.py" --eda
 foreach ($variant in 'E00','E01','E02','E03','E04') {
-    uv run python $script --variant $variant
+    uv run python "$root/src/train.py" --variant $variant --run-id "$variant-$tag"
+    if ($LASTEXITCODE -ne 0) { throw "$variant の学習に失敗しました" }
 }
-uv run python competitions/010-bnp-paribas-cardif-claims-management/src/select_model.py --output competitions/010-bnp-paribas-cardif-claims-management/outputs/selection-replay.json
+uv run python "$root/src/select_model.py" --baseline "E00-$tag" `
+    --candidate E01 "E01-$tag" --candidate E02 "E02-$tag" `
+    --candidate E03 "E03-$tag" --candidate E04 "E04-$tag" `
+    --output "$root/outputs/selection-$tag.json"
 ```
 
-E03 の現行実装は E03-r2 として保存する。旧 E03 の再現には修正前のコードを使う。既存 run の再学習には別の `--run-id` を指定する。選定の再実行には記録済みの候補の成果物と未使用の出力パスが必要。実験ログは
-`experiments.jsonl`、分割・OOF・提出ファイルは `outputs/runs/` に保存する。
+この手順は再学習した run だけで選定する。E03 は修正版の欠損カテゴリ処理を使う。
+旧 E03 の再現には修正前のコードが必要。元の成果物一式がある環境では、
+`--baseline` と `--candidate` を省略すると既存 6 run の監査を再実行できる。
+実験ログは `experiments.jsonl`、分割・OOF・提出ファイルは `outputs/runs/` に保存する。
 
 ## 結果
 

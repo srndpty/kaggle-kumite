@@ -1,0 +1,18 @@
+{
+  "run_id": "E04",
+  "trial": "E04",
+  "size": 320,
+  "inference_horizontal_flip": false,
+  "submission_input": {
+    "sample_sha256": "4d6b4f17cd6ce6e1af91cc3df560a3dfeb355a07cabcf9aadd6db65225c4e5a0",
+    "images": {
+      "2216849948.jpg": "f9533e12a96e1f9b3c6f3be062cbd25f8b7e49426b51b214eea5e89c729716ca"
+    }
+  },
+  "split_hash": "c36db2185ad40095948aad6014e87eb026f6dddc2e279c8c940fb7feb18a4f56",
+  "weights": {
+    "E04/fold-0.pt": "3883a8e352e6aa2fcd2788f366466db78fd4fab0c8ba7934d842633dd9450ead",
+    "E04/fold-1.pt": "c486a89395ad7e7b08c7902829fe5e43485426825959704b70474bae80fab6e3",
+    "E04/fold-2.pt": "c6cb51b7f91b2f71809f1bfe0a5544f3a33ec96f3b7b2a1c0d2190d86577b7fe"
+  }
+}

@@ -56,7 +56,7 @@
 | [K020](K020-quantile-bins-for-additive-effects.md) | 仮説 | Santander では数値特徴を分位点ビンに置換すると、ロジスティック回帰の OOF AUC が +0.02516 |
 | [K021](K021-value-frequency-in-numeric-features.md) | 仮説 | Santander では値の出現回数追加で OOF AUC +0.00554、反復値を残した列の追加で +0.00473 |
 | [K022](K022-product-holdings-for-ranking.md) | 仮説 | #034 で前月保有商品に条件付けて順位付けすると MAP@7 が +0.00415 |
-| [K023](K023-horizontal-flips-for-segmentation.md) | 仮説 | #070 で学習時の左右反転は OOF +0.03223、推論時の反転平均は +0.01393。空マスクに効果が集中 |
+| [K023](K023-horizontal-flips-for-segmentation.md) | 再現 | 左右反転は #070 のセグメンテーションと #059 の画像分類で OOF を改善。#059 は学習時 +0.02879、推論時 +0.01860 |
 | [K024](K024-extreme-value-mixture-regression.md) | 仮説 | Elo でまれな極端値が二乗誤差の約78%を占めた。同じ特徴での群別回帰の確率加重は OOF RMSE +0.00217 |
 | [K025](K025-identity-weighting-bias-auc.md) | 仮説 | #042 の属性言及ありの陰性を2倍に重み付けすると、OOF BPSN は +0.05288、BNSP は −0.04093 |
 | [K026](K026-image-summary-with-tabular.md) | 仮説 | #016 の掲載表に幅・高さ・縦横比・明度などの画像統計を追加すると OOF QWK +0.01143 |
@@ -65,3 +65,4 @@
 | [K029](K029-round-count-quantiles.md) | 仮説 | #022 の商品×店舗で分位点を丸めると WSPL が 0.30587 → 0.29824、50%区間の被覆率が 58.13% → 73.22% |
 | [K030](K030-missing-value-ablation.md) | 仮説 | #010 の LightGBM では、数値欠損の分岐・指示・カテゴリ欠損の独立化で明確な改善なし |
 | [K031](K031-absolute-loss-for-mae.md) | 仮説 | #014 の時系列 CV で LightGBM の学習損失を二乗誤差から絶対誤差に変えると MAE が 0.07284 → 0.06913 |
+| [K032](K032-class-weighting-and-per-class-recall.md) | 仮説 | #059 でクラス頻度の逆平方根を損失に掛けると Accuracy +0.02383。改善への寄与は最多クラスが最大で、クラス別再現率の変化は混在 |

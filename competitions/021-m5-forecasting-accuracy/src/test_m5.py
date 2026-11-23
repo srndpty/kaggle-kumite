@@ -199,3 +199,43 @@ def test_submission_uses_sample_id_order(tmp_path: Path) -> None:
     pd.DataFrame({"id": ids[:3] + ids[:1]}).to_csv(sample, index=False)
     with pytest.raises(ValueError, match="提出 ID"):
         submission(data, public, data, private, tmp_path)
+
+
+def test_hierarchy_csr_and_shuffled_rows_agree() -> None:
+    from scipy.sparse import csr_matrix
+
+    from kumite.m5 import LEVELS
+
+    series = pd.DataFrame(
+        {
+            "item_id": ["B", "A", "B", "A"],
+            "dept_id": ["D2", "D1", "D2", "D1"],
+            "cat_id": ["C2", "C1", "C2", "C1"],
+            "store_id": ["TX_1", "CA_1", "CA_1", "TX_1"],
+            "state_id": ["TX", "CA", "CA", "TX"],
+        }
+    )
+    values = np.arange(12).reshape(4, 3)
+    labels = []
+    rows = []
+    for level, keys in enumerate(LEVELS, start=1):
+        groups = (
+            [tuple(row) for row in series[list(keys)].itertuples(index=False, name=None)]
+            if keys
+            else [()] * len(series)
+        )
+        for key in sorted(set(groups)):
+            labels.append((level, "_".join(key) if key else "Total_X"))
+            rows.append([group == key for group in groups])
+    reference = csr_matrix(np.asarray(rows, dtype=np.float64))
+    hierarchy = Hierarchy.from_series(series)
+    order = [2, 0, 3, 1]
+    shuffled = Hierarchy.from_series(series.iloc[order])
+    expected_labels = pd.DataFrame(labels, columns=["level", "series"])
+    pd.testing.assert_frame_equal(hierarchy.labels, expected_labels)
+    pd.testing.assert_frame_equal(shuffled.labels, expected_labels)
+    np.testing.assert_array_equal(hierarchy.aggregate(values), reference @ values)
+    np.testing.assert_array_equal(shuffled.aggregate(values[order]), reference @ values)
+    np.testing.assert_allclose(
+        hierarchy.aggregate(values[:, 0] / 7), reference @ (values[:, 0] / 7)
+    )

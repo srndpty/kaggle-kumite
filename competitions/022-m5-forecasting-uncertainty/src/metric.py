@@ -10,6 +10,27 @@ def scale_at(data: Sales, hierarchy: Hierarchy, origin: int) -> np.ndarray:
     return historical_change_scale(data, hierarchy, origin, squared=False)
 
 
+def series_losses(
+    actual: np.ndarray,
+    prediction: np.ndarray,
+    weight: np.ndarray,
+    scale: np.ndarray,
+) -> np.ndarray:
+    validate_prediction(prediction, len(actual))
+    if actual.shape != prediction.shape[:2]:
+        raise ValueError("実績と予測の形状が一致しません")
+    active = weight > 0
+    if (scale[active] <= 0).any():
+        raise ValueError("正の重みを持つ系列の WSPL の尺度を定義できません")
+    scaled_weight = np.divide(weight, scale, out=np.zeros_like(weight), where=active)
+    losses = np.empty((len(actual), len(QUANTILES)))
+    for index, quantile in enumerate(QUANTILES):
+        error = actual - prediction[:, :, index]
+        loss = np.maximum(quantile * error, (quantile - 1) * error).mean(axis=1)
+        losses[:, index] = loss * scaled_weight
+    return losses
+
+
 def score(
     actual: np.ndarray,
     prediction: np.ndarray,
@@ -17,21 +38,14 @@ def score(
     weight: np.ndarray,
     scale: np.ndarray,
 ) -> np.ndarray:
-    validate_prediction(prediction, len(hierarchy.levels))
-    if actual.shape != prediction.shape[:2]:
-        raise ValueError("実績と予測の形状が一致しません")
-    active = weight > 0
-    if (scale[active] <= 0).any():
-        raise ValueError("正の重みを持つ系列の WSPL の尺度を定義できません")
-    scaled_weight = np.divide(weight, scale, out=np.zeros_like(weight), where=active)
-    scores = []
-    for index, quantile in enumerate(QUANTILES):
-        error = actual - prediction[:, :, index]
-        loss = np.maximum(quantile * error, (quantile - 1) * error).mean(axis=1)
-        scores.append(
-            np.bincount(hierarchy.levels, weights=loss * scaled_weight, minlength=len(LEVELS))
-        )
-    return np.stack(scores, axis=1)
+    losses = series_losses(actual, prediction, weight, scale)
+    return np.stack(
+        [
+            np.bincount(hierarchy.levels, weights=column, minlength=len(LEVELS))
+            for column in losses.T
+        ],
+        axis=1,
+    )
 
 
 def evaluation_inputs(

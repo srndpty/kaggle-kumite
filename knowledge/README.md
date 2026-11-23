@@ -48,7 +48,7 @@
 | [K012](K012-test-neighbour-averaging.md) | 仮説 | test の中の近傍と予測を平均すると logloss が下がる（State Farm Private -0.050）。OOF では効果を 2 倍に見積もる |
 | [K013](K013-categorical-splits-vs-numeric.md) | 仮説 | 名義カテゴリの数値扱いがLightGBMのカテゴリ分割より良かった（Porto Seguro、3 seed平均Gini +0.016054） |
 | [K014](K014-ranking-vs-probabilities.md) | 再現 | 順位と確率を分けて評価する。Porto Seguroの重み付けは両方悪化、JigsawではAUC改善でもLogLossは約2倍へ悪化 |
-| [K015](K015-feature-group-ablation.md) | 仮説 | 特徴群を除く比較実験も有効。Porto Seguroのcalc除外で3 seed平均Gini +0.002654、原因は未特定 |
+| [K015](K015-feature-group-ablation.md) | 条件付き | 特徴群の除外で Porto Seguro の Gini と MoA の Log Loss は改善。Mercedes-Benz では R² が悪化 |
 | [K016](K016-character-features-in-text.md) | 再現 | 文字3〜5-gram 追加で #041 の macro AUC が約 +0.0052、#048 の範囲抽出の Jaccard が +0.00707、#042 の属性別 AUC を含む合成スコアが +0.01954 |
 | [K017](K017-customer-history-aggregation.md) | 仮説 | Home Creditで顧客内の借入・過去申込・返済履歴の単独追加がAUC約+0.0056〜+0.0057 |
 | [K018](K018-recent-history-aggregation.md) | 仮説 | Home Creditで全期間借入集約に直近365日集約を追加し、2 seedでAUC +0.000788 / +0.001562 |
@@ -66,3 +66,4 @@
 | [K030](K030-missing-value-ablation.md) | 仮説 | #010 の LightGBM では、数値欠損の分岐・指示・カテゴリ欠損の独立化で明確な改善なし |
 | [K031](K031-absolute-loss-for-mae.md) | 仮説 | #014 の時系列 CV で LightGBM の学習損失を二乗誤差から絶対誤差に変えると MAE が 0.07284 → 0.06913 |
 | [K032](K032-class-weighting-and-per-class-recall.md) | 仮説 | #059 でクラス頻度の逆平方根を損失に掛けると Accuracy +0.02383。改善への寄与は最多クラスが最大で、クラス別再現率の変化は混在 |
+| [K033](K033-shrink-probabilities-to-label-priors.md) | 仮説 | MoA で個別確率をラベルの出現率へ 10% 縮小すると、希少ラベル帯の OOF Log Loss が 0.005034 → 0.004564 |

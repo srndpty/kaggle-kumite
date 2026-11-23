@@ -1,6 +1,6 @@
 # K015: 特徴群の除外を固定条件で検証する
 
-- 状態: 仮説
+- 状態: 条件付き
 - 分類: 特徴量 / 前処理
 
 ## 仮説
@@ -13,9 +13,13 @@ Porto SeguroのE04からps_calc_*だけを除外したE06は、fold平均Gini差
 
 Mercedes-Benz の E03 では、二値特徴群を除くと5 fold すべてで R² が悪化した。匿名の二値列でも、カテゴリで表しきれない予測情報を持つ場合がある。この比較は Ridge と車両構成単位の5分割に限る。
 
+#093 MoA の独立 L2 ロジスティック回帰では、遺伝子発現を外すと OOF Log Loss が 0.035158 から 0.020693 に下がり、全 5 fold で改善した。改善は主に陽性が 81 行以上のラベルから来た。発現を 64 主成分に置換した場合は 0.023067 だった。
+
 ## 適用条件
 
 カテゴリを数値として扱うLightGBM、31葉、学習率0.05、同一seed内で固定した層化5分割。欠損処理や他の特徴群は同じ。
+
+MoA では化合物単位の固定 5 分割と標準化済みの入力を使い、回帰の L2 ペナルティは C=1 相当。細胞生存率・時間・用量を共通入力にした。
 
 ## 未検証
 
@@ -31,5 +35,6 @@ Mercedes-Benz の E03 では、二値特徴群を除くと5 fold すべてで R�
 |---|---|---|
 | [002 Porto Seguro](../competitions/002-porto-seguro-safe-driver-prediction/README.md) | E04/E06、各-s43/-s44 | fold平均Gini差の3 seed平均+0.002654 |
 | [012 Mercedes-Benz](../competitions/012-mercedes-benz-greener-manufacturing/report.md) | E00/E03 | 二値特徴群を除くと OOF R² 0.55461 → 0.54489 |
+| [093 MoA](../competitions/093-lish-moa/report.md) | E01-r3・E02-r3・E05-r3 | 発現ブロックを除くと OOF Log Loss 0.035158 → 0.020693 |
 
 着眼点の出典: [1位本人投稿の許可転載](https://kaggler.com/2017/12/01/winners-solution-porto-seguro.html)。上位解法全体の再現ではない。

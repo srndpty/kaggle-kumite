@@ -9,6 +9,7 @@ import pandas as pd
 from model import load, predict, write_submission
 from train import DATA, ROOT, inference_sources, source_signature, verify_selection
 
+from kumite.kaggle_notebook import write_cpu_notebook
 from kumite.provenance import file_sha256
 
 SLUG = "commonlitreadabilityprize"
@@ -27,38 +28,14 @@ submission.to_csv('submission.csv', index=False)
 
 
 def build(output: Path, owner: str, trial: str, source: str) -> None:
-    output.mkdir(parents=True, exist_ok=True)
-    notebook = {
-        "cells": [
-            {
-                "cell_type": "code",
-                "id": "inference",
-                "metadata": {},
-                "source": source.splitlines(keepends=True),
-                "execution_count": None,
-                "outputs": [],
-            }
-        ],
-        "metadata": {
-            "kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"}
-        },
-        "nbformat": 4,
-        "nbformat_minor": 5,
-    }
     title = f"Kumite CommonLit {trial}"
-    metadata = {
-        "id": f"{owner}/{title.lower().replace(' ', '-')}",
-        "title": title,
-        "code_file": "submit.ipynb",
-        "language": "python",
-        "kernel_type": "notebook",
-        "is_private": True,
-        "enable_gpu": False,
-        "enable_internet": False,
-        "competition_sources": [SLUG],
-    }
-    for name, value in (("submit.ipynb", notebook), ("kernel-metadata.json", metadata)):
-        (output / name).write_text(json.dumps(value, indent=2), encoding="utf-8")
+    write_cpu_notebook(
+        output,
+        source,
+        kernel_id=f"{owner}/{title.lower().replace(' ', '-')}",
+        title=title,
+        competition=SLUG,
+    )
 
 
 def inference_source(sources: dict[str, str], trial: str, train_sha256: str) -> str:

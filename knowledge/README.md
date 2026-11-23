@@ -64,3 +64,4 @@
 | [K028](K028-evaluate-all-hierarchy-levels.md) | 再現 | #021 の点予測と #022 の分位点予測で、商品×店舗の損失と12階層平均の順位が逆転した |
 | [K029](K029-round-count-quantiles.md) | 仮説 | #022 の商品×店舗で分位点を丸めると WSPL が 0.30587 → 0.29824、50%区間の被覆率が 58.13% → 73.22% |
 | [K030](K030-missing-value-ablation.md) | 仮説 | #010 の LightGBM では、数値欠損の分岐・指示・カテゴリ欠損の独立化で明確な改善なし |
+| [K031](K031-absolute-loss-for-mae.md) | 仮説 | #014 の時系列 CV で LightGBM の学習損失を二乗誤差から絶対誤差に変えると MAE が 0.07284 → 0.06913 |

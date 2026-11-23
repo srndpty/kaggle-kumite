@@ -1,0 +1,38 @@
+{
+  "selected": "E04",
+  "data_hash": "f0b7f200bf19d953705e64f7f275d5de0a7a2183bcaa4a042770b7cd4ebbcdb0",
+  "split_version": "zillow-time-v1",
+  "split_hash": "b408ad0e788b7433f3dcc992628e8a4c7c74eca4cb66399702d12d371e3c4176",
+  "candidates": {
+    "E04": {
+      "oof_score": 0.06909433442298728,
+      "oof_sha256": "497c5b207f21712186e4b64cf5699f2f7930eb60791b400fe267a77e02940334",
+      "split_roles_sha256": "b33eaf1fdba1a4b7f2f63aad935e922be52916b3376752518c8d52bd631cff4e"
+    },
+    "E02": {
+      "oof_score": 0.069127063872302,
+      "oof_sha256": "981d86fe1b62203b46a1388dc149a03a9cfbae0e56e70e723f69216b40fe1d80",
+      "split_roles_sha256": "b33eaf1fdba1a4b7f2f63aad935e922be52916b3376752518c8d52bd631cff4e"
+    },
+    "median": {
+      "oof_score": 0.06945726007389139,
+      "oof_sha256": "6739738291ed9df44e314bb25db5cfe1baf0882b974ef04fe8b7443ef6e38c58",
+      "split_roles_sha256": "b33eaf1fdba1a4b7f2f63aad935e922be52916b3376752518c8d52bd631cff4e"
+    },
+    "E03": {
+      "oof_score": 0.07076967135110522,
+      "oof_sha256": "900c053d22a728748cddf11a1204257eb9eb8f10ce650aa264cd6f2fe7ca77cc",
+      "split_roles_sha256": "b33eaf1fdba1a4b7f2f63aad935e922be52916b3376752518c8d52bd631cff4e"
+    },
+    "E01": {
+      "oof_score": 0.07284124870754599,
+      "oof_sha256": "4a33a713137636140b397d523a8b4e1f1ccc66887dcf6eac77b31ae67af4d792",
+      "split_roles_sha256": "b33eaf1fdba1a4b7f2f63aad935e922be52916b3376752518c8d52bd631cff4e"
+    },
+    "E05": {
+      "oof_score": 0.07288005992974632,
+      "oof_sha256": "127c0528f291482d5d2ccf65ed67268a00e55fc29586150c9d07d8edf1abc680",
+      "split_roles_sha256": "b33eaf1fdba1a4b7f2f63aad935e922be52916b3376752518c8d52bd631cff4e"
+    }
+  }
+}

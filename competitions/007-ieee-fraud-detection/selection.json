@@ -1,0 +1,59 @@
+{
+  "selected": "E05",
+  "data_hash": "47b3b0f06d218cd28d7121adc10e8ba052b1908f802459d9ba0447764f0e4a16",
+  "split_hash": "e59d8c2d6649b736d7fe2f5de44b6e5b57c23c1705d5392363dc1d503061b94a",
+  "split_version": "time-v1-28d-gap30d",
+  "small_delta": 0.002,
+  "excluded": {
+    "E02": "seed 43 で改善しない",
+    "E03": "seed 43 で改善しない",
+    "E04": "seed 43 で改善しない"
+  },
+  "candidates": {
+    "E01": {
+      "mean_auc": 0.8769394804865293,
+      "seed": 42,
+      "oof_sha256": "0d3cebbc30de09f92d8e79b54bedd41dc600b2544891b9a4df805ade4143fe12"
+    },
+    "E02": {
+      "mean_auc": 0.8789116032991829,
+      "seed": 42,
+      "oof_sha256": "aa176414bc7d985d60f4c5a81ee2abb02c4a748ca1b26a1a76a2dbb9fa0d3982"
+    },
+    "E03": {
+      "mean_auc": 0.8777547451412056,
+      "seed": 42,
+      "oof_sha256": "621b5c947d01dacb71bb8cb0b96dba18d355e49885c3c87858a09fa26d96b30a"
+    },
+    "E04": {
+      "mean_auc": 0.8784073644621652,
+      "seed": 42,
+      "oof_sha256": "d8052692b0177840796351ba614e01bb9a3b298bf86eaae3452b4ac9881dc3ab"
+    },
+    "E05": {
+      "mean_auc": 0.880242360366949,
+      "seed": 42,
+      "oof_sha256": "b0e8e1531e766f8a30aa2435dd58bfd33de84dda74a73f471b36219bc80bf24c"
+    },
+    "E01-s43": {
+      "mean_auc": 0.8808648311640014,
+      "seed": 43,
+      "oof_sha256": "77d6cb5213b58d292f52087621e83915fad9b57c83dfc3b83c88b00e0d720ce8"
+    },
+    "E02-s43": {
+      "mean_auc": 0.8805276189353651,
+      "seed": 43,
+      "oof_sha256": "7a0156a1f7807c1d69f37020864422e053283e787e219c977a660663219f602b"
+    },
+    "E03-s43": {
+      "mean_auc": 0.8789282699799373,
+      "seed": 43,
+      "oof_sha256": "838a765138d84fa1b2b45df6008c160638cce8b075644a65964c6417ccee6043"
+    },
+    "E04-s43": {
+      "mean_auc": 0.8798001920479604,
+      "seed": 43,
+      "oof_sha256": "f8b7b8bdea73581105bf5c60b3805e86f251ecbda682adb1af849773e7851d28"
+    }
+  }
+}

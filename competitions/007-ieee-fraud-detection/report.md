@@ -18,7 +18,7 @@ E03 の短期件数特徴では、完全なカードキーを持つ評価行の2
 
 ## 上位解法と追試
 
-- 1位チームは独立に特徴を作り、CatBoost・LightGBM・XGBoost をブレンドした。特徴と学習器の両方を変えて予測の多様性を得ている。 [Kaggle 掲載の本人 writeup を編集した事例](https://www.kaggle.com/solution-write-up-documentation)
+- 1位チームは独立に特徴を作り、CatBoost・LightGBM・XGBoost をブレンドした。特徴と学習器の両方を変えて予測の多様性を得ている。 [Chris Deotte 本人の Kaggle writeup](https://www.kaggle.com/competitions/ieee-fraud-detection/discussion/111284) · [Deotte 共著の解説](https://developer.nvidia.com/blog/leveraging-machine-learning-to-detect-fraud-tips-to-developing-a-winning-kaggle-solution/)
 - 2位チームの CPMP は推定した取引主体ごとに、取引間隔や金額の平均・分散に相当する統計を作った。教師ありの主体別集約も加えている。 [CPMP 本人の writeup](https://www.kaggle.com/competitions/ieee-fraud-detection/writeups/2-uncles-and-3-puppies-2nd-solution-cpmp-view)
 - 10位チームは経過日と匿名列 D1 からカードの起点日を推定し、複数のカード関連列・住所・メールと合わせて取引をグループ化した。 [チームの writeup](https://www.kaggle.com/competitions/ieee-fraud-detection/writeups/m5-10th-solution-and-code) · [公開コード](https://github.com/jxzly/Kaggle-IEEE-CIS-Fraud-Detection-2019)
 
@@ -48,7 +48,7 @@ seed 43 の E01 は平均 0.880865。E02 は 0.880528、E03 は 0.878928、E04 �
 | cutoff 時点の未知カードキー | 4,107 | 3.82% | 0.91420 | 0.91947 |
 | カードキー欠損 | 2,964 | 1.75% | 0.79948 | 0.78727 |
 
-金額比率を計算できる既知キーの集団で改善した。未知キーでは金額比率が欠損でもモデル全体の分岐が変わるため、同集団の改善を金額比率そのものの効果とは解釈できない。キー欠損集団では悪化し、不正例は52件だった。学習行では取引直前までを参照できるため、評価時の30日以上古い履歴との違いは残る。学習側でも参照履歴の古さを合わせる効果は未検証。
+金額比率を計算できる既知キーの集団で改善した。未知キーでは金額比率が欠損でもモデル全体の分岐が変わるため、同集団の改善を金額比率そのものの効果とは解釈できない。キー欠損集団では悪化し、不正例は52件だった。学習行では取引直前までを参照できるため、評価時の30日以上古い履歴との違いは残る。学習行でも取引の30日前までの履歴に制限した特徴は、E05 との追補比較に残す。E05 の seed 43 での改善幅も追補実験の対象とする。
 
 ## 外部評価
 

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from dataset import CARD, ID, TARGET, TIME, check_ids, features, load, make_splits
+from dataset import CARD, ID, TARGET, TIME, check_ids, data_files, features, load, make_splits
 from select_run import selection
 from sklearn.metrics import roc_auc_score
 
@@ -67,11 +67,6 @@ def run(
 ) -> None:
     store = RunStore(root)
     data = root / "data"
-    paths = sorted(
-        data / f"{part}_{kind}.csv"
-        for part in ("train", "test")
-        for kind in ("transaction", "identity")
-    )
     with store.reserve(run_id) as reservation:
         start = time.perf_counter()
         train = load(data, "train", trial == "identity")
@@ -80,7 +75,7 @@ def run(
             if source
             else pd.read_csv(data / "test_transaction.csv", usecols=[TIME])
         )
-        data_hash = files_sha256(paths)
+        data_hash = files_sha256(data_files(data))
         splits, version = make_splits(train, test)
         roles = split_roles(len(train), splits)
         split_hash = array_sha256(roles)

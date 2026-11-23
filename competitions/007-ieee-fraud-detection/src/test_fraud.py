@@ -1,5 +1,6 @@
 """時系列分割・特徴・提出時に守る条件。"""
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -18,6 +19,7 @@ from dataset import (
 from select_run import selection
 from train import run, submission
 
+from kumite.provenance import file_sha256
 from kumite.runs import RunStore
 
 
@@ -106,12 +108,41 @@ def test_run_and_refit_with_synthetic_data(tmp_path: Path) -> None:
     query[[ID]].to_csv(data / "test_identity.csv", index=False)
     query[[ID]].assign(isFraud=0).iloc[::-1].to_csv(data / "sample_submission.csv", index=False)
     run(tmp_path, "E01", "base", 42)
-    selected = selection(RunStore(tmp_path), ["E01"])
+    store = RunStore(tmp_path)
+    selected = selection(store, ["E01"])
     assert selected["selected"] == "E01"
     run(tmp_path, "final-v1", "base", 42, "E01")
     saved = pd.read_csv(tmp_path / "outputs" / "runs" / "final-v1" / "submission.csv")
     assert saved[ID].tolist() == [301, 300]
     assert saved[TARGET].between(0, 1).all()
+
+    log = store.log_path.read_text(encoding="utf-8")
+    lines = log.splitlines()
+    record = json.loads(lines[0])
+    for changes, error in (
+        ({"fold_scores": [0.0, 0.0, 0.0]}, "保存済み AUC"),
+        ({"oof_score": 0.0}, "保存済み AUC"),
+        ({"data_hash": "foreign"}, "データハッシュ"),
+        ({"params": {**record["params"], "seed": 43}}, "比較可能"),
+    ):
+        lines[0] = json.dumps({**record, **changes})
+        store.log_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        with pytest.raises(ValueError, match=error):
+            selection(store, ["E01"])
+
+    store.log_path.write_text(log, encoding="utf-8")
+    oof = store.load_array("E01", "oof.npy")
+    roles = store.load_array("E01", "split_roles.npy")
+    first, second = np.flatnonzero(roles[0] == 2)[:2]
+    assert oof[first] != oof[second]
+    oof[[first, second]] = oof[[second, first]]
+    artifact = store.runs_dir / "E01" / "oof.npy"
+    np.save(artifact, oof)
+    record["artifacts"]["oof.npy"] = file_sha256(artifact)
+    lines[0] = json.dumps(record)
+    store.log_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="保存済み AUC"):
+        selection(store, ["E01"])
 
 
 def test_relative_amount_uses_only_amounts_before_query_time() -> None:

@@ -13,6 +13,16 @@ TIME = "TransactionDT"
 TARGET = "isFraud"
 CARD = ["card1", "card2"]
 DAY = 86400
+
+
+def data_files(data: Path) -> list[Path]:
+    return sorted(
+        data / f"{part}_{kind}.csv"
+        for part in ("train", "test")
+        for kind in ("transaction", "identity")
+    )
+
+
 CATEGORICAL = {
     "ProductCD",
     "addr1",

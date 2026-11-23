@@ -31,7 +31,7 @@ CV で選んだ E04 の Late Submission は Public 0.674、Private 0.705。
 
 ## 検証と再現
 
-`commonlit-group-v1` は、正規化本文の一致、文字5-gram 集合の Jaccard ≥ 0.8、または非ルート出典 URL の一致を辺とする連結成分で抜粋を束ねる。2,831グループ中3グループは2件。目的値を五分位で層化し、seed 42 の5分割で全件を一度ずつ検証する。fold の件数は 567・567・567・567・566。
+`commonlit-group-v1` は、正規化本文の一致、文字5-gram 集合の Jaccard ≥ 0.8、または非ルート出典 URL の一致を辺とする連結成分で抜粋を束ねる。2,831グループ中3グループは2件。出典 URL が欠損し、本文の類似度も閾値未満の抜粋は、同じ作品でも別 fold に入る可能性がある。目的値を五分位で層化し、seed 42 の5分割で全件を一度ずつ検証する。fold の件数は 567・567・567・567・566。
 
 特徴は本文から作成し、語彙・IDF・数値特徴の標準化は学習 fold に限定する。出典 URL は分割用、ID は照合用。ライセンス・`standard_error`・公開済みの完全版 CLEAR Corpus は使用対象外。出典が判明する範囲は限られ、公式テストの現代文比率の高さは CV で再現していない。
 
@@ -50,13 +50,15 @@ uv run python "$d/src/train.py" select @runs --output "$d/outputs/selection-r2.j
 uv run python "$d/src/train.py" final "$d/outputs/selection-r2.json" "$d/outputs/final-r2.csv"
 ```
 
-`selection.json` は初回の選定記録。Kaggle では同じ予測コードを組み込む。元のモデルの提出手順は次のとおり。再実行時は push が返すバージョンを使う。
+`selection.json` は初回の選定記録。Notebook の生成時に候補 run の評価契約・学習設定・分割と OOF RMSE を照合し、選定 run の予測ソース署名を検証する。生成した Notebook を公式配布データでローカル実行し、通常の予測経路と CSV が一致したものを出力する。Kaggle 上でも `train.csv` のハッシュを検証する。出力先の `evidence.json` に run ID、コード版、データ・分割・Notebook のハッシュを保存する。
 
 ```powershell
 $owner = '<Kaggle username>'
-$trial = (Get-Content "$d/selection.json" -Raw | ConvertFrom-Json).trial
-uv run python "$d/src/notebook.py" $owner "$d/outputs/kaggle/$trial" --trial $trial
-kaggle kernels push -p "$d/outputs/kaggle/$trial"
+$export = "$d/outputs/kaggle/selected"
+uv run python "$d/src/notebook.py" $owner $export --selection "$d/selection.json"
+if ($LASTEXITCODE -ne 0) { throw 'Notebook の照合に失敗' }
+$trial = (Get-Content "$export/evidence.json" -Raw | ConvertFrom-Json).trial
+kaggle kernels push -p $export
 $kernel = "$owner/kumite-commonlit-$($trial.ToLowerInvariant())"
 kaggle kernels status $kernel
 # COMPLETE の後に、push が返したバージョンで実行

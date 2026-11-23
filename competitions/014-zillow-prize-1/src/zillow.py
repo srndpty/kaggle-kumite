@@ -30,6 +30,12 @@ NUMERIC = (
     "landtaxvaluedollarcnt",
     "taxamount",
 )
+TAX_FEATURES = (
+    "structuretaxvaluedollarcnt",
+    "taxvaluedollarcnt",
+    "landtaxvaluedollarcnt",
+    "taxamount",
+)
 CATEGORICAL = ("fips", "propertylandusetypeid", "regionidcity", "regionidzip")
 FEATURES = (*NUMERIC, *CATEGORICAL, "month")
 ID = "parcelid"
@@ -65,6 +71,16 @@ def load_train() -> pd.DataFrame:
         frames.append(join_properties(rows, properties, year))
         del properties
     return pd.concat(frames, ignore_index=True)
+
+
+def check_transaction_order(train: pd.DataFrame) -> None:
+    columns = [ID, DATE, TARGET]
+    expected = pd.concat(
+        [pd.read_csv(path, usecols=columns, parse_dates=[DATE]) for path in TRANSACTIONS.values()],
+        ignore_index=True,
+    )
+    if not train[columns].reset_index(drop=True).equals(expected[columns]):
+        raise ValueError("取引行の順序または値が公式 CSV と一致しません")
 
 
 def time_splits(dates: pd.Series) -> list[Split]:

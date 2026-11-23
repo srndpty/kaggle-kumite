@@ -29,12 +29,18 @@ CV で E04 を選定した。OOF MAE は 0.06909、Kaggle Public は 0.06507、P
 
 ## 検証と再現
 
-`zillow-time-v1` は2017年1–2月、3–4月、5–6月、7–8月の4窓。
+`zillow-time-v1` は、年別の物件スナップショットを利用できる条件で取引ラベルを時系列検証する評価契約。
+検証期間は2017年1–2月、3–4月、5–6月、7–8月の4窓。
 各窓の開始日より前の取引で学習し、4窓を合わせた72,812件の MAE で選定する。
 各取引は同年の物件スナップショットと結合する。カテゴリ辞書は学習行だけから作り、物件 ID は照合に使う。
 2017年の物件スナップショットは10月公開のため、取引ラベルの締切は再現できるが、各 CV 時点での物件属性の可用性には制約がある。
+感度分析では、税額と建物・土地・合計評価額の4列を除いた同じ窓で E02 と E04 を再計測した。
+既存の CV と外部採点を採用判断の記録とする。
 
 最終予測は各年10月15日より前の公式取引で学習し、その年の物件スナップショットから10〜12月分を生成する。
+提出雛形の物件 ID が年別スナップショットに存在しない場合は、対象月以外の属性を欠損として予測し、年ごとの件数を表示する。
+選定・誤差分析・最終提出では公式 CSV、取引行順、分割、学習設定と OOF を照合し、OOF から MAE を再計算する。
+最終提出では全候補から選定記録を再構成し、一致した選定 JSON を成果物に保存する。
 
 ```powershell
 dev download 14
@@ -49,6 +55,8 @@ dev submit 14 competitions/014-zillow-prize-1/outputs/runs/baseline-v1/submissio
 uv run python $train select median E01 E02 E03 E04 E05
 uv run python $train analyze E02 E04
 uv run python $train analyze E01 E04
+uv run python $train cv E02-no-tax E04-no-tax
+uv run python $train analyze E02-no-tax E04-no-tax
 uv run python $train final final-v1
 dev submit 14 competitions/014-zillow-prize-1/outputs/runs/final-v1/submission.csv -m "E04 CV-selected final"
 ```
@@ -61,5 +69,8 @@ uv run python $train cv E04 --run-id E04-r2
 uv run python $train select median E01 E02 E03 E04-r2 E05 --output $selection
 uv run python $train final final-r2 --selection $selection
 ```
+
+選定には候補 run のローカル成果物が必要。別環境では候補を再計測し、
+実際に生成した run ID を `select` に渡して新しい選定 JSON を作る。
 
 [レポート](report.md) · [実験ログ](experiments.jsonl) · [CV 選定](selection.json)

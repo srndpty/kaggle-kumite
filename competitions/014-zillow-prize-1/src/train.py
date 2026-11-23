@@ -18,8 +18,10 @@ from zillow import (
     ROOT,
     SAMPLE,
     TARGET,
+    TAX_FEATURES,
     TRANSACTIONS,
     category_types,
+    check_transaction_order,
     describe,
     feature_frame,
     load_train,
@@ -30,6 +32,7 @@ from zillow import (
 from kumite.bootstrap import group_bootstrap_diff
 from kumite.crossfit import FoldOutput, cross_fit_splits, split_roles
 from kumite.cv_run import Evaluation, Trial, publish_cv_run
+from kumite.experiments import ExperimentRecord
 from kumite.gbdt import fit_lightgbm_fixed
 from kumite.paths import REPO_ROOT
 from kumite.provenance import array_sha256, code_version, files_sha256, peak_memory_mb
@@ -55,7 +58,18 @@ TRIALS = {
     "E03": ("学習ラベルの両端を抑えると全体 MAE が下がる", "regression"),
     "E04": ("直近の取引を重視すると後半の検証窓で改善する", "regression_l1"),
     "E05": ("郵便番号ごとの平均評価額を追加すると全体 MAE が下がる", "regression"),
+    "E02-no-tax": ("税額・評価額を外した絶対誤差回帰", "regression_l1"),
+    "E04-no-tax": ("税額・評価額を外した条件で直近重みを検証", "regression_l1"),
 }
+SPLIT_VERSION = "zillow-time-v1"
+
+
+def trial_params(trial: str) -> dict[str, Any]:
+    return {**SETTINGS, "trial": trial, "objective": TRIALS[trial][1]}
+
+
+def feature_version(trial: str) -> str:
+    return "zillow-properties-v1-no-tax" if trial.endswith("-no-tax") else "zillow-properties-v1"
 
 
 def mae(y: np.ndarray, pred: np.ndarray) -> float:
@@ -77,7 +91,7 @@ def fit_predictor(train: pd.DataFrame, trial: str, cutoff: pd.Timestamp):
         return lambda rows, month=None: np.full(len(rows), value, dtype=np.float64)
     categories = category_types(train)
     weight = None
-    if trial == "E04":
+    if trial in ("E04", "E04-no-tax"):
         days = (cutoff - train[DATE]).dt.days.to_numpy(dtype=np.float64)
         weight = np.exp2(-days / 365)
     params = {**SETTINGS, "objective": TRIALS[trial][1]}
@@ -85,6 +99,8 @@ def fit_predictor(train: pd.DataFrame, trial: str, cutoff: pd.Timestamp):
 
     def features(rows: pd.DataFrame, month: int | None = None) -> pd.DataFrame:
         frame = feature_frame(rows, categories, month)
+        if trial.endswith("-no-tax"):
+            frame = frame.drop(columns=list(TAX_FEATURES))
         if zip_value is not None:
             frame["zip_mean_tax_value"] = rows["regionidzip"].map(zip_value)
         return frame
@@ -114,7 +130,7 @@ def cv(train: pd.DataFrame, trials: list[str], run_id: str | None) -> None:
     if not np.array_equal((roles == 2).sum(axis=0), expected.to_numpy()):
         raise ValueError("検証対象の所属が一致しません")
     evaluation = Evaluation(
-        "14", "MAE", False, mae, data_hash(), "zillow-time-v1", array_sha256(roles), 42
+        "14", "MAE", False, mae, data_hash(), SPLIT_VERSION, array_sha256(roles), 42
     )
     for name in trials:
         with STORE.reserve(run_id or name) as reservation:
@@ -131,8 +147,8 @@ def cv(train: pd.DataFrame, trials: list[str], run_id: str | None) -> None:
                 hypothesis,
                 hypothesis,
                 model,
-                "zillow-properties-v1",
-                {**SETTINGS, "trial": name, "objective": model},
+                feature_version(name),
+                trial_params(name),
             )
             publish_cv_run(
                 STORE,
@@ -148,31 +164,110 @@ def cv(train: pd.DataFrame, trials: list[str], run_id: str | None) -> None:
             )
 
 
-def select(run_ids: list[str], output: Path) -> None:
-    records = [STORE.record(run_id) for run_id in run_ids]
-    first = records[0]
-    if any(
-        r.data_hash != first.data_hash
-        or r.split_version != first.split_version
-        or r.split_hash != first.split_hash
-        or r.metric != "MAE"
-        or r.params.get("trial") not in TRIALS
-        for r in records
-    ):
-        raise ValueError("同じデータ・分割の Zillow CV run を指定してください")
-    ordered = sorted(records, key=lambda r: (r.oof_score, list(TRIALS).index(r.params["trial"])))
-    selected = ordered[0]
-    payload = {"selected": selected.run_id, "candidates": {r.run_id: r.oof_score for r in ordered}}
+def audit_runs(
+    train: pd.DataFrame,
+    run_ids: list[str],
+) -> dict[str, tuple[ExperimentRecord, np.ndarray]]:
+    check_transaction_order(train)
+    inputs = data_hash()
+    splits = time_splits(train[DATE])
+    roles = split_roles(len(train), splits)
+    split_hash = array_sha256(roles)
+    valid = (roles == 2).any(axis=0)
+    expected = train[DATE].ge("2017-01-01") & train[DATE].lt("2017-09-01")
+    if not np.array_equal(valid, expected.to_numpy()):
+        raise ValueError("検証対象行が固定期間と一致しません")
+    y = train[TARGET].to_numpy()
+    runs = {}
+    for run_id in run_ids:
+        record = STORE.record(run_id)
+        trial = record.params.get("trial")
+        if (
+            trial not in TRIALS
+            or record.params != trial_params(trial)
+            or record.model != TRIALS[trial][1]
+            or record.data_version != feature_version(trial)
+            or record.competition_id != "14"
+            or record.metric != "MAE"
+            or record.greater_is_better
+            or record.seed != SETTINGS["seed"]
+            or record.data_hash != inputs
+            or record.split_version != SPLIT_VERSION
+            or record.split_hash != split_hash
+        ):
+            raise ValueError(f"{run_id} の入力データ・分割・学習設定が一致しません")
+        saved_roles = STORE.load_array(run_id, "split_roles.npy")
+        if array_sha256(saved_roles) != split_hash:
+            raise ValueError(f"{run_id} の分割成果物が一致しません")
+        oof = STORE.load_array(run_id, "oof.npy")
+        if (
+            oof.shape != y.shape
+            or not np.isfinite(oof[valid]).all()
+            or not np.isnan(oof[~valid]).all()
+        ):
+            raise ValueError(f"{run_id} の OOF 対象行が一致しません")
+        fold_scores = [mae(y[indices], oof[indices]) for _, indices in splits]
+        if mae(y[valid], oof[valid]) != record.oof_score or fold_scores != record.fold_scores:
+            raise ValueError(f"{run_id} の保存済み MAE が OOF の再計算と一致しません")
+        runs[run_id] = (record, oof)
+    if len({record.data_version for record, _ in runs.values()}) != 1:
+        raise ValueError("同じ特徴量系列の Zillow CV run を指定してください")
+    return runs
+
+
+def selection_payload(records: list[ExperimentRecord]) -> dict[str, Any]:
+    ordered = sorted(
+        records, key=lambda r: (r.oof_score, list(TRIALS).index(r.params["trial"]), r.run_id)
+    )
+    best = ordered[0]
+    return {
+        "selected": best.run_id,
+        "data_hash": best.data_hash,
+        "split_version": best.split_version,
+        "split_hash": best.split_hash,
+        "candidates": {
+            r.run_id: {
+                "oof_score": r.oof_score,
+                "oof_sha256": r.artifacts["oof.npy"],
+                "split_roles_sha256": r.artifacts["split_roles.npy"],
+            }
+            for r in ordered
+        },
+    }
+
+
+def select(train: pd.DataFrame, run_ids: list[str], output: Path) -> None:
+    audited = audit_runs(train, run_ids)
+    payload = selection_payload([record for record, _ in audited.values()])
     with output.open("x", encoding="utf-8") as file:
         json.dump(payload, file, ensure_ascii=False, indent=2)
         file.write("\n")
     print(payload)
 
 
-def final(train: pd.DataFrame, run_id: str, source: str, selection: Path | None) -> None:
-    record = STORE.record(source)
-    if record.data_hash != data_hash() or record.params.get("trial") not in TRIALS:
-        raise ValueError("入力データまたは CV run が一致しません")
+def verify_selection(train: pd.DataFrame, contents: bytes) -> ExperimentRecord:
+    saved = json.loads(contents)
+    if (
+        not isinstance(saved, dict)
+        or not isinstance(saved.get("candidates"), dict)
+        or not saved["candidates"]
+    ):
+        raise ValueError("選定記録の候補がありません")
+    audited = audit_runs(train, list(saved["candidates"]))
+    expected = selection_payload([record for record, _ in audited.values()])
+    if saved != expected:
+        raise ValueError("選定記録が CV 成果物と一致しません")
+    return audited[expected["selected"]][0]
+
+
+def final(train: pd.DataFrame, run_id: str, source: str | None, selection: Path | None) -> None:
+    contents = selection.read_bytes() if selection is not None else None
+    if contents is not None:
+        record = verify_selection(train, contents)
+    elif source is not None:
+        record = audit_runs(train, [source])[source][0]
+    else:
+        raise ValueError("選定記録または CV run を指定してください")
     sample = pd.read_csv(SAMPLE, usecols=["ParcelId", *MONTHS])
     ids = sample["ParcelId"]
     if ids.empty or ids.isna().any() or not ids.is_unique:
@@ -185,6 +280,7 @@ def final(train: pd.DataFrame, run_id: str, source: str, selection: Path | None)
                 train.loc[train[DATE].lt(cutoff)], record.params["trial"], cutoff
             )
             properties = read_properties(year)
+            print(f"{year} 年の物件 ID 未結合: {(~ids.isin(properties.index)).sum()} 件")
             cols = [month for month in MONTHS if month.startswith(str(year))]
             for col in cols:
                 sample[col] = np.nan
@@ -205,8 +301,8 @@ def final(train: pd.DataFrame, run_id: str, source: str, selection: Path | None)
 
         def write(out: Path) -> None:
             sample.to_csv(out / "submission.csv", index=False, float_format="%.8f")
-            if selection is not None:
-                (out / "selection.json").write_bytes(selection.read_bytes())
+            if contents is not None:
+                (out / "selection.json").write_bytes(contents)
 
         final_record = replace(
             record,
@@ -216,7 +312,7 @@ def final(train: pd.DataFrame, run_id: str, source: str, selection: Path | None)
             code_version=code_version(REPO_ROOT),
             runtime_sec=time.perf_counter() - start,
             peak_memory_mb=peak_memory_mb(),
-            inputs=STORE.input_hashes(source, "oof.npy", "split_roles.npy"),
+            inputs=STORE.input_hashes(record.run_id, "oof.npy", "split_roles.npy"),
             artifacts={},
             late_score=None,
         )
@@ -224,11 +320,9 @@ def final(train: pd.DataFrame, run_id: str, source: str, selection: Path | None)
 
 
 def analyze(train: pd.DataFrame, base: str, other: str) -> None:
-    base_pred = STORE.load_array(base, "oof.npy")
-    other_pred = STORE.load_array(other, "oof.npy")
+    audited = audit_runs(train, [base, other])
+    base_pred, other_pred = audited[base][1], audited[other][1]
     valid = np.isfinite(base_pred)
-    if not np.array_equal(valid, np.isfinite(other_pred)):
-        raise ValueError("OOF 対象行が一致しません")
     rows = train.loc[valid].copy()
     actual = rows[TARGET].to_numpy()
     rows["base"] = np.abs(actual - base_pred[valid])
@@ -268,13 +362,12 @@ def main() -> None:
     analyze_parser.add_argument("base")
     analyze_parser.add_argument("other")
     args = parser.parse_args()
-    if args.command == "select":
-        select(args.run_ids, args.output)
-        return
     if args.command == "cv" and args.run_id and len(args.trials) != 1:
         parser.error("--run-id は単一実験を指定する場合だけ使用できます")
     train = load_train()
-    if args.command == "eda":
+    if args.command == "select":
+        select(train, args.run_ids, args.output)
+    elif args.command == "eda":
         describe(train)
     elif args.command == "cv":
         cv(train, args.trials, args.run_id)
@@ -282,12 +375,7 @@ def main() -> None:
         analyze(train, args.base, args.other)
     else:
         selection = None if args.source else args.selection or DEFAULT_SELECTION
-        source = (
-            args.source
-            if selection is None
-            else json.loads(selection.read_text(encoding="utf-8"))["selected"]
-        )
-        final(train, args.run_id, source, selection)
+        final(train, args.run_id, args.source, selection)
 
 
 if __name__ == "__main__":

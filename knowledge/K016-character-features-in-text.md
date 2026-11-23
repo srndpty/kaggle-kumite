@@ -17,11 +17,15 @@ seed43でもfold平均macro AUCは0.979964→0.985175（+0.005211）。2つの�
 
 #042 の英語コメントでは、単語 unigram に文字 3〜5-gram を追加すると、全体 AUC は 0.91659 から 0.92935、属性別 AUC を含む合成スコアは 0.85835 から 0.87788 に上がった。選定後にローカル採点した公式 Private データでも、合成スコアは 0.85897 から 0.87896 に上がった。単語 bigram を個別の TF-IDF 特徴群として足した E02 は、OOF 合成スコアが 0.82938 に下がった。
 
+#049 CommonLit の読みやすさ回帰では、単語 unigram TF-IDF に語内の文字 3〜5-gram を追加すると、OOF RMSE が 0.72984 から 0.70539 に下がった。学習語彙のカバー率が最も低い四分位の抜粋では 0.80305 → 0.76922、最も高い四分位でも 0.70500 → 0.67761 だった。
+
 ## 適用条件
 
 英語のWikipediaコメント・6ラベル分類。文面重複をグループ化した多ラベル層化3分割。語彙・IDFは学習foldのみでfit。min_df=3、単語最大10万・文字最大15万、sublinear_tf、各行列のL2正規化、LRのC=1。
 
 #048 は英語ツイートの範囲抽出で、本文の重複を束ねた5分割。語と感情の二値特徴に語内 n-gram の二値特徴を追加した。
+
+#049 は英語の文学作品の抜粋2,834件を、本文の類似と出典 URL でグループ化した5分割。単語と文字はそれぞれ L2 正規化し、Ridge の正則化係数を固定した。
 
 ## 未検証
 
@@ -39,3 +43,4 @@ seed43でもfold平均macro AUCは0.979964→0.985175（+0.005211）。2つの�
 | 同上 | E01-s43→E03-s43 | seed43: +0.005211 |
 | [#048 Tweet Sentiment Extraction](../competitions/048-tweet-sentiment-extraction/report.md) | E01 → E02 | OOF Jaccard +0.00707、本文グループ単位の95%区間 [0.00502, 0.00898] |
 | [#042 Jigsaw Unintended Bias](../competitions/042-jigsaw-unintended-bias-in-toxicity-classification/report.md) | E01 → E03-r2 | 全体 OOF AUC +0.01276、属性別 AUC を含む合成スコア +0.01954 |
+| [#049 CommonLit Readability Prize](../competitions/049-commonlitreadabilityprize/report.md) | E01 → E02 | OOF RMSE −0.02445、グループ単位の95%区間 [−0.02987, −0.01947] |

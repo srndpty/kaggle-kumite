@@ -51,11 +51,18 @@ def treated(frame: pd.DataFrame) -> np.ndarray:
     return status.eq("trt_cp").to_numpy(dtype=bool)
 
 
-def features(frame: pd.DataFrame, trial: str) -> np.ndarray:
+def feature_columns(frame: pd.DataFrame, trial: str) -> list[str]:
     prefixes = ("c-",) if trial == "E02" else ("g-", "c-")
-    columns = [column for column in frame.columns if column.startswith(prefixes)]
+    columns = sorted(
+        (column for column in frame.columns if column.startswith(prefixes)),
+        key=lambda column: (column[0] != "g", int(column[2:])),
+    )
+    return [*columns, "cp_time"]
+
+
+def features(frame: pd.DataFrame, columns: list[str]) -> np.ndarray:
     dose = frame["cp_dose"].map({"D1": 0, "D2": 1}).to_numpy(dtype=float)
-    values = np.column_stack([frame[[*columns, "cp_time"]].to_numpy(dtype=float), dose])
+    values = np.column_stack([frame[columns].to_numpy(dtype=float), dose])
     if not np.isfinite(values).all():
         raise ValueError("特徴量に欠損または非有限値があります")
     return values
@@ -118,12 +125,13 @@ def project(x: np.ndarray, state: dict[str, np.ndarray]) -> np.ndarray:
 
 def fit_model(train: pd.DataFrame, y: np.ndarray, trial: str) -> dict[str, np.ndarray]:
     training = treated(train)
-    x = features(train.loc[training], trial)
+    columns = feature_columns(train, trial)
+    x = features(train.loc[training], columns)
     label = y[training]
     prior = (label.sum(axis=0) + 0.5) / (len(label) + 1)
     state = {
         "trial": np.array(trial),
-        "columns": np.asarray(train.columns, dtype=str),
+        "columns": np.asarray(columns, dtype=str),
         "prior": prior,
     }
     with threadpool_limits(limits=2):
@@ -133,12 +141,8 @@ def fit_model(train: pd.DataFrame, y: np.ndarray, trial: str) -> dict[str, np.nd
         )
         x = np.asarray(scale.transform(x))
         if trial == "E05":
-            genes = [
-                column.startswith("g-")
-                for column in train.columns
-                if column.startswith(("g-", "c-"))
-            ]
-            gene_mask = np.array([*genes, False, False])
+            genes = [column.startswith("g-") for column in columns]
+            gene_mask = np.array([*genes, False])
             pca = PCA(n_components=64, svd_solver="randomized", random_state=SEED)
             pca.fit(x[:, gene_mask])
             state.update(
@@ -158,7 +162,7 @@ def apply_model(query: pd.DataFrame, state: dict[str, np.ndarray]) -> np.ndarray
     result = np.zeros((len(query), len(prior)))
     if not inference.any():
         return result
-    raw = features(query.loc[inference, state["columns"]], trial)
+    raw = features(query.loc[inference], state["columns"].tolist())
     with threadpool_limits(limits=2):
         x = (raw - state["mean"]) / state["scale"]
         if trial == "E05":

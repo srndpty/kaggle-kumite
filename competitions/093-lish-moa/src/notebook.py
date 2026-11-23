@@ -3,6 +3,9 @@
 import argparse
 import json
 from base64 import b64encode
+from collections.abc import Mapping
+from hashlib import sha256
+from io import BytesIO
 from pathlib import Path
 from textwrap import wrap
 from uuid import uuid4
@@ -65,18 +68,30 @@ def build(output: Path, owner: str, trial: str, source: str) -> None:
         (output / name).write_text(json.dumps(value, indent=2), encoding="utf-8")
 
 
+def verified_weights(
+    expected: Path, contract: Mapping[str, object]
+) -> tuple[bytes, dict[str, object]]:
+    manifest = json.loads(expected.with_suffix(".fit.json").read_text(encoding="utf-8"))
+    weights = expected.with_suffix(".npz").read_bytes()
+    if (
+        manifest["contract"] != contract
+        or manifest["weights_sha256"] != sha256(weights).hexdigest()
+        or manifest["csv_sha256"] != file_sha256(expected)
+    ):
+        raise ValueError("提出成果物が生成記録と一致しません")
+    with np.load(BytesIO(weights), allow_pickle=False) as state:
+        if json.loads(state["contract"].item()) != contract:
+            raise ValueError("学習済み係数の学習条件が実験記録と一致しません")
+    return weights, manifest
+
+
 def export(output: Path, owner: str, run_id: str, expected: Path) -> None:
-    trial, model_source = verify_run(run_id)
-    weights = expected.with_suffix(".npz")
-    with np.load(weights, allow_pickle=False) as state:
-        if state["trial"].item() != trial or state["run_id"].item() != run_id:
-            raise ValueError("学習済み係数が指定した run と一致しません")
-    encoded = "\n".join(
-        repr(chunk) for chunk in wrap(b64encode(weights.read_bytes()).decode(), 100)
-    )
+    contract, model_source = verify_run(run_id)
+    weights, manifest = verified_weights(expected, contract)
+    encoded = "\n".join(repr(chunk) for chunk in wrap(b64encode(weights).decode(), 100))
     hashes = {name: file_sha256(DATA / name) for name in TRAIN_FILES}
     source = f"""
-{model_source}
+{model_source.decode("utf-8")}
 
 from base64 import b64decode
 from hashlib import sha256
@@ -113,7 +128,7 @@ with np.load(BytesIO(b64decode(payload)), allow_pickle=False) as state:
         "training_sha256": hashes,
         "public_input_sha256": {name: file_sha256(DATA / name) for name in FILES[-2:]},
         "public_output_sha256": preview_hash,
-        "weights_sha256": file_sha256(weights),
+        "fit": manifest,
         "notebook_sha256": file_sha256(output / "submit.ipynb"),
     }
     (output / "evidence.json").write_text(json.dumps(evidence, indent=2), encoding="utf-8")
@@ -132,11 +147,11 @@ if __name__ == "__main__":
         if args.expected is None:
             parser.error("--expected にローカル提出 CSV を指定してください")
         if args.selection:
-            _, _, groups = load_training(DATA)
-            run_id = selected_run(args.selection, groups)
+            _, labels, groups = load_training(DATA)
+            run_id = selected_run(args.selection, groups, labels.to_numpy())
         else:
             run_id = args.baseline
-            if verify_run(run_id)[0] != "E01":
+            if run_id.partition("-")[0] != "E01":
                 parser.error("--baseline には E01 の run ID を指定してください")
         export(args.output, args.owner, run_id, args.expected)
     else:

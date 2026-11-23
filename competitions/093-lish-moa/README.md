@@ -50,7 +50,7 @@
 | E05-r3 | 遺伝子発現を PCA 64 成分に圧縮 | 0.023067 |
 | E01-row-r3 | 診断用の行シャッフル分割 | 0.026924 |
 
-モデル選定は固定した化合物分割の E01〜E05 の最小 OOF Log Loss に従い、E02-r3 を採用した。E00 と行分割は診断用。選定記録と詳細は [selection.json](selection.json) と [実験ログ](experiments.jsonl) に保存した。
+モデル選定は固定した化合物分割の E01〜E05 の最小 OOF Log Loss に従い、E02-r3 を採用した。選定時は各候補の保存済み OOF を現在の公式ラベルで再採点し、ログと一致することを確認する。E00 と行分割は診断用。選定記録と詳細は [selection.json](selection.json) と [実験ログ](experiments.jsonl) に保存した。
 
 固定係数版の Late Submission は E01-r3 が Public **0.03425**、Private **0.03053**。E02-r3 は Public **0.02147**、Private **0.01907**。実験ログの `late_score` には Private を記録した。 [ベースライン Notebook](https://www.kaggle.com/code/shion5/kumite-moa-e01-r3) · [最終 Notebook](https://www.kaggle.com/code/shion5/kumite-moa-e02-r3) · [提出履歴](https://www.kaggle.com/competitions/lish-moa/submissions)
 
@@ -77,7 +77,7 @@ $owner = 'your-kaggle-username'
 uv run python "$d/src/notebook.py" $owner "$d/outputs/final-repro" --selection "$d/outputs/selection-repro.json" --expected "$d/outputs/final-repro.csv"
 ```
 
-`final` は提出 CSV と同名の NPZ に学習済み係数・前処理を保存する。Notebook 生成時は NPZ をコードセルに同梱し、公開入力でローカルの CSV と比較する。公開入力と係数、Notebook のハッシュは `evidence.json` に残る。Kaggle 上では学習 CSV のハッシュを確認し、同梱係数で推論する。生成した非公開 Notebook は `kaggle kernels push -p <Notebookディレクトリ>` で登録し、完走後に `kaggle competitions submit lish-moa -k <Notebook ID> -v <バージョン> -f submission.csv -m <メッセージ>` で採点する。
+`final` は提出 CSV と同名の NPZ に学習済み係数・前処理を保存する。同時に、run ID・データ・分割・推論ソース・学習条件と CSV/NPZ の SHA256 を同名の `.fit.json` に保存する。再生成時は新しい出力名を指定する。Notebook 生成時は実験ログ、生成記録、NPZ 内の学習条件、CSV/NPZ の SHA256 を照合し、公開入力でローカルの CSV と比較する。公開入力と係数、Notebook のハッシュは `evidence.json` に残る。Kaggle 上では学習 CSV のハッシュを確認し、同梱係数で推論する。生成した非公開 Notebook は `kaggle kernels push -p <Notebookディレクトリ>` で登録し、完走後に `kaggle competitions submit lish-moa -k <Notebook ID> -v <バージョン> -f submission.csv -m <メッセージ>` で採点する。
 
 ダミー Notebook は `notebook.py` にユーザー名と出力先だけを指定して生成する。ベースラインの再提出には `train.py baseline <E01のrun ID> <出力CSV>` で係数を保存し、`notebook.py` に `--baseline <E01のrun ID> --expected <出力CSV>` を付ける。
 

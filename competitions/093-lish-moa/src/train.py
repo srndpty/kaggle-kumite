@@ -2,7 +2,8 @@
 
 import argparse
 import json
-import runpy
+from hashlib import sha256
+from math import isclose
 from pathlib import Path
 from time import perf_counter
 
@@ -173,8 +174,10 @@ def cv(
         )
 
 
-def select(store: RunStore, groups: np.ndarray, run_ids: list[str], output: Path) -> None:
-    selection = choose_run(store, groups, run_ids)
+def select(
+    store: RunStore, groups: np.ndarray, y: np.ndarray, run_ids: list[str], output: Path
+) -> None:
+    selection = choose_run(store, groups, y, run_ids)
     with output.open("x", encoding="utf-8") as stream:
         json.dump(selection, stream, indent=2)
         stream.write("\n")
@@ -182,42 +185,110 @@ def select(store: RunStore, groups: np.ndarray, run_ids: list[str], output: Path
 
 
 def choose_run(
-    store: RunStore, groups: np.ndarray, run_ids: list[str]
+    store: RunStore, groups: np.ndarray, y: np.ndarray, run_ids: list[str]
 ) -> dict[str, str | list[str]]:
     current = evaluation(make_folds(groups))
     records = [store.record(run_id) for run_id in run_ids]
-    if len(records) != len(HYPOTHESES) or {record.params["trial"] for record in records} != set(
+    if len(records) != len(HYPOTHESES) or {record.params.get("trial") for record in records} != set(
         HYPOTHESES
     ):
         raise ValueError("候補には全ての比較実験を指定してください")
+    scores = []
     for record in records:
         if (
             record.split_version != current.split_version
             or record.split_hash != current.split_hash
             or record.data_hash != current.data_hash
+            or record.competition_id != current.competition_id
+            or record.metric != current.metric
+            or record.greater_is_better is not current.greater_is_better
+            or record.seed != current.seed
+            or record.params.get("trial") != record.run_id.partition("-")[0]
         ):
             raise ValueError(f"実験条件が一致しません: {record.run_id}")
-    best = min(records, key=lambda record: (record.oof_score, record.run_id))
-    source = store.artifact_path(best.run_id, "inference.py")
-    return {"run_ids": run_ids, "run_id": best.run_id, "source_sha256": file_sha256(source)}
+        oof = store.load_array(record.run_id, "oof.npy")
+        validate_multilabel_probabilities(oof, *y.shape)
+        score = log_loss(y, oof)
+        if not isclose(score, record.oof_score, rel_tol=0, abs_tol=1e-14):
+            raise ValueError(f"OOF の再採点が実験ログと一致しません: {record.run_id}")
+        scores.append((score, record.run_id))
+    _, best = min(scores)
+    source = verified_source(store, best)
+    return {"run_ids": run_ids, "run_id": best, "source_sha256": sha256(source).hexdigest()}
 
 
-def selected_run(selection_path: Path, groups: np.ndarray) -> str:
+def selected_run(selection_path: Path, groups: np.ndarray, y: np.ndarray) -> str:
     selection = json.loads(selection_path.read_text(encoding="utf-8"))
-    if selection != choose_run(RunStore(ROOT), groups, selection["run_ids"]):
+    if selection != choose_run(RunStore(ROOT), groups, y, selection["run_ids"]):
         raise ValueError("選定記録が実験ログと一致しません")
     return str(selection["run_id"])
 
 
-def verify_run(run_id: str) -> tuple[str, str]:
+def verified_source(store: RunStore, run_id: str) -> bytes:
+    expected = store.record(run_id).artifacts["inference.py"]
+    source = store.artifact_path(run_id, "inference.py").read_bytes()
+    if sha256(source).hexdigest() != expected:
+        raise ValueError("推論ソースのハッシュが実験記録と一致しません")
+    return source
+
+
+def verify_run(run_id: str) -> tuple[dict[str, object], bytes]:
     store = RunStore(ROOT)
     record = store.record(run_id)
+    if record.params.get("trial") != run_id.partition("-")[0]:
+        raise ValueError("実験番号が実験記録と一致しません")
     if record.split_version != VERSION or record.data_hash != files_sha256(
         DATA / name for name in FILES
     ):
         raise ValueError("実験時とデータまたは分割が異なります")
-    source = store.artifact_path(run_id, "inference.py")
-    return str(record.params["trial"]), source.read_text(encoding="utf-8")
+    source = verified_source(store, run_id)
+    return {
+        "run_id": run_id,
+        "data_hash": record.data_hash,
+        "split_hash": record.split_hash,
+        "source_sha256": sha256(source).hexdigest(),
+        "params": record.params,
+    }, source
+
+
+def fit_submission(train: pd.DataFrame, labels: pd.DataFrame, run_id: str, output: Path) -> None:
+    contract, source = verify_run(run_id)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    weights = output.with_suffix(".npz")
+    manifest = output.with_suffix(".fit.json")
+    if output.suffix != ".csv":
+        raise ValueError("提出ファイルには .csv を指定してください")
+    inference = {}
+    exec(compile(source, "inference.py", "exec"), inference)
+    with manifest.open("x", encoding="utf-8") as stream:
+        created = []
+        try:
+            if output.exists() or weights.exists():
+                raise FileExistsError("提出 CSV または NPZ が既にあります")
+            trial = run_id.partition("-")[0]
+            state = inference["fit_model"](train, labels.to_numpy(), trial)
+            state["labels"] = np.asarray(labels.columns, dtype=str)
+            state["contract"] = np.array(json.dumps(contract, sort_keys=True))
+            created.append(output)
+            inference["write_submission"](DATA, state, output)
+            created.append(weights)
+            np.savez_compressed(weights, **state)
+            json.dump(
+                {
+                    "contract": contract,
+                    "weights_sha256": file_sha256(weights),
+                    "csv_sha256": file_sha256(output),
+                },
+                stream,
+                indent=2,
+            )
+            stream.write("\n")
+        except BaseException:
+            stream.close()
+            for path in created:
+                path.unlink(missing_ok=True)
+            manifest.unlink()
+            raise
 
 
 def main() -> None:
@@ -246,21 +317,15 @@ def main() -> None:
     elif args.command == "cv":
         cv(store, train, labels, groups, args.trial, args.run_id, args.row, args.baseline)
     elif args.command == "select":
-        select(store, groups, args.run_ids, args.output)
+        select(store, groups, labels.to_numpy(), args.run_ids, args.output)
     else:
         if args.command == "final":
-            run_id = selected_run(args.selection, groups)
+            run_id = selected_run(args.selection, groups, labels.to_numpy())
         else:
             run_id = args.run_id
             if store.record(run_id).params["trial"] != "E01":
                 raise ValueError("ベースラインは E01 を指定してください")
-        trial, _ = verify_run(run_id)
-        inference = runpy.run_path(str(store.artifact_path(run_id, "inference.py")))
-        state = inference["fit_model"](train, labels.to_numpy(), trial)
-        state["labels"] = np.asarray(labels.columns, dtype=str)
-        state["run_id"] = np.array(run_id)
-        inference["write_submission"](DATA, state, args.output)
-        np.savez_compressed(args.output.with_suffix(".npz"), **state)
+        fit_submission(train, labels, run_id, args.output)
 
 
 if __name__ == "__main__":

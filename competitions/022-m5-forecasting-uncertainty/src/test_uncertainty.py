@@ -4,11 +4,15 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
-from metric import scale_at, score
+import train
+from metric import evaluate, scale_at, score
 from model import EXPERIMENTS, QUANTILE_NAMES, QUANTILES, forecast
 from submission import series_ids, write_submission
 
+from kumite.experiments import ExperimentRecord
 from kumite.m5 import HORIZON, Hierarchy, Sales, revenue_weights
+from kumite.provenance import array_sha256
+from kumite.runs import RunStore
 
 
 def example() -> Sales:
@@ -101,3 +105,61 @@ def test_rounding_changes_only_bottom_level() -> None:
     np.testing.assert_array_equal(rounded[bottom], np.rint(baseline[bottom]))
     np.testing.assert_array_equal(rounded[~bottom], baseline[~bottom])
     assert np.any(rounded[bottom] != baseline[bottom])
+
+
+@pytest.mark.parametrize("tampered", [False, True])
+def test_select_replays_hash_verified_predictions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tampered: bool
+) -> None:
+    data = example()
+    data.units[0] = np.arange(data.units.shape[1]) % 13
+    hierarchy = Hierarchy.from_series(data.series)
+    origin = 390
+    windows = np.array([origin], dtype=np.int32)
+    store = RunStore(tmp_path)
+    monkeypatch.setattr(train, "STORE", store)
+    monkeypatch.setattr(train, "ORIGINS", (origin,))
+    monkeypatch.setattr(train, "WINDOWS", windows)
+    monkeypatch.setattr(train, "input_hash", lambda *_: "data")
+    monkeypatch.setattr(train, "EXPERIMENTS", {"E01": EXPERIMENTS["E01"]})
+    monkeypatch.setattr(train, "load_sales", lambda _: data)
+    monkeypatch.setattr(train, "hierarchy_for", lambda _: hierarchy)
+    prediction = forecast(data, hierarchy, origin, "E01")
+    scores = evaluate(data, hierarchy, origin, prediction)
+    record = ExperimentRecord(
+        competition_id="022",
+        run_id="E01",
+        metric="WSPL",
+        greater_is_better=False,
+        data_version="E01",
+        data_hash="data",
+        split_version=train.SPLIT,
+        split_hash=array_sha256(windows),
+        seed=0,
+        hypothesis="",
+        changed_one_thing="",
+        model="test",
+        code_version="test",
+        fold_scores=[float(scores.mean())],
+        oof_score=float(scores.mean()),
+    )
+
+    def save(path: Path) -> None:
+        np.save(path / "origins.npy", windows)
+        np.save(path / "scores.npy", scores[None])
+        np.save(path / f"d_{origin}.npy", prediction + 100 if tampered else prediction)
+
+    with store.reserve("E01") as reservation:
+        store.publish(reservation, record, save)
+
+    # RunStore は改変済み予測自体のハッシュを記録している。
+    store.load_array("E01", f"d_{origin}.npy")
+    if tampered:
+        with pytest.raises(ValueError, match="再採点 WSPL"):
+            train.select(["E01"])
+    else:
+        result = train.select(["E01"])
+        assert result["selected"] == "E01"
+        assert result["artifacts"]["E01"] == store.input_hashes(
+            "E01", "scores.npy", f"d_{origin}.npy"
+        )

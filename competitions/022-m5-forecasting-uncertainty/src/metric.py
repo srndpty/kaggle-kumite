@@ -34,12 +34,16 @@ def score(
     return np.stack(scores, axis=1)
 
 
-def evaluate(data: Sales, hierarchy: Hierarchy, origin: int, prediction: np.ndarray) -> np.ndarray:
-    actual = hierarchy.aggregate(data.actual(origin + 1, origin + HORIZON))
-    return score(
-        actual,
-        prediction,
-        hierarchy,
+def evaluation_inputs(
+    data: Sales, hierarchy: Hierarchy, origin: int
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    return (
+        hierarchy.aggregate(data.actual(origin + 1, origin + HORIZON)),
         revenue_weights(data, hierarchy, origin),
         scale_at(data, hierarchy, origin),
     )
+
+
+def evaluate(data: Sales, hierarchy: Hierarchy, origin: int, prediction: np.ndarray) -> np.ndarray:
+    actual, weight, scale = evaluation_inputs(data, hierarchy, origin)
+    return score(actual, prediction, hierarchy, weight, scale)

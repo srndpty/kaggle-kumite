@@ -54,6 +54,19 @@ dev submissions 22
 
 再計測する場合は `cv <実験名> --run-id <新しいID>` を実験ごとに実行し、`select` に新しい5件の ID と `--output <新しい選定ファイル>` を渡す。`final <新しいID> --selection <新しい選定ファイル>` で CSV を再生成できる。[実験ログ](experiments.jsonl) · [選定記録](selection.json) · [実験レポート](report.md)
 
+## 提出後の選定監査
+
+初回提出時の記録は [selection.json](selection.json) に保存している。レビュー対応では、全候補の保存済み予測と尺度・重みから3窓の WSPL を再計算し、実験ログと照合した。照合した各候補のスコア・予測の SHA-256、元の選定記録の SHA-256（改行は LF）、照合時刻は [selection-audit.json](selection-audit.json) に記録した。
+
+同じ監査を再実行する場合は、空いている出力名を指定する。
+
+```powershell
+$c = "competitions/022-m5-forecasting-uncertainty"
+uv run python "$c/src/train.py" select E01 E02 E03 E04 E05 --audit-existing "$c/selection.json" --output "$c/selection-audit-r2.json"
+```
+
+提出当時の CV 成果物で最終 CSV を再生成する場合は、`final <新しいID> --selection "$c/selection-audit.json"` を使う。新しい CV で作る選定記録には、選定時刻と成果物のハッシュが入る。
+
 ## 進捗
 
 - [x] P0. 公式データの取得、ダミー提出と採点確認

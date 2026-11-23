@@ -1,13 +1,15 @@
 """CV、選定、最終予測とその証跡を保存する。"""
 
 import argparse
+import hashlib
 import json
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
 from dummy import DATA, ROOT
-from metric import evaluate
+from metric import evaluate, evaluation_inputs, score
 from model import EXPERIMENTS, QUANTILES, forecast
 from submission import write_submission
 
@@ -99,6 +101,10 @@ def select(run_ids: list[str]) -> dict:
     ):
         raise ValueError("各実験の CV run を1件ずつ指定してください")
     expected = (input_hash(VALIDATION_FILE), SPLIT, array_sha256(WINDOWS))
+    data = load_sales(DATA)
+    hierarchy = hierarchy_for(data)
+    inputs = {origin: evaluation_inputs(data, hierarchy, origin) for origin in ORIGINS}
+    evidence = {}
     for record in records:
         if (record.data_hash, record.split_version, record.split_hash) != expected:
             raise ValueError(f"{record.run_id} の入力または分割が一致しません")
@@ -111,6 +117,16 @@ def select(run_ids: list[str]) -> dict:
             or float(losses.mean()) != record.oof_score
         ):
             raise ValueError(f"{record.run_id} の WSPL が一致しません")
+        for index, origin in enumerate(ORIGINS):
+            name = f"d_{origin}.npy"
+            prediction = STORE.load_array(record.run_id, name)
+            actual, weight, scale = inputs[origin]
+            replayed = score(actual, prediction, hierarchy, weight, scale)
+            if not np.allclose(replayed, losses[index], rtol=1e-10, atol=1e-12):
+                raise ValueError(f"{record.run_id} d_{origin} の再採点 WSPL が一致しません")
+        evidence[record.run_id] = STORE.input_hashes(
+            record.run_id, "scores.npy", *(f"d_{origin}.npy" for origin in ORIGINS)
+        )
     best = min(records, key=lambda record: (record.oof_score, record.data_version))
     return {
         "selected": best.run_id,
@@ -118,10 +134,13 @@ def select(run_ids: list[str]) -> dict:
         "data_hash": best.data_hash,
         "split_hash": best.split_hash,
         "comparisons": {record.run_id: record.oof_score for record in records},
+        "artifacts": evidence,
     }
 
 
-def prepare_submission(experiment: str, run_id: str, cv_run: str) -> None:
+def prepare_submission(
+    experiment: str, run_id: str, cv_run: str, evidence: dict[str, str] | None = None
+) -> None:
     with STORE.reserve(run_id) as reservation:
         started = time.perf_counter()
         version = code_version(ROOT.parents[1])
@@ -163,7 +182,7 @@ def prepare_submission(experiment: str, run_id: str, cv_run: str) -> None:
             runtime_sec=time.perf_counter() - started,
             peak_memory_mb=peak_memory_mb(),
             code_version=version,
-            inputs=STORE.input_hashes(cv_run, "scores.npy"),
+            inputs=evidence if evidence is not None else STORE.input_hashes(cv_run, "scores.npy"),
         )
 
         def save(path: Path) -> None:
@@ -188,6 +207,9 @@ def main() -> None:
     selection = commands.add_parser("select")
     selection.add_argument("run_ids", nargs="+")
     selection.add_argument("--output", type=Path, default=SELECTION)
+    selection.add_argument(
+        "--audit-existing", type=Path, help="提出済みの選定記録と再採点結果を照合"
+    )
     baseline = commands.add_parser("baseline")
     baseline.add_argument("cv_run")
     baseline.add_argument("--run-id", default="baseline-v1")
@@ -202,6 +224,21 @@ def main() -> None:
             run_cv(experiment, options.run_id or experiment)
     elif options.command == "select":
         result = select(options.run_ids)
+        timestamp = datetime.now(UTC).isoformat(timespec="seconds")
+        if options.audit_existing:
+            original_text = options.audit_existing.read_text(encoding="utf-8")
+            original = json.loads(original_text)
+            historical_fields = {key: value for key, value in result.items() if key != "artifacts"}
+            if original != historical_fields:
+                raise ValueError("既存の選定記録と再採点結果が一致しません")
+            result["audit"] = {
+                "verified_at": timestamp,
+                "original_selection_sha256": hashlib.sha256(
+                    original_text.encode("utf-8")
+                ).hexdigest(),
+            }
+        else:
+            result["selected_at"] = timestamp
         with options.output.open("x", encoding="utf-8") as file:
             json.dump(result, file, ensure_ascii=False, indent=2)
             file.write("\n")
@@ -210,9 +247,15 @@ def main() -> None:
     else:
         result = json.loads(options.selection.read_text(encoding="utf-8"))
         verified = select(list(result["comparisons"]))
-        if result != verified:
+        comparable = {
+            key: value for key, value in result.items() if key not in {"audit", "selected_at"}
+        }
+        if comparable != verified:
             raise ValueError("選定ファイルが CV の結果と一致しません")
-        prepare_submission(verified["experiment"], options.run_id, verified["selected"])
+        selected = verified["selected"]
+        prepare_submission(
+            verified["experiment"], options.run_id, selected, verified["artifacts"][selected]
+        )
 
 
 if __name__ == "__main__":

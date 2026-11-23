@@ -40,6 +40,20 @@ def _predict(booster: lgb.Booster, x: pd.DataFrame, num_iteration: int | None) -
     return np.asarray(booster.predict(x, num_iteration=num_iteration), dtype=np.float64)
 
 
+def _settings(params: dict[str, Any]) -> dict[str, Any]:
+    return {"verbosity": -1, **{k: v for k, v in params.items() if k not in _CONTROL_KEYS}}
+
+
+def _dataset(
+    x: pd.DataFrame,
+    y: np.ndarray,
+    categorical: Sequence[str],
+    sample_weight: np.ndarray | None = None,
+) -> lgb.Dataset:
+    used = [c for c in categorical if c in x.columns]
+    return lgb.Dataset(x, y, weight=sample_weight, categorical_feature=used)
+
+
 def _lightgbm(
     x_tr: pd.DataFrame,
     y_tr: np.ndarray,
@@ -53,20 +67,15 @@ def _lightgbm(
 
     categorical のうち x_tr にある列を LightGBM のカテゴリ変数として渡す。
     """
-    lgb_params: dict[str, Any] = {
-        "verbosity": -1,
-        **{k: v for k, v in params.items() if k not in _CONTROL_KEYS},
-    }
-    used = [c for c in categorical if c in x_tr.columns]
-    train_set = lgb.Dataset(x_tr, y_tr, categorical_feature=used)
     if params["early_stopping"] is None:
         rounds = int(params["num_boost_round"])
-        booster = _train(lgb_params, train_set, num_boost_round=rounds)
+        booster = fit_lightgbm_fixed(x_tr, y_tr, params, categorical)
         return FoldOutput(
             _predict(booster, x_va, None), _predict(booster, x_te, None), {"rounds": rounds}
         )
+    train_set = _dataset(x_tr, y_tr, categorical)
     booster = _train(
-        lgb_params,
+        _settings(params),
         train_set,
         num_boost_round=int(params["num_boost_round"]),
         valid_sets=[lgb.Dataset(x_va, y_va, reference=train_set)],
@@ -91,6 +100,21 @@ def lightgbm_regression(
     return _lightgbm(
         x_tr, y_tr, x_va, y_va, x_te, {"objective": "regression", **params}, categorical
     )
+
+
+def fit_lightgbm_fixed(
+    x: pd.DataFrame,
+    y: np.ndarray,
+    params: dict[str, Any],
+    categorical: Sequence[str],
+    *,
+    sample_weight: np.ndarray | None = None,
+) -> lgb.Booster:
+    """固定ラウンドで学習し、分割して推論できるモデルを返す。"""
+    if params["early_stopping"] is not None:
+        raise ValueError("固定ラウンド学習では early_stopping を指定できません")
+    train_set = _dataset(x, y, categorical, sample_weight)
+    return _train(_settings(params), train_set, num_boost_round=int(params["num_boost_round"]))
 
 
 def lightgbm_binary(

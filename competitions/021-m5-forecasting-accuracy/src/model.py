@@ -5,7 +5,10 @@ from typing import Any
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
-from dataset import HORIZON, KEYS, Sales
+from dataset import HORIZON, Sales
+
+from kumite.m5 import KEYS
+from kumite.m5 import seasonal as seasonal
 
 FIRST_TRAIN_ORIGIN = 1096
 STRIDE = 7
@@ -29,12 +32,6 @@ EXTRA_WIDTH = {"base": 0, "calendar": 2, "price": 2, "intermittency": 2, "lags":
 
 def training_origins(origin: int) -> range:
     return range(FIRST_TRAIN_ORIGIN, origin - HORIZON + 1, STRIDE)
-
-
-def seasonal(data: Sales, origin: int) -> np.ndarray:
-    """直近4週の同曜日平均を4週先まで繰り返す。"""
-    history = data.actual(origin - HORIZON + 1, origin)
-    return np.tile(history.reshape(len(data.series), 4, 7).mean(axis=1), (1, 4))
 
 
 class Features:

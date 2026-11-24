@@ -48,8 +48,11 @@ def main() -> None:
             raise ValueError("データまたは分割が一致しません")
         if str(a["data_hash"]) != files_sha256([data / "train.csv", data / "test.csv"]):
             raise ValueError("現在の CSV と計測時のデータが一致しません")
-        if (args.base, args.other) == ("E00", "E01"):
+        if args.base.startswith("E00") and args.other == f"E01{args.base[3:]}":
             np.testing.assert_array_equal(a["oof"], b["oof"])
+            for name in a.files:
+                if name.startswith("tune_"):
+                    np.testing.assert_array_equal(a[name], b[name])
         coverage = b["coverage"]
     print(f"F1 差の 95% 区間: {paired_interval(y, base, other, groups)}")
     length = train["question_text"].str.len().to_numpy()

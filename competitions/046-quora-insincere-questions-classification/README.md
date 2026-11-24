@@ -61,15 +61,18 @@ foreach ($name in 'train.csv', 'test.csv', 'sample_submission.csv') {
 ```powershell
 $owner = '<Kaggleユーザー名>'
 uv run python "$d/src/train.py"                       # EDA
-uv run python "$d/src/train.py" E00 E01 E02 E03       # P3〜P4
-uv run python "$d/src/train.py" E04                   # P6
-uv run python "$d/src/analyze.py" E00 E01             # 閾値差と誤りの集計
-uv run python "$d/src/notebook.py" $owner "$d/outputs/final" --model final
+uv run python "$d/src/train.py" E00 --run-id E00-r2
+uv run python "$d/src/train.py" E01 --run-id E01-r2 --baseline-run-id E00-r2
+foreach ($trial in 'E02', 'E03', 'E04') {
+    uv run python "$d/src/train.py" $trial --run-id "$trial-r2"
+}
+uv run python "$d/src/analyze.py" E00-r2 E01-r2
+uv run python "$d/src/notebook.py" $owner "$d/outputs/final-r2" --model final --run-suffix=-r2 --selection "$d/selection-r2.json" --freeze
 ```
 
-Notebook 生成時に `--model` を省略するとダミー、`--model baseline` を指定すると E00 を生成する。生成先を `kaggle kernels push -p <出力先>` で登録し、実行完了後に `kaggle competitions submit quora-insincere-questions-classification -k <Notebook ID> -v <版> -f submission.csv -m <説明>` で採点する。
+Notebook 生成時に `--model` を省略するとダミー、`--model baseline` と `--run-suffix=-r2` を指定すると E00-r2 を生成する。生成先を `kaggle kernels push -p <出力先>` で登録し、実行完了後に `kaggle competitions submit quora-insincere-questions-classification -k <Notebook ID> -v <版> -f submission.csv -m <説明>` で採点する。
 
-再実行は試行を 1 件指定し、`--run-id E00-r2` のように別の ID を渡す。E01 で再実行した E00 の確率を使う場合は `--baseline-run-id E00-r2` を指定する。
+選定記録は新規パスに固定し、同じ記録から再生成する場合は `--freeze` を外して新しい出力先を指定する。新しい選定では、各 run の OOF のハッシュ・二値・F1 と、CV のデータ・分割・ソースを照合する。従来の `selection.json` と E00〜E04 は当時の採点を示す記録で、CV ソースの個別ハッシュが保存されていないため、新しい Notebook の生成には個別ハッシュを持つ run が必要。
 
 ## 実験ログ
 

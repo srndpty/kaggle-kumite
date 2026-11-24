@@ -67,5 +67,7 @@
 | [K031](K031-absolute-loss-for-mae.md) | 仮説 | #014 の時系列 CV で LightGBM の学習損失を二乗誤差から絶対誤差に変えると MAE が 0.07284 → 0.06913 |
 | [K032](K032-class-weighting-and-per-class-recall.md) | 仮説 | #059 でクラス頻度の逆平方根を損失に掛けると Accuracy +0.02383。改善への寄与は最多クラスが最大で、クラス別再現率の変化は混在 |
 | [K033](K033-shrink-probabilities-to-label-priors.md) | 仮説 | MoA で個別確率をラベルの出現率へ 10% 縮小すると、希少ラベル帯の OOF Log Loss が 0.005034 → 0.004564 |
-| [K034](K034-nms-threshold-for-dense-detection.md) | 仮説 | #074 で NMS の IoU 閾値を上げると密集画像の見逃しが638件減り、誤検出が7,587件増えた |
+| [K034](K034-nms-threshold-for-dense-detection.md) | 再現 | 抑制幅を変えると誤検出と見逃しが逆方向に変わった。#074 は空間、#090 は時間方向で確認 |
 | [K035](K035-staged-noisy-supervision.md) | 仮説 | #084 の弱ラベル使用量を揃えると、noisy の後に curated で学習した構成が混合学習より OOF lwlrap +0.01083 |
+
+| [K036](K036-periodic-local-time.md) | 仮説 | #090 で現地時刻を1日周期で符号化すると、系列単位3-fold の OOF AP が +0.049922 |

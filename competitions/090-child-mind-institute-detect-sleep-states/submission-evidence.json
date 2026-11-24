@@ -1,0 +1,102 @@
+{
+  "competition": "child-mind-institute-detect-sleep-states",
+  "p0": {
+    "notebook": "https://www.kaggle.com/code/shion5/kumite-sleep-p0",
+    "version": 1,
+    "submitted_at_utc": "2026-11-24T03:55:17.393000Z",
+    "description": "Kumite P0 fixed events",
+    "status": "COMPLETE",
+    "public_score": 0.0,
+    "private_score": 0.0,
+    "submission_id": 58809769,
+    "notebook_sha256": "289bfac0bad6167f29ff69dfa709bd07140493535733f744f6f4d9b7e58481b7"
+  },
+  "baseline": {
+    "run_id": "E00",
+    "notebook": "https://www.kaggle.com/code/shion5/kumite-sleep-e00",
+    "private_dataset": "shion5/kumite-sleep-weights-e00/1",
+    "version": 2,
+    "submitted_at_utc": "2026-11-24T04:05:34.693000+00:00",
+    "description": "Kumite E00 baseline",
+    "status": "COMPLETE",
+    "public_score": null,
+    "private_score": null,
+    "public_test": {
+      "series": 3,
+      "rows": 6,
+      "max_abs_score_delta": 0.0,
+      "local_sha256": "2b54716c2db2d2563febe3741163bf8c88a3def11753b5e6595733ade260e0bf",
+      "kaggle_sha256": "2b54716c2db2d2563febe3741163bf8c88a3def11753b5e6595733ade260e0bf"
+    },
+    "submission_id": 58810181,
+    "notebook_sha256": "b5be4f52ccd30ab48eac426b71ac77bb2f05d6dc61e56d5b7cff060e9d5015c1",
+    "model_bundle_sha256": "7ac16c2da323816b3ffc26fc0738af50daf3ff835b1d99e76f33ccafc33acd57",
+    "error_description": "Your notebook generated a submission file with incorrect format. Some examples causing this are: wrong number of rows or columns, empty values, an incorrect data type for a value, or invalid submission values from what is expected."
+  },
+  "final": {
+    "run_id": "E04",
+    "notebook": "https://www.kaggle.com/code/shion5/kumite-sleep-e04",
+    "private_dataset": "shion5/kumite-sleep-weights-e04/1",
+    "version": 1,
+    "submitted_at_utc": "2026-11-24T04:10:06.397000+00:00",
+    "description": "Kumite E04 selected local clock",
+    "status": "COMPLETE",
+    "public_score": null,
+    "private_score": null,
+    "public_test": {
+      "series": 3,
+      "rows": 6,
+      "max_abs_score_delta": 0.0,
+      "local_sha256": "81df1d9b953f32cbca8930610816dbc81bfc6b5d70c2bf6d9c276388d0af169d",
+      "kaggle_sha256": "81df1d9b953f32cbca8930610816dbc81bfc6b5d70c2bf6d9c276388d0af169d"
+    },
+    "submission_id": 58810349,
+    "notebook_sha256": "ff08c9676368e1c9db6dd48646f42cec94a14941f07852765c5544d12d655768",
+    "model_bundle_sha256": "955bff1dce03de1761b1ef2188c051edbdafd4067b385eb608dff9b1c2a4bff5",
+    "selection_sha256": "23edcff7ad2eaa507905da95ee588ae5dcdc41b0d94f8d4cf4205ad4eb98bedd",
+    "error_description": "Your notebook generated a submission file with incorrect format. Some examples causing this are: wrong number of rows or columns, empty values, an incorrect data type for a value, or invalid submission values from what is expected."
+  },
+  "baseline_capped": {
+    "run_id": "E00-capped",
+    "notebook": "https://www.kaggle.com/code/shion5/kumite-sleep-e00",
+    "private_dataset": "shion5/kumite-sleep-weights-e00/1",
+    "version": 3,
+    "submitted_at_utc": "2026-11-24T09:55:47Z",
+    "description": "Kumite E00 capped",
+    "submission_id": 58823233,
+    "status": "COMPLETE",
+    "public_score": 0.051,
+    "private_score": 0.066,
+    "public_test": {
+      "series": 3,
+      "rows": 6,
+      "max_abs_score_delta": 0.0,
+      "local_sha256": "2b54716c2db2d2563febe3741163bf8c88a3def11753b5e6595733ade260e0bf",
+      "kaggle_sha256": "2b54716c2db2d2563febe3741163bf8c88a3def11753b5e6595733ade260e0bf"
+    },
+    "notebook_sha256": "1a5c149b4a9d9659bbdd2182a9328cca24316b13726f9233fcada1d9118baf55",
+    "model_bundle_sha256": "7ac16c2da323816b3ffc26fc0738af50daf3ff835b1d99e76f33ccafc33acd57"
+  },
+  "final_capped": {
+    "run_id": "E04-capped",
+    "notebook": "https://www.kaggle.com/code/shion5/kumite-sleep-e04",
+    "private_dataset": "shion5/kumite-sleep-weights-e04/1",
+    "version": 2,
+    "submitted_at_utc": "2026-11-24T09:55:48Z",
+    "description": "Kumite E04 capped",
+    "submission_id": 58823236,
+    "status": "COMPLETE",
+    "public_score": 0.171,
+    "private_score": 0.202,
+    "public_test": {
+      "series": 3,
+      "rows": 6,
+      "max_abs_score_delta": 0.0,
+      "local_sha256": "81df1d9b953f32cbca8930610816dbc81bfc6b5d70c2bf6d9c276388d0af169d",
+      "kaggle_sha256": "81df1d9b953f32cbca8930610816dbc81bfc6b5d70c2bf6d9c276388d0af169d"
+    },
+    "notebook_sha256": "b730d544e10521942f961546536af1e133293cca302d92699db070be0358ecbb",
+    "model_bundle_sha256": "955bff1dce03de1761b1ef2188c051edbdafd4067b385eb608dff9b1c2a4bff5",
+    "selection_sha256": "23edcff7ad2eaa507905da95ee588ae5dcdc41b0d94f8d4cf4205ad4eb98bedd"
+  }
+}

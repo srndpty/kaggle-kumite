@@ -1,0 +1,14 @@
+{
+  "run_id": "E02",
+  "metric": "F1",
+  "split_hash": "a8360373b9c28760ce51399a6544cf8c0107275e82c847af0f33c0d1d3fcd6ad",
+  "data_hash": "4b3c7784766cc3692a392c3b01f3e7accdfcf8571f2f9dd7797e76a967bbb5a2",
+  "candidates": {
+    "E00": 0.5092175819014443,
+    "E01": 0.6034556825726257,
+    "E02": 0.6231874152798187,
+    "E03": 0.6059466829763716,
+    "E04": 0.6065509186045867
+  },
+  "kernel_id": "shion5/kumite-quora-insincere-final-e02"
+}

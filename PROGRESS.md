@@ -9,11 +9,11 @@
 
 | 状態 | 件数 |
 |---|---:|
-| 完了 | 33 |
+| 完了 | 34 |
 | 実装・学習完了、外部評価未達 | 1 |
 | P0 で中断 | 1 |
 | 差し替え | 1 |
-| 未着手 | 64 |
+| 未着手 | 63 |
 | **合計** | **100** |
 
 完了は個別の進捗チェックリストを終えたコンペを指す。#091 は外部評価未達のため、完了件数から除く。
@@ -82,7 +82,7 @@
 | 043 | Jigsaw Multilingual Toxic Comment Classification | 未着手 | — |
 | 044 | Jigsaw Rate Severity of Toxic Comments | 未着手 | — |
 | 045 | [Quora Question Pairs](competitions/045-quora-question-pairs/README.md) | 完了 | — |
-| 046 | Quora Insincere Questions Classification | 未着手 | — |
+| 046 | [Quora Insincere Questions Classification](competitions/046-quora-insincere-questions-classification/README.md) | 完了 | E02 の OOF F1 0.62319、Late Private F1 0.63519。 |
 | 047 | Google QUEST Q&A Labeling | 未着手 | — |
 | 048 | [Tweet Sentiment Extraction](competitions/048-tweet-sentiment-extraction/README.md) | 完了 | — |
 | 049 | [CommonLit Readability Prize](competitions/049-commonlitreadabilityprize/README.md) | 完了 | — |

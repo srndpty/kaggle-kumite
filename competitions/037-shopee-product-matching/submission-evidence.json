@@ -1,0 +1,64 @@
+{
+  "competition": "shopee-product-matching",
+  "selection_sha256": "2dc1f8d6ea4ef02a1e6398757f6d04b9c3c789e4fdee503654a81027a95d6c69",
+  "submissions": [
+    {
+      "trial": "P0",
+      "submission_id": 58841250,
+      "notebook": "shion5/kumite-shopee-p0",
+      "version": 1,
+      "submitted_at_utc": "2026-11-24T17:00:09Z",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_f1": 0.466,
+      "private_f1": 0.458,
+      "notebook_sha256": "a9b6039e1601f478cd58ae944dfee743c2d8748e40531036333402e685659b88",
+      "metadata_sha256": "be41e933261e46b97bc5a56889fb5874b9a7a919a2a8daa1baea4ad42e46ee06"
+    },
+    {
+      "trial": "P0",
+      "submission_id": 58841261,
+      "notebook": "shion5/kumite-shopee-p0",
+      "version": 1,
+      "submitted_at_utc": "2026-11-24T17:00:18Z",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_f1": 0.466,
+      "private_f1": 0.458,
+      "notebook_sha256": "a9b6039e1601f478cd58ae944dfee743c2d8748e40531036333402e685659b88",
+      "metadata_sha256": "be41e933261e46b97bc5a56889fb5874b9a7a919a2a8daa1baea4ad42e46ee06"
+    },
+    {
+      "trial": "E00",
+      "submission_id": 58841799,
+      "notebook": "shion5/kumite-shopee-e00-submission",
+      "version": 1,
+      "submitted_at_utc": "2026-11-24T17:12:59.797Z",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_f1": 0.54,
+      "private_f1": 0.531,
+      "notebook_sha256": "c36fc2e773ed939624e17b49051a8696900fd910de38e180586bcb3cbbfb1930",
+      "metadata_sha256": "123267c6c81d2c09088f8a750d877abdd6d3fe8c97f87de73be2c97ab9d30ced",
+      "dataset": "shion5/kumite-shopee-e00",
+      "model_sha256": "dd45b57d301dfcfb57b8cd5ea696d30c851f6abbca62e6b9069752f095253b66",
+      "public_test_rows": 3,
+      "local_and_kaggle_csv_contents_match": true,
+      "kaggle_public_test_csv_sha256": "164bce85bd72fccdac54b3a8842474a90ed5d0b712d36140b437a9c24fa205e2"
+    },
+    {
+      "trial": "E04",
+      "submission_id": 58842447,
+      "notebook": "shion5/kumite-shopee-e04-submission",
+      "version": 1,
+      "submitted_at_utc": "2026-11-24T17:27:12Z",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_f1": 0.646,
+      "private_f1": 0.638,
+      "notebook_sha256": "338096b99e331c8661763174facd5194f1c5e7f8962d0fa17fd8e0986862c47c",
+      "metadata_sha256": "ed8f00c6d09b47767b1927870c71468466f6b61314f65ece869bea3afcbd9562",
+      "dataset": "shion5/kumite-shopee-e04",
+      "model_sha256": "ab12522d1dadba22ead78ec83f96b44e5b691bb96ceee1539f3f363cbe8bd2e3",
+      "public_test_rows": 3,
+      "local_and_kaggle_csv_contents_match": true,
+      "kaggle_public_test_csv_sha256": "164bce85bd72fccdac54b3a8842474a90ed5d0b712d36140b437a9c24fa205e2"
+    }
+  ]
+}

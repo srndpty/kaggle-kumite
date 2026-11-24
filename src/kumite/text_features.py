@@ -25,6 +25,7 @@ def build_features(
     bigram: bool = False,
     chars: bool = False,
     additional_bigrams: bool = False,
+    lowercase: bool = True,
 ) -> tuple[tuple[sparse.csr_matrix, sparse.csr_matrix, sparse.csr_matrix], list[TfidfVectorizer]]:
     settings = [("word", (1, 2 if bigram else 1), 100_000)]
     if additional_bigrams:
@@ -38,6 +39,7 @@ def build_features(
             min_df=3,
             max_features=max_features,
             sublinear_tf=True,
+            lowercase=lowercase,
             dtype=cast(Any, np.float32),
         )
         for analyzer, ngram_range, max_features in settings

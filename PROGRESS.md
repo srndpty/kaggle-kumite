@@ -9,11 +9,11 @@
 
 | 状態 | 件数 |
 |---|---:|
-| 完了 | 30 |
+| 完了 | 31 |
 | 実装・学習完了、外部評価未達 | 1 |
 | P0 で中断 | 1 |
 | 差し替え | 1 |
-| 未着手 | 67 |
+| 未着手 | 66 |
 | **合計** | **100** |
 
 完了は個別の進捗チェックリストを終えたコンペを指す。#091 は外部評価未達のため、完了件数から除く。
@@ -68,7 +68,7 @@
 | 034 | [Santander Product Recommendation](competitions/034-santander-product-recommendation/README.md) | 完了 | — |
 | 035 | WSDM - KKBox's Music Recommendation Challenge | 未着手 | — |
 | 036 | WSDM - KKBox's Churn Prediction Challenge | 未着手 | — |
-| 037 | Shopee - Price Match Guarantee | 未着手 | — |
+| 037 | [Shopee - Price Match Guarantee](competitions/037-shopee-product-matching/README.md) | 完了 | E04 の Late Private F1 0.638。 |
 | 038 | Google Landmark Retrieval 2020 | 未着手 | — |
 | 039 | Google Landmark Recognition 2020 | 未着手 | — |
 | 040 | OTTO – Multi-Objective Recommender System | 未着手 | — |

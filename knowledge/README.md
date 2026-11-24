@@ -74,3 +74,4 @@
 | [K037](K037-summary-source-overlap.md) | 仮説 | #050 で原文と要約の語句一致率を加えると、課題単位 OOF MCRMSE が 0.85492 → 0.75594 |
 | [K038](K038-retrieval-vs-reranking.md) | 再現 | 候補固定の再ランキングで #058 の MAP@25 +0.01279、#037 の平均 F1 +0.07892 |
 | [K039](K039-sensor-event-window-length.md) | 仮説 | #091 の過去3秒窓は過去1秒窓より Turn AP +0.03172、StartHesitation AP −0.00870 |
+| [K040](K040-l1-for-original-scale-mae.md) | 仮説 | #011 で元尺度 L1 は L2 より全体 MAE が 29.02 改善し、実測上位 1% の MAE は悪化 |

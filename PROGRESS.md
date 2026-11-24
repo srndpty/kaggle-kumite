@@ -9,11 +9,11 @@
 
 | 状態 | 件数 |
 |---|---:|
-| 完了 | 32 |
+| 完了 | 33 |
 | 実装・学習完了、外部評価未達 | 1 |
 | P0 で中断 | 1 |
 | 差し替え | 1 |
-| 未着手 | 65 |
+| 未着手 | 64 |
 | **合計** | **100** |
 
 完了は個別の進捗チェックリストを終えたコンペを指す。#091 は外部評価未達のため、完了件数から除く。
@@ -90,7 +90,7 @@
 | 051 | Feedback Prize - Evaluating Student Writing | 未着手 | — |
 | 052 | Feedback Prize - Predicting Effective Arguments | 未着手 | — |
 | 053 | Feedback Prize - English Language Learning | 未着手 | — |
-| 054 | U.S. Patent Phrase to Phrase Matching | 未着手 | — |
+| 054 | [U.S. Patent Phrase to Phrase Matching](competitions/054-us-patent-phrase-to-phrase-matching/README.md) | 完了 | E05 の Late Private Pearson 0.4864。 |
 | 055 | NBME - Score Clinical Patient Notes | 未着手 | — |
 | 056 | LLM - Detect AI Generated Text | 未着手 | — |
 | 057 | Kaggle - LLM Science Exam | 未着手 | — |

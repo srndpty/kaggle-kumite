@@ -51,17 +51,23 @@ anchor と target の文字数中央値はともに 15。四分位範囲は anch
 
 ## 再現
 
+公式採点時の記録は E01〜E05。レビュー後に推論ソースの SHA256 を記録して再評価した E01-r2〜E05-r2 でも、OOF Pearson は同じだった。[確定した選定記録](selection.json) は E05-r2 を指す。対応するローカル成果物が揃っていれば、`src/export.py` はこの選定記録から Notebook を生成する。
+
+新規環境では未使用の共通接尾辞で実験を再実行し、新しいパスに選定記録を作る。
+
 ```powershell
 $d = 'competitions/054-us-patent-phrase-to-phrase-matching'
+$kaggleUser = '自分のKaggleユーザー名'
+$suffix = '-r3'
+$selection = "$d/outputs/selection$suffix.json"
 dev download 54
 foreach ($run in 'E01','E02','E03','E04','E05') {
-    uv run python "$d/src/train.py" $run --run-id "${run}-r2"
-    if ($LASTEXITCODE -ne 0) { break }
+    uv run python "$d/src/train.py" $run --run-id "$run$suffix"
+    if ($LASTEXITCODE -ne 0) { throw "CV に失敗しました" }
 }
-uv run python "$d/src/analyze.py" --run-suffix=-r2
-uv run python "$d/src/export.py" <Kaggleユーザー名> "$d/outputs/final" --run-suffix=-r2
-kaggle kernels push -p "$d/outputs/final"
-kaggle competitions submit us-patent-phrase-to-phrase-matching -k <ユーザー名>/kumite-patent-final -v <版> -f submission.csv -m 'Kumite Patent E05 final'
+uv run python "$d/src/analyze.py" "--run-suffix=$suffix" --diagnose-peers
+uv run python "$d/src/select_model.py" "--run-suffix=$suffix" --output $selection
+uv run python "$d/src/export.py" $kaggleUser "$d/outputs/final" --selection $selection
 ```
 
-公式採点に用いた run は記録済みの E01〜E05。上の例は再実行のため `-r2` を付ける。再実行済みなら、未使用の共通接尾辞に置き換える。初回採点の Notebook は `src/dummy.py` で生成し、Baseline は `src/export.py --baseline` で生成する。
+Kaggle で採点する場合は、`kaggle kernels push -p "$d/outputs/final"` で登録し、実行完了を確認してから `kaggle competitions submit us-patent-phrase-to-phrase-matching -k "$kaggleUser/kumite-patent-final" -v <版> -f submission.csv -m 'Kumite Patent final'` で提出する。初回採点の Notebook は `src/dummy.py` で生成する。Baseline を生成する場合は `src/export.py` に `--baseline` と対象 run の `--run-suffix` を渡す。

@@ -7,6 +7,8 @@ from sklearn.feature_extraction import DictVectorizer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import Ridge
 
+ALPHA = 1
+
 
 def pearson(actual: np.ndarray, pred: np.ndarray) -> float:
     if np.ptp(actual) == 0 or np.ptp(pred) == 0:
@@ -19,7 +21,7 @@ class PatentRidge:
         self.features = features
         self.characters = TfidfVectorizer(analyzer="char", ngram_range=(3, 5))
         self.categories = DictVectorizer()
-        self.model = Ridge(alpha=1, solver="lsqr")
+        self.model = Ridge(alpha=ALPHA, solver="lsqr")
 
     def matrix(self, rows: pd.DataFrame, *, fit: bool = False) -> csr_matrix:
         values = []

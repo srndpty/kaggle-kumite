@@ -5,17 +5,16 @@ from pathlib import Path
 from time import perf_counter
 
 import numpy as np
-import pandas as pd
+from evidence import ROOT, SEED, SPLIT_VERSION, data_digest, inference_sources, source_digests
 from inputs import load_data, submission
-from model import PatentRidge, pearson
-from split import make_split
+from model import ALPHA, PatentRidge, pearson
+from split import check_split, make_split
 
 from kumite.crossfit import FoldOutput, cross_fit, folds_to_splits
 from kumite.cv_run import Evaluation, Trial, publish_cv_run
-from kumite.provenance import file_sha256, files_sha256
+from kumite.provenance import file_sha256
 from kumite.runs import RunStore
 
-ROOT = Path(__file__).resolve().parents[1]
 TRIALS: dict[str, tuple[tuple[str, ...], str, str]] = {
     "E01": ((), "語句の長さと一致率で類似度を予測できる", "Ridge Baseline"),
     "E02": (("char",), "表記揺れの誤差が減る", "文字 TF-IDF コサイン"),
@@ -40,14 +39,17 @@ def main() -> None:
     args = parser.parse_args()
     features, hypothesis, change = TRIALS[args.trial]
     data = ROOT / "data"
+    data_hash = data_digest(data)
+    source_hashes = source_digests(inference_sources(ROOT))
     train, test = load_data(data)
-    split_path = ROOT / "outputs" / "split_v1.csv"
+    split_path = ROOT / "outputs" / f"{SPLIT_VERSION}.csv"
     split_path.parent.mkdir(exist_ok=True)
     split = make_split(train)
-    if split_path.exists() and not pd.read_csv(split_path).equals(split):
-        raise ValueError("split_v1 が既存の分割と一致しません")
-    if not split_path.exists():
+    if split_path.exists():
+        check_split(split_path, split)
+    else:
         split.to_csv(split_path, index=False, lineterminator="\n")
+    split_hash = file_sha256(split_path)
     folds = split["fold"].to_numpy()
     y = train["score"].to_numpy()
     store = RunStore(ROOT)
@@ -62,6 +64,12 @@ def main() -> None:
         result = cross_fit(folds, fit_fold)
         submission(train, result.oof)
         test_submission = submission(test, result.query)
+        if (
+            data_digest(data) != data_hash
+            or file_sha256(split_path) != split_hash
+            or source_digests(inference_sources(ROOT)) != source_hashes
+        ):
+            raise ValueError("CV の実行中に入力または推論ソースが変わりました")
 
         def write_artifacts(directory: Path) -> None:
             test_submission.to_csv(directory / "submission.csv", index=False)
@@ -73,15 +81,19 @@ def main() -> None:
                 competition_id="054",
                 metric="pearson",
                 greater_is_better=True,
-                data_hash=files_sha256(
-                    data / name for name in ("train.csv", "test.csv", "sample_submission.csv")
-                ),
-                split_version="split_v1",
-                split_hash=file_sha256(split_path),
-                seed=0,
+                data_hash=data_hash,
+                split_version=SPLIT_VERSION,
+                split_hash=split_hash,
+                seed=SEED,
                 score=pearson,
             ),
-            Trial(hypothesis, change, "Ridge", "official", {"alpha": 1, "features": features}),
+            Trial(
+                hypothesis,
+                change,
+                "Ridge",
+                "official",
+                {"alpha": ALPHA, "features": features, "source_sha256": source_hashes},
+            ),
             y,
             folds_to_splits(folds),
             result,

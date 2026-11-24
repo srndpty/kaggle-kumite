@@ -1,5 +1,7 @@
 """正規化 anchor と無順序ペアで連結したグループを分割する。"""
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import GroupKFold
@@ -33,3 +35,9 @@ def make_split(rows: pd.DataFrame) -> pd.DataFrame:
     if (folds < 0).any():
         raise ValueError("検証されていない行があります")
     return pd.DataFrame({"id": rows["id"], "component": component, "fold": folds})
+
+
+def check_split(path: Path, expected: pd.DataFrame) -> None:
+    stored = pd.read_csv(path, dtype={"id": str, "component": str}, keep_default_na=False)
+    if not stored.equals(expected):
+        raise ValueError("保存された分割が現在の公式データから構成した分割と一致しません")

@@ -1,14 +1,15 @@
 """OOF で選定した設定を全行で再学習する提出 Notebook を生成する。"""
 
 import argparse
+import json
 from pathlib import Path
 
+from evidence import ROOT, inference_sources
+from select_model import select
 from train import TRIALS
 
 from kumite.kaggle_notebook import write_cpu_notebook
-from kumite.runs import RunStore
 
-ROOT = Path(__file__).resolve().parents[1]
 SLUG = "us-patent-phrase-to-phrase-matching"
 BODY = """
 test_file, = (
@@ -26,19 +27,33 @@ def predict_directory(data, output, features):
 """
 
 
-def inference_source(features: tuple[str, ...]) -> str:
-    checks = Path(__file__).resolve().parents[3] / "src" / "kumite" / "checks.py"
-    inputs = (ROOT / "src" / "inputs.py").read_text(encoding="utf-8")
-    model = (ROOT / "src" / "model.py").read_text(encoding="utf-8")
+def inference_source(features: tuple[str, ...], sources: dict[str, bytes]) -> str:
     return "\n".join(
         (
-            checks.read_text(encoding="utf-8"),
-            inputs.replace("from kumite.checks import validate_regression", ""),
-            model,
+            sources["checks.py"].decode("utf-8"),
+            sources["inputs.py"]
+            .decode("utf-8")
+            .replace("from kumite.checks import validate_regression", ""),
+            sources["model.py"].decode("utf-8"),
             PREDICT,
             f"FEATURES = {features!r}",
         )
     )
+
+
+def verified_source(root: Path, path: Path, suffix: str, *, baseline: bool) -> tuple[str, str]:
+    sources = inference_sources(root)
+    frozen = None if baseline else json.loads(path.read_text(encoding="utf-8"))
+    if frozen is not None:
+        if not isinstance(frozen, dict) or not isinstance(frozen.get("run_suffix"), str):
+            raise ValueError("選定記録の形式が不正です")
+        suffix = frozen["run_suffix"]
+    current = select(root, suffix, sources, baseline=baseline)
+    if not baseline and frozen != current:
+        raise ValueError("現在の選定結果が確定済みの選定記録と一致しません")
+    run_id = current["selected"]
+    features = TRIALS[run_id.removesuffix(suffix)][0]
+    return run_id, inference_source(features, sources)
 
 
 def main() -> None:
@@ -47,18 +62,12 @@ def main() -> None:
     parser.add_argument("output", type=Path)
     parser.add_argument("--baseline", action="store_true")
     parser.add_argument("--run-suffix", default="")
+    parser.add_argument("--selection", type=Path, default=ROOT / "selection.json")
     args = parser.parse_args()
-    store = RunStore(ROOT)
-    if args.baseline:
-        record = store.record(f"E01{args.run_suffix}")
-        name = "baseline"
-    else:
-        records = [store.record(f"{trial}{args.run_suffix}") for trial in TRIALS]
-        if len({(record.data_hash, record.split_hash) for record in records}) != 1:
-            raise ValueError("同じデータと分割の run が必要です")
-        record = max(records, key=lambda item: item.oof_score)
-        name = "final"
-    source = inference_source(tuple(record.params["features"]))
+    if args.run_suffix and not args.baseline:
+        parser.error("最終提出の run 接尾辞は選定記録から取得します")
+    run_id, source = verified_source(ROOT, args.selection, args.run_suffix, baseline=args.baseline)
+    name = "baseline" if args.baseline else "final"
     write_cpu_notebook(
         args.output,
         source + BODY,
@@ -66,7 +75,7 @@ def main() -> None:
         title=f"Kumite Patent {name.title()}",
         competition=SLUG,
     )
-    print(record.run_id)
+    print(run_id)
 
 
 if __name__ == "__main__":

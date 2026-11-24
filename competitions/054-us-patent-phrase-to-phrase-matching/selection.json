@@ -1,0 +1,29 @@
+{
+  "selected": "E05-r2",
+  "run_suffix": "-r2",
+  "data_sha256": "4d28a038a80d6e1c578ff68376cd3d126eac9c1cc3dee0f1da772c34755ad516",
+  "split_version": "split_v1",
+  "split_sha256": "b993c80a55c21d03851696ec5f661c7c3de986350b85609606cb07638f480144",
+  "seed": 0,
+  "metric": "pearson",
+  "greater_is_better": true,
+  "source_sha256": {
+    "checks.py": "4f6f298b47182eea3f4244627a3d7cfa33dd845169ca58ed41d37451c56dbd6d",
+    "inputs.py": "43263fdf71b9a7b89cdbe04db0c967c350e62a49a297c3e8e2230c7d7aa57de9",
+    "model.py": "3c9de55bb919d51e3e7028a98e4b29d89fa192378c973927850b795d52ffc4f0"
+  },
+  "oof_sha256": {
+    "E01-r2": "e1f5bcf7ff3433da32e545b69f2e5afa9fbb45804b1ad6c0102b55e45d95a31d",
+    "E02-r2": "522888e8dc9e2bb9e6ed72b9e5fc0fa3199a45c5d3cee028711d975ded3d8338",
+    "E03-r2": "6dd200e17c571cd1a60f74490778183fcf7bd0a56624e8859925a0a57ad3d01d",
+    "E04-r2": "6912ca53217a41d31e871fde2fac38c64b34c095f6f7d8a1da3d2f76d2cfccf8",
+    "E05-r2": "30970a94e7d8f999341cb20bafefeaed7da5d52c8212b259bf2315eaa6718b8c"
+  },
+  "oof_pearson": {
+    "E01-r2": 0.42721737231722257,
+    "E02-r2": 0.4857737996221805,
+    "E03-r2": 0.4861363996090603,
+    "E04-r2": 0.4872240748347261,
+    "E05-r2": 0.4884005338780029
+  }
+}

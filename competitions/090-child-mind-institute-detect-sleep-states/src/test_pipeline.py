@@ -1,0 +1,107 @@
+"""イベント採点と欠番処理の回帰テスト。"""
+
+from pathlib import Path
+from types import ModuleType
+
+import numpy as np
+import pandas as pd
+import polars as pl
+import pytest
+from metric import TOLERANCES, score
+from pipeline import EVENTS, bins, candidates, limit_candidates, matrix, submission
+from train import split
+
+
+def fixture() -> tuple[pl.DataFrame, pl.DataFrame]:
+    truth = pl.DataFrame(
+        {
+            "series_id": ["a"] * 5,
+            "step": [100, 130, 500, 550, None],
+            "event": ["onset", "onset", "wakeup", "wakeup", "wakeup"],
+        }
+    )
+    predicted = pl.DataFrame(
+        {
+            "series_id": ["a"] * 5,
+            "step": [100, 101, 142, 500, 750],
+            "event": ["onset", "onset", "onset", "wakeup", "wakeup"],
+            "score": [0.9, 0.8, 0.8, 0.9, 0.7],
+        }
+    )
+    return truth, predicted
+
+
+def test_boundary_duplicate_tie_and_empty() -> None:
+    truth, predicted = fixture()
+    detail = score(truth, predicted)
+    assert detail["onset/12"] == pytest.approx(0.5)
+    assert detail["onset/36"] == pytest.approx(0.5 + 1 / 3)
+    assert detail["wakeup/12"] == pytest.approx(0.5)
+    assert set(score(truth, predicted.clear()).values()) == {0}
+
+
+def test_official_metric_parity() -> None:
+    reference = Path(__file__).resolve().parents[1] / "outputs/reference/metric.txt"
+    if not reference.is_file():
+        pytest.skip("Kaggle 公式メトリックの照合用コードが未取得")
+    official = ModuleType("official_event_metric")
+    # pandas 3 は apply にグループキー列を渡さない。
+    source = reference.read_text(encoding="utf-8").replace(
+        "class_counts[group[event_column_name].iat[0]]", "class_counts[group.name[0]]"
+    )
+    exec(compile(source, str(reference), "exec"), official.__dict__)
+    truth, predicted = fixture()
+    expected = official.score(
+        pd.DataFrame(truth.drop_nulls("step").to_dict(as_series=False)),
+        pd.DataFrame(predicted.to_dict(as_series=False)),
+        {event: list(TOLERANCES) for event in EVENTS},
+        "series_id",
+        "step",
+        "event",
+        "score",
+    )
+    assert np.mean(list(score(truth, predicted).values())) == pytest.approx(expected)
+
+
+def test_gap_and_submission(tmp_path: Path) -> None:
+    path = tmp_path / "series.parquet"
+    pl.DataFrame(
+        {
+            "series_id": ["a"] * 4,
+            "step": [0, 1, 12, 13],
+            "anglez": [0.0, 0.0, 100.0, 100.0],
+            "enmo": [0.0] * 4,
+        }
+    ).write_parquet(path)
+    frame = bins(path)
+    assert frame["segment"].to_list() == [1, 2]
+    np.testing.assert_array_equal(matrix(frame, False)[:, 2], [0, 100])
+    probabilities = frame.with_columns(*(pl.lit(0.5).alias(event) for event in EVENTS))
+    result = candidates(probabilities, 0)
+    assert submission(result, path)["row_id"].to_list() == [0, 1, 2, 3]
+    with pytest.raises(ValueError, match="Unknown"):
+        submission(result.with_columns(pl.lit(99).alias("step")), path)
+
+
+def test_split_assigns_each_series_once() -> None:
+    ids = ["a", "b", "c", "d", "e", "f"]
+    frame = pl.DataFrame({"series_id": ids * 3})
+    assignments = split(frame)
+    assert assignments["series_id"].to_list() == ids
+    assert assignments["fold"].value_counts()["count"].to_list() == [2, 2, 2]
+    assert assignments.equals(split(frame.reverse()))
+
+
+def test_candidate_limit_keeps_best_per_event() -> None:
+    events = pl.DataFrame(
+        {
+            "series_id": ["a"] * 20,
+            "step": list(range(10)) * 2,
+            "event": ["onset"] * 10 + ["wakeup"] * 10,
+            "score": [i / 10 for i in range(10)] * 2,
+        }
+    )
+    result = limit_candidates(events, events)
+    assert result.height == 16
+    assert result["step"].min() == 2
+    assert result["step"].max() == 9

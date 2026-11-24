@@ -3,15 +3,29 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
-from ranking import KEY, LABEL, read_queries, retrieve, submission
+from ranking import KEY, LABEL, read_queries, retrieve, submission, validate_ranking
 from train import map25, splits_for
 
 from kumite.checks import check_label_independence
 
 
-def test_map25() -> None:
-    ranking = np.tile(np.arange(100), (3, 1))
-    assert map25(np.array([0, 24, 25]), ranking) == pytest.approx((1 + 1 / 25) / 3)
+@pytest.mark.parametrize(("label", "score"), [(0, 1.0), (24, 0.04), (25, 0.0), (100, 0.0)])
+def test_map25_boundaries(label: int, score: float) -> None:
+    assert map25(np.array([label]), np.arange(100)[None, :]) == pytest.approx(score)
+
+
+def test_map25_averages_all_rows() -> None:
+    ranking = np.tile(np.arange(100), (4, 1))
+    assert map25(np.array([0, 24, 25, 100]), ranking) == pytest.approx((1 + 1 / 25) / 4)
+    assert map25(np.arange(100, 104), ranking) == 0.0
+
+
+def test_validate_ranking_rejects_duplicate_candidate_ids() -> None:
+    ids = np.arange(100)
+    ranking = ids[None, :].copy()
+    ranking[0, 99] = 0
+    with pytest.raises(ValueError, match="重複"):
+        validate_ranking(ranking, 1, ids, 100)
 
 
 def test_retrieval_is_independent_of_labels(tmp_path: Path) -> None:

@@ -9,11 +9,11 @@
 
 | 状態 | 件数 |
 |---|---:|
-| 完了 | 31 |
+| 完了 | 32 |
 | 実装・学習完了、外部評価未達 | 1 |
 | P0 で中断 | 1 |
 | 差し替え | 1 |
-| 未着手 | 66 |
+| 未着手 | 65 |
 | **合計** | **100** |
 
 完了は個別の進捗チェックリストを終えたコンペを指す。#091 は外部評価未達のため、完了件数から除く。
@@ -32,7 +32,7 @@
 | 008 | Microsoft Malware Prediction | 未着手 | — |
 | 009 | TalkingData AdTracking Fraud Detection Challenge | 未着手 | — |
 | 010 | [BNP Paribas Cardif Claims Management](competitions/010-bnp-paribas-cardif-claims-management/README.md) | 完了 | — |
-| 011 | Allstate Claims Severity | 未着手 | — |
+| 011 | [Allstate Claims Severity](competitions/011-allstate-claims-severity/README.md) | 完了 | E02 の Late Private MAE 1144.12303。 |
 | 012 | [Mercedes-Benz Greener Manufacturing](competitions/012-mercedes-benz-greener-manufacturing/README.md) | 完了 | — |
 | 013 | Bosch Production Line Performance | 未着手 | — |
 | 014 | [Zillow Prize: Zillow’s Home Value Prediction](competitions/014-zillow-prize-1/README.md) | 完了 | — |

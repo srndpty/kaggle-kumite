@@ -5,12 +5,13 @@ import time
 from importlib.metadata import version
 from typing import Any
 
-import librosa
 import numpy as np
 import torch
-from dataset import RATE
 from supervision import collapse_probabilities
 from torch import nn
+
+from kumite.audio import Features as Features
+from kumite.audio import SmallCNN as SmallCNN
 
 
 def seed_all(seed: int) -> None:
@@ -22,65 +23,6 @@ def seed_all(seed: int) -> None:
     torch.set_num_threads(8)
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
-
-
-class Features(nn.Module):
-    weights: torch.Tensor
-    window: torch.Tensor
-
-    def __init__(self, linear: bool = False):
-        super().__init__()
-        if linear:
-            frequencies = np.linspace(0, RATE / 2, 257)
-            edges = np.linspace(0, RATE / 2, 42)
-            weights = np.maximum(
-                0,
-                np.minimum(
-                    (frequencies[None, :] - edges[:-2, None]) / np.diff(edges)[:-1, None],
-                    (edges[2:, None] - frequencies[None, :]) / np.diff(edges)[1:, None],
-                ),
-            )
-            weights /= np.maximum(weights.sum(axis=1, keepdims=True), 1e-12)
-        else:
-            weights = librosa.filters.mel(sr=RATE, n_fft=512, n_mels=40)
-            weights /= np.maximum(weights.sum(axis=1, keepdims=True), 1e-12)
-        self.register_buffer("weights", torch.as_tensor(weights, dtype=torch.float32))
-        self.register_buffer("window", torch.hann_window(400))
-
-    def forward(self, wave: torch.Tensor) -> torch.Tensor:
-        spectrum = torch.stft(
-            wave,
-            n_fft=512,
-            hop_length=160,
-            win_length=400,
-            window=self.window,
-            center=True,
-            return_complex=True,
-        )
-        power = spectrum.abs().square()
-        return torch.log(torch.matmul(self.weights, power) + 1e-6).unsqueeze(1)
-
-
-class SmallCNN(nn.Module):
-    def __init__(self, n_classes: int = 12):
-        super().__init__()
-        layers: list[nn.Module] = []
-        channels = 1
-        for output in (32, 64, 128):
-            layers.extend(
-                (
-                    nn.Conv2d(channels, output, 3, padding=1),
-                    nn.BatchNorm2d(output),
-                    nn.ReLU(),
-                    nn.MaxPool2d(2),
-                )
-            )
-            channels = output
-        layers.extend((nn.AdaptiveAvgPool2d(1), nn.Flatten(), nn.Linear(128, n_classes)))
-        self.layers = nn.Sequential(*layers)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.layers(x)
 
 
 def shift_wave(wave: torch.Tensor, shifts: torch.Tensor) -> torch.Tensor:

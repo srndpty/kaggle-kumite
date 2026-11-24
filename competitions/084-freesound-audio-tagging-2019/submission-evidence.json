@@ -1,0 +1,50 @@
+{
+  "competition": "freesound-audio-tagging-2019",
+  "baseline": {
+    "run_id": "E01",
+    "kernel_id": "shion5/kumite-freesound-baseline",
+    "kernel_version": 2,
+    "dataset": "shion5/kumite-freesound-baseline-weights",
+    "notebook_sha256": "fc3a666e9c6deb262eb71fb61284ddecd88f26aa6594f6c6f78488f6eadbb0fa",
+    "weights_sha256": {
+      "freesound-fold0.pt": "9296a816100286f31697f92d64d6a7177da06d1ab21d8507b241210b9ce0459e",
+      "freesound-fold1.pt": "6e6298262fa426386a492c8e83586a7223a12bdad7ba323e3ee3acbcca51f5dc",
+      "freesound-fold2.pt": "1ea64b8102139a4fd849e7579f2cad478a586b2244aaacc0e6fdafd2cdfdbaba"
+    },
+    "public_submission_sha256": "48dcdcd277cda75b28e962c85273e879afcd9bfe7a51b80e00199d854353a286",
+    "public_rows": 3361,
+    "scoring": {
+      "fileName": "submission.csv",
+      "date": "2026-11-24 01:54:52.987000",
+      "description": "Kumite model baseline E01",
+      "status": "SubmissionStatus.COMPLETE",
+      "publicScore": "0.00000",
+      "privateScore": "0.37736"
+    }
+  },
+  "final": {
+    "selected_run_id": "E05",
+    "refit_run_id": "final-E05",
+    "kernel_id": "shion5/kumite-freesound-final",
+    "kernel_version": 1,
+    "dataset": "shion5/kumite-freesound-final-weights",
+    "notebook_sha256": "7bf33242bb6170abdf5dfcf1c81fc686ff3adee152d724aeecbbc4ffbe4c7274",
+    "weights_sha256": "34ca28ce76fae24a47932c04e4c3a9501a4e84fdf870c8ed0a41f7844d69bfd8",
+    "selection_sha256": "8151f6d2f246b64920b3f43bb716054a87db0d18113a0be1c6dfe1321556ed79",
+    "public_submission_sha256": "668e8e6fe0682cdae4110df1716bbe82385e7d38392141a26e0be20e9ea8f526",
+    "public_rows": 3361,
+    "local_match": {
+      "seed": 42,
+      "public_rows_checked": 12,
+      "maximum_absolute_difference": 1.1622905731201172e-06
+    },
+    "scoring": {
+      "fileName": "submission.csv",
+      "date": "2026-11-24 02:04:47",
+      "description": "Kumite final E05",
+      "status": "SubmissionStatus.COMPLETE",
+      "publicScore": "0.00000",
+      "privateScore": "0.26984"
+    }
+  }
+}

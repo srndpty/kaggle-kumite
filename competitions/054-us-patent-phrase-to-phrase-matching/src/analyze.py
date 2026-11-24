@@ -1,0 +1,94 @@
+"""OOF の誤差と連結成分単位のスコア差を集計する。"""
+
+import argparse
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+from inputs import load_data
+from model import pearson
+from split import make_split
+from train import ROOT, TRIALS
+
+from kumite.checks import validate_regression
+from kumite.runs import RunStore
+
+
+def paired_interval(
+    y: np.ndarray, baseline: np.ndarray, candidate: np.ndarray, groups: np.ndarray
+) -> np.ndarray:
+    rng = np.random.default_rng(42)
+    group_count = int(groups.max()) + 1
+    # 各成分の十分統計を先に計算し、再抽出のたびに全行を複製しない。
+    moments = [
+        np.vstack(
+            [
+                np.bincount(groups, weights=value, minlength=group_count)
+                for value in (np.ones(len(y)), y, y**2, pred, pred**2, y * pred)
+            ]
+        )
+        for pred in (baseline, candidate)
+    ]
+    differences = np.empty(2000)
+    for index in range(len(differences)):
+        weights = np.bincount(rng.integers(group_count, size=group_count), minlength=group_count)
+        scores = []
+        for matrix in moments:
+            n, sy, syy, sp, spp, syp = matrix @ weights
+            scores.append((syp - sy * sp / n) / np.sqrt((syy - sy**2 / n) * (spp - sp**2 / n)))
+        differences[index] = scores[1] - scores[0]
+    return np.quantile(differences, [0.025, 0.975])
+
+
+def main(root: Path = ROOT, *, suffix: str = "") -> None:
+    train, _ = load_data(root / "data")
+    split = make_split(train)
+    _, groups = np.unique(split["component"].to_numpy(), return_inverse=True)
+    y = train["score"].to_numpy()
+    predictions = {}
+    store = RunStore(root)
+    for trial in TRIALS:
+        record = store.record(f"{trial}{suffix}")
+        pred = np.load(store.runs_dir / record.run_id / "oof.npy", allow_pickle=False)
+        validate_regression(pred, len(train), lower=0)
+        if not np.isclose(pearson(y, pred), record.oof_score) or (pred > 1).any():
+            raise ValueError(f"OOF と記録が不一致です: {record.run_id}")
+        predictions[trial] = pred
+
+    for base, candidate in (("E01", "E02"), ("E02", "E03"), ("E03", "E04"), ("E04", "E05")):
+        lo, hi = paired_interval(y, predictions[base], predictions[candidate], groups)
+        print(f"{base} → {candidate}: 95% CI [{lo:+.5f}, {hi:+.5f}]")
+
+    pairs = [tuple(sorted((a, b))) for a, b in zip(train["anchor"], train["target"], strict=True)]
+    multiple = (
+        train.assign(pair=pd.Series(pairs, index=train.index))
+        .groupby("pair")["context"]
+        .transform("nunique")
+        .gt(1)
+    )
+    # 空白と非英数字を取り除くと同じ綴りになるペアを表記揺れとして集計する。
+    anchor_key = train["anchor"].str.replace(r"[\W_]+", "", regex=True)
+    target_key = train["target"].str.replace(r"[\W_]+", "", regex=True)
+    variants = train["anchor"].ne(train["target"]) & anchor_key.eq(target_key) & anchor_key.ne("")
+    unknown = pd.Series(False, index=train.index)
+    for fold in range(5):
+        valid = split["fold"].eq(fold)
+        unknown.loc[valid] = ~train.loc[valid, "context"].isin(train.loc[~valid, "context"])
+        overlap = train.loc[valid, "target"].isin(train.loc[~valid, "target"]).mean()
+        distribution = train.loc[valid, "score"].value_counts().sort_index().to_dict()
+        print(f"fold {fold}: target 重複 {overlap:.2%} / score {distribution}")
+    for label, mask in (
+        ("表記揺れ", variants),
+        ("複数 CPC のペア", multiple),
+        ("未知 CPC", unknown),
+    ):
+        print(label, int(mask.sum()))
+        if mask.any():
+            for run, pred in predictions.items():
+                print(f"  {run}: MAE {np.mean(np.abs(y[mask] - pred[mask])):.5f}")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--run-suffix", default="")
+    main(suffix=parser.parse_args().run_suffix)

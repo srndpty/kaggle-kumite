@@ -71,3 +71,4 @@
 | [K035](K035-staged-noisy-supervision.md) | 仮説 | #084 の弱ラベル使用量を揃えると、noisy の後に curated で学習した構成が混合学習より OOF lwlrap +0.01083 |
 
 | [K036](K036-periodic-local-time.md) | 仮説 | #090 で現地時刻を1日周期で符号化すると、系列単位3-fold の OOF AP が +0.049922 |
+| [K037](K037-summary-source-overlap.md) | 仮説 | #050 で原文と要約の語句一致率を加えると、課題単位 OOF MCRMSE が 0.85492 → 0.75594 |

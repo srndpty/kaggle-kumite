@@ -89,13 +89,13 @@ uv run python "$d/src/train.py" E04 E04 --baseline E00-r2
 uv run python "$d/src/train.py" E05 E05 --baseline E00-r2
 ```
 
-`export.py <Kaggleユーザー名> <run ID> <新規出力先>` は、指定した CV 設定で再学習し、公開テストの出力と、重み・提出用 Notebook を生成する。再学習には公式 CSV に矩形がない49枚も空ラベルで加える。重みを非公開データセットに登録し、`kernel/` を Kaggle で実行する。
+`export.py <Kaggleユーザー名> <CV run ID> <新規出力先> --run-id <再学習run ID>` は、指定した CV 設定で再学習し、公開テストの出力と、重み・提出用 Notebook を生成する。再学習には公式 CSV に矩形がない49枚も空ラベルで加える。独立した run には全学習データ・コード・CV 成果物・選定記録のハッシュと、生成物を保存する。ログの `score_source: source_cv` は引き継いだ CV スコアを示す。成果物は `outputs/runs/<再学習run ID>/` に保存し、指定した出力先にも提出用に配置する。重みを非公開データセットに登録し、`kernel/` を Kaggle で実行する。
 
 最終比較は `analyze.py <新規選定JSON> E00-r2 E02 E03 E04 <P6のrun ID>` で記録する。ランダム分割 E01 は撮影元を分けた CV との差を見るために使う。最終提出では `export.py` に `--selection <選定JSON>` を追加する。
 
 [選定記録](selection.json) に従い、主分割で最も高い `E02` を最終構成に固定した。 [振り返り](report.md)
 
-最終評価は非公開 CPU Notebook の版1を使用した。当時は GPU の待ち時間を受けて CPU に切り替えた。現在は `export.py <Kaggleユーザー名> E02 <新規出力先> --selection <選定JSON> --device cpu` で、公開テストの推論と Notebook を同じデバイス設定で生成できる。学習は CUDA を使用する。選定時と最終学習前に保存済み OOF 予測を再採点する。 [実際に採点した Notebook の証跡](submission-evidence.json)
+最終評価は非公開 CPU Notebook の版1を使用した。当時は GPU の待ち時間を受けて CPU に切り替えた。現在は `export.py <Kaggleユーザー名> E02 <新規出力先> --run-id final-E02 --selection <選定JSON> --device cpu` で、公開テストの推論と Notebook を同じデバイス設定で生成できる。学習は CUDA を使用する。選定時と最終学習前に保存済み OOF 予測を再採点する。 [実際に採点した Notebook の証跡](submission-evidence.json)
 
 証跡の `selection_sha256` は提出前の選定ファイルのバイト列に対応する。現在の `selection.json` を、キー順を維持した `json.dumps(..., indent=2)`、UTF-8、CRLF、末尾改行なしで再シリアライズすると同じハッシュを得られる。
 

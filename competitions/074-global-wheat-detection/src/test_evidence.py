@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 import analyze
+import export as exporter
 import numpy as np
 import pytest
 from dataset import Sample
@@ -55,7 +56,7 @@ def baseline(
             hypothesis="",
             changed_one_thing="",
             model="test",
-            params={"trial": trial},
+            params={"trial": trial, "size": 512, "color": False, "nms": 0.5},
             fold_scores=[1.0] * 3,
             oof_score=1.0,
             code_version="test",
@@ -70,6 +71,69 @@ def baseline(
         with store.reserve(trial) as reservation:
             store.publish(reservation, record, write_outputs)
     return store, rows
+
+
+def test_export_publishes_independent_refit(
+    baseline: tuple[RunStore, list[dict[str, object]]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store, _ = baseline
+    root = analyze.ROOT
+    data = root / "data"
+    sample = data / "sample_submission.csv"
+    sample.write_bytes(b"image_id,PredictionString\npublic,\n")
+    (data / "test").mkdir()
+    (data / "test" / "public.jpg").touch()
+    selection = root / "selection.json"
+    selection.write_text(
+        json.dumps(analyze.build_selection("E00", ["E02", "E03", "E04", "E05"])),
+        encoding="utf-8",
+    )
+    original, _ = analyze.load_samples(data)
+    extra = data / "extra.jpg"
+    extra.write_bytes(b"unlabeled")
+    monkeypatch.setattr(exporter, "ROOT", root)
+    monkeypatch.setattr(
+        exporter,
+        "load_samples",
+        lambda _, include_unlabeled=False: (
+            [*original, Sample(extra, "", [])] if include_unlabeled else original,
+            {},
+        ),
+    )
+    monkeypatch.setattr(exporter, "code_version", lambda _: "refit-code")
+
+    def fit(samples: list[Sample], *_: object) -> object:
+        assert (store.runs_dir / ".locks" / "final-E00.lock").is_file()
+        assert len(samples) == 4
+        return exporter.torch.nn.Linear(1, 1)
+
+    def write_csv(_: Path, _checkpoint: Path, path: Path, *args: object, **kwargs: object) -> None:
+        path.write_bytes(b"image_id,PredictionString\npublic,\n")
+
+    monkeypatch.setattr(exporter, "fit", fit)
+    monkeypatch.setattr(exporter, "write_submission", write_csv)
+    output = root / "bundle"
+    exporter.export("owner", "E00", output, selection, "cpu", run_id="final-E00")
+    final = store.record("final-E00")
+    cv = store.record("E00")
+    assert final.code_version == "refit-code"
+    assert final.data_hash != cv.data_hash
+    assert final.params["cv_run"] == "E00"
+    assert final.split_version == "full-train"
+    assert final.inputs["E00/oof.jsonl"] == cv.artifacts["oof.jsonl"]
+    assert store.artifact_path("final-E00", "selection.json").read_bytes() == selection.read_bytes()
+    assert (
+        store.artifact_path("final-E00", "wheat.pt").read_bytes()
+        == (output / "weights" / "wheat.pt").read_bytes()
+    )
+    evidence = json.loads((output / "evidence.json").read_bytes())
+    assert (evidence["run_id"], evidence["cv_run_id"], evidence["code_version"]) == (
+        "final-E00",
+        "E00",
+        "refit-code",
+    )
+    with pytest.raises(FileExistsError, match="記録済み"):
+        exporter.export("owner", "E00", root / "second", selection, "cpu", run_id="final-E00")
 
 
 def test_export_rejects_altered_selection(

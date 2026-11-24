@@ -4,6 +4,8 @@ import argparse
 import hashlib
 import inspect
 import json
+import shutil
+from dataclasses import replace
 from pathlib import Path
 from typing import Literal
 
@@ -14,7 +16,7 @@ from model import build_model, detect, fit, fuse_views, load_image
 from submission import submission_images, write_submission
 
 from kumite.kaggle_notebook import write_cpu_notebook
-from kumite.provenance import file_sha256, files_sha256
+from kumite.provenance import code_version, file_sha256, files_sha256
 from kumite.runs import RunStore
 
 IMPORTS = """import csv
@@ -54,13 +56,18 @@ def verify_selection(run_id: str, choice: dict[str, object], store: RunStore) ->
 
 def export(
     owner: str,
-    run_id: str,
+    cv_run_id: str,
     output: Path,
     selection: Path | None,
     notebook_device: Literal["cpu", "cuda"] = "cuda",
+    *,
+    run_id: str,
 ) -> None:
+    if output.exists():
+        raise FileExistsError(output)
     store = RunStore(ROOT)
-    record = store.record(run_id)
+    record = store.record(cv_run_id)
+    selection_bytes = None
     selection_hash = None
     if record.split_version != "source-v1":
         raise ValueError("Submission requires a source-v1 run")
@@ -69,7 +76,7 @@ def export(
             raise ValueError("Final submission requires --selection")
     else:
         selection_bytes = selection.read_bytes()
-        verify_selection(run_id, json.loads(selection_bytes), store)
+        verify_selection(cv_run_id, json.loads(selection_bytes), store)
         selection_hash = hashlib.sha256(selection_bytes).hexdigest()
     data = ROOT / "data"
     sample = data / "sample_submission.csv"
@@ -82,60 +89,109 @@ def export(
     final_data_hash = files_sha256([data / "train.csv", *(sample.path for sample in full_samples)])
     size, nms = int(record.params["size"]), float(record.params["nms"])
     flip_fusion = record.params.get("flip_fusion", False)
-    output.mkdir(parents=True, exist_ok=False)
-    weights = output / "weights"
-    weights.mkdir()
-    device = torch.device("cuda")
-    model = fit(full_samples, size, bool(record.params["color"]), device)
-    checkpoint = weights / "wheat.pt"
-    torch.save(model.state_dict(), checkpoint)
-    write_submission(
-        sample,
-        checkpoint,
-        output / "public.csv",
-        size,
-        nms,
-        torch.device(notebook_device),
-        flip_fusion=flip_fusion,
+    for name in ("oof.jsonl", "split.json"):
+        store.artifact_path(cv_run_id, name)
+    inputs = store.input_hashes(cv_run_id, "oof.jsonl", "split.json")
+    if selection_hash is not None:
+        inputs["selection.json"] = selection_hash
+    version = code_version(ROOT.parents[1])
+    final_record = replace(
+        record,
+        run_id=run_id,
+        data_hash=final_data_hash,
+        split_version="full-train",
+        split_hash="",
+        hypothesis="選定済みの構成を全学習画像で再学習して外部評価する",
+        changed_one_thing="全学習画像での再学習と提出物の生成",
+        params={
+            **record.params,
+            "cv_run": cv_run_id,
+            "score_source": "source_cv",
+            "training_images": len(full_samples),
+            "training_device": "cuda",
+            "notebook_device": notebook_device,
+        },
+        code_version=version,
+        inputs=inputs,
+        artifacts={},
+        late_score=None,
+        runtime_sec=None,
+        peak_memory_mb=None,
+        conclusion="",
+        next_experiment="",
     )
     dataset = f"{owner}/kumite-wheat-weights-{run_id.lower()}"
-    weights_hash = file_sha256(checkpoint)
-    (weights / "dataset-metadata.json").write_text(
-        json.dumps(
-            {"title": f"Kumite Wheat {run_id}", "id": dataset, "licenses": [{"name": "other"}]}
-        ),
-        encoding="utf-8",
-    )
-    write_notebook(
-        output / "kernel",
-        owner,
-        run_id,
-        dataset,
-        weights_hash,
-        template_hash,
-        size,
-        nms,
-        flip_fusion,
-        notebook_device,
-    )
-    (output / "evidence.json").write_text(
-        json.dumps(
-            {
-                "run_id": run_id,
-                "data_hash": record.data_hash,
-                "final_data_hash": final_data_hash,
-                "final_training_images": len(full_samples),
-                "split_hash": record.split_hash,
-                "weights_hash": weights_hash,
-                "selection_hash": selection_hash,
-                "notebook_hash": file_sha256(output / "kernel" / "submit.ipynb"),
-                "notebook_device": notebook_device,
-                "sample_submission_sha256": template_hash,
-            },
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
+
+    def write_outputs(stage: Path) -> None:
+        model = fit(full_samples, size, bool(record.params["color"]), torch.device("cuda"))
+        checkpoint = stage / "wheat.pt"
+        torch.save(model.state_dict(), checkpoint)
+        del model
+        write_submission(
+            sample,
+            checkpoint,
+            stage / "public.csv",
+            size,
+            nms,
+            torch.device(notebook_device),
+            flip_fusion=flip_fusion,
+        )
+        weights_hash = file_sha256(checkpoint)
+        (stage / "dataset-metadata.json").write_text(
+            json.dumps(
+                {"title": f"Kumite Wheat {run_id}", "id": dataset, "licenses": [{"name": "other"}]}
+            ),
+            encoding="utf-8",
+        )
+        write_notebook(
+            stage,
+            owner,
+            run_id,
+            dataset,
+            weights_hash,
+            template_hash,
+            size,
+            nms,
+            flip_fusion,
+            notebook_device,
+        )
+        if selection_bytes is not None:
+            (stage / "selection.json").write_bytes(selection_bytes)
+        (stage / "evidence.json").write_text(
+            json.dumps(
+                {
+                    "run_id": run_id,
+                    "cv_run_id": cv_run_id,
+                    "code_version": version,
+                    "data_hash": record.data_hash,
+                    "final_data_hash": final_data_hash,
+                    "final_training_images": len(full_samples),
+                    "split_hash": record.split_hash,
+                    "weights_hash": weights_hash,
+                    "selection_hash": selection_hash,
+                    "notebook_hash": file_sha256(stage / "submit.ipynb"),
+                    "notebook_device": notebook_device,
+                    "sample_submission_sha256": template_hash,
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+    with store.reserve(run_id) as reservation:
+        published = store.publish(reservation, final_record, write_outputs)
+    output.mkdir(parents=True, exist_ok=False)
+    (output / "weights").mkdir()
+    (output / "kernel").mkdir()
+    for name, dest in (
+        ("wheat.pt", "weights/wheat.pt"),
+        ("dataset-metadata.json", "weights/dataset-metadata.json"),
+        ("submit.ipynb", "kernel/submit.ipynb"),
+        ("kernel-metadata.json", "kernel/kernel-metadata.json"),
+        ("public.csv", "public.csv"),
+        ("evidence.json", "evidence.json"),
+    ):
+        shutil.copyfile(published / name, output / dest)
 
 
 def write_notebook(
@@ -197,12 +253,13 @@ write_submission(
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("owner")
-    parser.add_argument("run_id")
+    parser.add_argument("cv_run_id")
     parser.add_argument("output", type=Path)
+    parser.add_argument("--run-id", required=True)
     parser.add_argument("--selection", type=Path)
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cuda")
     args = parser.parse_args()
-    export(args.owner, args.run_id, args.output, args.selection, args.device)
+    export(args.owner, args.cv_run_id, args.output, args.selection, args.device, run_id=args.run_id)
 
 
 if __name__ == "__main__":

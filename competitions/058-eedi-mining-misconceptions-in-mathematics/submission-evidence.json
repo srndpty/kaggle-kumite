@@ -1,0 +1,48 @@
+{
+  "competition": "eedi-mining-misconceptions-in-mathematics",
+  "submissions": [
+    {
+      "trial": "P0",
+      "run_id": null,
+      "notebook": "shion5/kumite-eedi-p0",
+      "version": 1,
+      "submitted_at_utc": "2026-11-24 11:10:04.033000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_map25": 0.00183,
+      "private_map25": 0.00077,
+      "notebook_sha256": "4a339c63a56e876bde5da711efa7e0f10cb50f587eb477b238d405531501ad10",
+      "metadata_sha256": "c7d6fee6a6a8dae0138ed3f7f6798417b78da7c2b07b0f00a64f686a57fbebdb",
+      "dataset_sources": []
+    },
+    {
+      "trial": "E00",
+      "run_id": "E00",
+      "notebook": "shion5/kumite-eedi-e00",
+      "version": 1,
+      "submitted_at_utc": "2026-11-24 11:13:27.097000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_map25": 0.1123,
+      "private_map25": 0.13592,
+      "notebook_sha256": "44ed5e1b1d2ec667c2b72a66c5df68c18d0c813bb7d0b979bf9d80bf12983e34",
+      "metadata_sha256": "4c31e9e8426b18e77a3c99ab5c87cf5593b9df10090d0aa3d46c54c028a2c4ea",
+      "dataset_sources": []
+    },
+    {
+      "trial": "E04",
+      "run_id": "final-E04",
+      "notebook": "shion5/kumite-eedi-e04",
+      "version": 1,
+      "submitted_at_utc": "2026-11-24 11:26:15.593000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_map25": 0.13175,
+      "private_map25": 0.16252,
+      "notebook_sha256": "95b22a33ebd03e96cf324ca635b2d2071e19f96c766b3a54c1adbf93258a1f33",
+      "metadata_sha256": "bb6d8b6646ca119c3a53adf9710667e995c89f5c11fe1cce28dc8953d3f06c13",
+      "dataset_sources": [
+        "shion5/kumite-eedi-e5-small-v2"
+      ]
+    }
+  ],
+  "model_revision": "ffb93f3bd4047442299a41ebb6fa998a38507c52",
+  "selection_sha256": "b23eede4d6e5be9d6eddc192a3054ca8a0520b6e49a8c92663639b410a3869bf"
+}

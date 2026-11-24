@@ -5,14 +5,42 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
+      - name: PR の検査対象を判定
+        if: github.event_name == 'pull_request'
+        id: scope
+        shell: pwsh
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: ./.github/scripts/ci-scope.ps1 -Base $env:BASE_SHA -Head $env:HEAD_SHA >> $env:GITHUB_OUTPUT
       - uses: astral-sh/setup-uv@v6
+        if: steps.scope.outputs.mode != 'docs'
+        with:
+          enable-cache: true
       # competitions/ の型検査に ML ライブラリが要るため、全既定グループ（audio含む。torch は CPU 版）を入れる。
       - run: uv sync --locked
-      - run: pwsh ./dev.ps1 check
+        if: steps.scope.outputs.mode != 'docs'
+      - name: lint・型検査・テスト
+        if: steps.scope.outputs.mode != 'docs'
+        shell: pwsh
+        run: |
+          $targets = @()
+          if ($env:CHECK_MODE -eq 'competitions') {
+              $targets = @(ConvertFrom-Json -InputObject $env:CHECK_COMPETITIONS)
+          }
+          ./dev.ps1 check @targets
         env:
           UV_NO_SYNC: "1"
+          CHECK_MODE: ${{ steps.scope.outputs.mode }}
+          CHECK_COMPETITIONS: ${{ steps.scope.outputs.competitions }}

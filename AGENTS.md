@@ -27,7 +27,7 @@ Kaggle 100本ノック: 終了済みの賞金付きコンペ100題を解き、�
 `dev <command>`（実体は `dev.ps1`）。一覧は `dev help`。
 
 - `dev setup` — 依存関係の同期と pre-commit の導入
-- `dev check` — lint + 整形確認 + 型検査 + テスト。CI と同一なので、commit 前に通す
+- `dev check` — lint + 整形確認 + 型検査 + 全テスト。commit 前に通す。PR の CI は変更範囲に応じてテスト対象を絞る
 - `dev format` / `dev lint` / `dev test` / `dev clean`
 - `dev list` / `dev new <番号>` / `dev download <番号>`
 - `dev submit <番号> <ファイル> -m <メッセージ>` / `dev submissions <番号>` / `dev compare <番号> <基準> <run_id...>` / `dev orphans <番号> [--delete]`

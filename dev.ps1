@@ -24,11 +24,21 @@ function Invoke-Lint { Invoke-Native uv run ruff check . }
 # 引数があれば pytest にそのまま渡す。
 function Invoke-Test {
     if ($rest.Count -gt 0) { Invoke-Native uv run pytest @rest; return }
+    Invoke-CheckTests
+}
+
+function Invoke-CheckTests([string[]] $Competitions = @()) {
     Invoke-Native uv run pytest tests
-    Get-ChildItem "competitions/*/src/test_*.py" | ForEach-Object { $_.Directory.FullName } |
-        Sort-Object -Unique | ForEach-Object {
-            Invoke-Native uv run pytest $_
+    if ($Competitions.Count -eq 0) {
+        $Competitions = @(Get-ChildItem competitions -Directory | ForEach-Object { $_.FullName })
+    }
+    foreach ($competition in $Competitions) {
+        $src = Join-Path $competition 'src'
+        if ((Test-Path -LiteralPath $src -PathType Container) -and
+            (Get-ChildItem -LiteralPath $src -File -Filter 'test_*.py' | Select-Object -First 1)) {
+            Invoke-Native uv run pytest $src
         }
+    }
 }
 
 $commands = [ordered]@{
@@ -45,11 +55,11 @@ $commands = [ordered]@{
         }
     }
     test     = @{ Description = "pytest を実行（tests/ と各コンペの src/ を別々に。追加引数があればそのまま渡す）"; Action = { Invoke-Test } }
-    check    = @{ Description = "lint + 整形確認 + 型検査 + テスト（CI と同一）"; Action = {
+    check    = @{ Description = "lint + 整形確認 + 型検査 + テスト（引数でコンペのパスを指定可能）"; Action = {
             Invoke-Lint
             Invoke-Native uv run ruff format --check .
             Invoke-Native uv run pyright
-            Invoke-Test
+            Invoke-CheckTests -Competitions $rest
         }
     }
     clean    = @{ Description = "キャッシュを削除（data/ outputs/ は消さない）"; Action = {

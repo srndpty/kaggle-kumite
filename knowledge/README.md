@@ -73,3 +73,4 @@
 | [K036](K036-periodic-local-time.md) | 仮説 | #090 で現地時刻を1日周期で符号化すると、系列単位3-fold の OOF AP が +0.049922 |
 | [K037](K037-summary-source-overlap.md) | 仮説 | #050 で原文と要約の語句一致率を加えると、課題単位 OOF MCRMSE が 0.85492 → 0.75594 |
 | [K038](K038-retrieval-vs-reranking.md) | 仮説 | #058 で候補を固定した LambdaRank は MAP@25 +0.01279。構成概念名の追加は Recall@100 +8.83ポイント |
+| [K039](K039-sensor-event-window-length.md) | 仮説 | #091 の過去3秒窓は過去1秒窓より Turn AP +0.03172、StartHesitation AP −0.00870 |

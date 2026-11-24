@@ -4,6 +4,7 @@ Kaggle 100本ノック。終了済みの賞金付きコンペ100題で、EDA →
 ゴールは順位ではなく、100件の再現可能な ML 実験レポート集。
 
 - コンペ一覧: [catalog/kaggle100_catalog.md](catalog/kaggle100_catalog.md)
+- 全体進捗: [PROGRESS.md](PROGRESS.md)
 - 進め方・規約: [AGENTS.md](AGENTS.md)
 
 ## セットアップ

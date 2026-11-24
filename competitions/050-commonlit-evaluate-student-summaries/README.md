@@ -37,6 +37,8 @@ E00 の学習ラベル列平均による参照 OOF は 1.04993。E04 は分割�
 
 2026-11-24 に各 Notebook の版1を採点した。E00 は Public 0.61688 / Private 0.65148。課題単位 CV で選定した E02 は Public **0.56152** / Private **0.63399**。実験ログの `late_score` は Private を記録する。 [E00 Notebook](https://www.kaggle.com/code/shion5/kumite-summaries-e00) · [E02 Notebook](https://www.kaggle.com/code/shion5/kumite-summaries-e02) · [振り返り](report.md)
 
+Notebook の書き出し時は、配布 CSV 5件、保存済み推論ソース、生成 Notebook のハッシュを `evidence.json` に記録する。Kaggle 実行時は学習 CSV 2件のハッシュを照合し、テスト側は列構成・課題の対応・サンプル提出と要約の ID 集合を検査する。上の採点値は提出済みの版1の実測値。
+
 ## 上位解法と再現対象
 
 - 1位 Lucky shake は学習課題を増やすために原文・課題・要約を生成し、擬似ラベルを使った。公開推論コードの LightGBM 特徴には要約と原文の語数比がある。E05 ではこの比だけを加える。語数の定義は E00 のトークン化に揃える。 [本人 writeup](https://www.kaggle.com/competitions/commonlit-evaluate-student-summaries/writeups/lucky-shake-1st-a-brief-review-of-the-competition-) · [本人の推論コード](https://www.kaggle.com/code/itsmeanszao/debertav3-lgbm-no-autocorrect)

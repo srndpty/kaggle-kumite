@@ -2,9 +2,9 @@
 
 import re
 from collections.abc import Iterable, Set
+from inspect import getsource
 from itertools import pairwise
 from pathlib import Path
-from typing import TypeVar
 
 import numpy as np
 import pandas as pd
@@ -38,6 +38,16 @@ def load_partition(data: Path, partition: str) -> pd.DataFrame:
     rows = pd.read_csv(
         data / f"summaries_{partition}.csv", dtype={"student_id": str, "prompt_id": str}
     )
+    summary_columns = {"student_id", "prompt_id", "text"}
+    if partition == "train":
+        summary_columns.update(TARGETS)
+    if set(rows.columns) != summary_columns or set(prompts.columns) != {
+        "prompt_id",
+        "prompt_title",
+        "prompt_question",
+        "prompt_text",
+    }:
+        raise ValueError(f"{partition} の列構成が不正です")
     if rows.empty or rows["student_id"].isna().any() or not rows["student_id"].is_unique:
         raise ValueError(f"{partition} の student_id が不正です")
     if prompts["prompt_id"].isna().any() or rows["prompt_id"].isna().any():
@@ -61,9 +71,6 @@ def load(data: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 def tokens(text: str) -> list[str]:
     return WORDS.findall(text.casefold())
-
-
-Item = TypeVar("Item")
 
 
 def overlap(items: Iterable[str | tuple[str, str]], reference: Set[str | tuple[str, str]]) -> float:
@@ -121,10 +128,21 @@ def write_submission(
 ) -> None:
     if prediction.shape != (len(test), len(TARGETS)) or not np.isfinite(prediction).all():
         raise ValueError("提出予測の形状または値が不正です")
-    submission = pd.DataFrame(prediction, columns=TARGETS, index=test["student_id"])
+    ids = test["student_id"]
+    if ids.isna().any() or not ids.is_unique:
+        raise ValueError("提出元の student_id に欠損または重複があります")
+    submission = pd.DataFrame(prediction, columns=TARGETS, index=ids)
     template = pd.read_csv(sample, dtype={"student_id": str})
-    if list(template) != ["student_id", *TARGETS] or not template["student_id"].is_unique:
+    if list(template) != ["student_id", *TARGETS]:
         raise ValueError("サンプル提出の形式が不正です")
-    if set(template["student_id"]) == set(submission.index):
-        submission = submission.loc[template["student_id"]]
-    submission.to_csv(output)
+    expected_ids = template["student_id"]
+    if expected_ids.isna().any() or not expected_ids.is_unique:
+        raise ValueError("サンプル提出の student_id に欠損または重複があります")
+    if set(expected_ids) != set(ids):
+        raise ValueError("提出ID集合がサンプル提出と一致しません")
+    submission.loc[expected_ids].to_csv(output)
+
+
+def submission_io_source() -> str:
+    """保存済みモデルにも現行の入出力検証を適用する。"""
+    return "\n".join(getsource(function) for function in (load_partition, load, write_submission))

@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data"
 SEED = 42
 PRIMARY_SPLIT = "prompt-loo-v1"
+SELECTION_TRIALS = ("E00", "E01", "E02", "E03", "E05")
 
 
 def rmse_columns(y: np.ndarray, prediction: np.ndarray) -> np.ndarray:
@@ -140,6 +141,8 @@ def run_cv(train: pd.DataFrame, test: pd.DataFrame, trial: str, run_id: str) -> 
 
 
 def select(train: pd.DataFrame, run_ids: list[str]) -> dict[str, object]:
+    if not run_ids or len(set(run_ids)) != len(run_ids):
+        raise ValueError("選定候補の run ID は空にできず、重複もできません")
     roles = split_roles(len(train), make_splits(train))
     config = evaluation(roles, False)
     store = RunStore(ROOT)
@@ -159,6 +162,11 @@ def select(train: pd.DataFrame, run_ids: list[str]) -> dict[str, object]:
     }
     for run_id in run_ids:
         record = store.record(run_id)
+        trial = record.params.get("trial")
+        if trial not in SELECTION_TRIALS or run_id.partition("-")[0] != trial:
+            raise ValueError(f"{run_id}: 主分割の選定対象ではありません")
+        if record.metric != config.metric or record.greater_is_better is not False:
+            raise ValueError(f"{run_id}: 選定指標が一致しません")
         if (record.data_hash, record.split_version, record.split_hash) != (
             config.data_hash,
             config.split_version,
@@ -166,10 +174,14 @@ def select(train: pd.DataFrame, run_ids: list[str]) -> dict[str, object]:
         ):
             raise ValueError(f"{run_id}: 比較条件が一致しません")
         prediction = np.load(store.artifact_path(run_id, "oof.npy"), allow_pickle=False)
+        if prediction.shape != y.shape:
+            raise ValueError(f"{run_id}: OOF の形状が不正です")
+        if not np.isfinite(prediction).all():
+            raise ValueError(f"{run_id}: OOF に非有限値があります")
         score = mcrmse(y, prediction)
         if score != record.oof_score:
             raise ValueError(f"{run_id}: OOF スコアが一致しません")
-        order.append((score, int(record.params["trial"] != "E00"), run_id))
+        order.append((score, int(trial != "E00"), run_id))
         comparisons[run_id] = {
             "mcrmse": score,
             "rmse": dict(zip(TARGETS, rmse_columns(y, prediction).tolist(), strict=True)),

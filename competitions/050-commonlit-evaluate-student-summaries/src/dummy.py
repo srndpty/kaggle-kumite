@@ -3,23 +3,29 @@
 import argparse
 from pathlib import Path
 
+from model import FILES, TARGETS, submission_io_source
+
 from kumite.kaggle_notebook import write_cpu_notebook
 
 SLUG = "commonlit-evaluate-student-summaries"
-SOURCE = """from pathlib import Path
+SOURCE = f"""from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
-train_path, = (
-    path for path in Path('/kaggle/input').rglob('summaries_train.csv')
-    if (path.parent / 'summaries_test.csv').is_file()
+TARGETS = {TARGETS!r}
+FILES = {FILES!r}
+
+{submission_io_source()}
+
+data, = (
+    path.parent for path in Path('/kaggle/input').rglob('summaries_train.csv')
+    if all((path.parent / name).is_file() for name in FILES)
 )
-train = pd.read_csv(train_path)
-submission = pd.read_csv(train_path.parent / 'summaries_test.csv', dtype={'student_id': str})
-submission = submission[['student_id']].copy()
-for target in ('content', 'wording'):
-    submission[target] = train[target].mean()
-submission.to_csv('/kaggle/working/submission.csv', index=False)
+train, test = load(data)
+prediction = np.broadcast_to(train[TARGETS].mean().to_numpy(), (len(test), len(TARGETS)))
+write_submission(test, prediction, Path('/kaggle/working/submission.csv'),
+                 data / 'sample_submission.csv')
 """
 
 

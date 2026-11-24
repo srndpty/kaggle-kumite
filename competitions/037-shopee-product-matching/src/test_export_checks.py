@@ -63,8 +63,9 @@ def test_selection_checks_requested_run_and_saved_scores(tmp_path: Path) -> None
         verify_selection(store, "E04", path)
 
 
-def test_source_change_blocks_export(tmp_path: Path) -> None:
-    for name in ("matching.py", "images.py", "inference.py"):
+@pytest.mark.parametrize("changed", ["matching.py", "train.py", "split.py"])
+def test_source_change_blocks_export(tmp_path: Path, changed: str) -> None:
+    for name in ("matching.py", "images.py", "inference.py", "train.py", "split.py"):
         (tmp_path / name).write_text("# cv", encoding="utf-8")
     hashes = source_hashes(tmp_path)
     historical = record("E04", 0.8)
@@ -74,7 +75,7 @@ def test_source_change_blocks_export(tmp_path: Path) -> None:
         historical, inputs={f"source/{name}": digest for name, digest in hashes.items()}
     )
     verify_sources(saved, hashes)
-    (tmp_path / "matching.py").write_text("# changed", encoding="utf-8")
+    (tmp_path / changed).write_text("# changed", encoding="utf-8")
     with pytest.raises(ValueError, match="不一致"):
         verify_sources(saved, source_hashes(tmp_path))
 

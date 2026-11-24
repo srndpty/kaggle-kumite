@@ -8,13 +8,14 @@ from kumite.experiments import ExperimentRecord
 from kumite.provenance import file_sha256
 from kumite.runs import RunStore
 
-SOURCE_FILES = ("matching.py", "images.py", "inference.py")
+NOTEBOOK_SOURCE_FILES = ("matching.py", "images.py", "inference.py")
+CV_SOURCE_FILES = (*NOTEBOOK_SOURCE_FILES, "train.py", "split.py")
 CRITERION = "外側 OOF の平均 F1 最大。同点の場合は Baseline からの変更が少ない方を優先。"
 CHANGE_COUNTS = {"E00": 0, "E01": 1, "E02": 1, "E03": 2, "E04": 3}
 
 
 def source_hashes(directory: Path) -> dict[str, str]:
-    return {name: file_sha256(directory / name) for name in SOURCE_FILES}
+    return {name: file_sha256(directory / name) for name in CV_SOURCE_FILES}
 
 
 def verify_sources(record: ExperimentRecord, hashes: dict[str, str]) -> None:

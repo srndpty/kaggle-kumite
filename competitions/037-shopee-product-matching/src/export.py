@@ -7,7 +7,13 @@ import json
 import shutil
 from pathlib import Path
 
-from export_checks import source_hashes, verify_bundle, verify_selection, verify_sources
+from export_checks import (
+    NOTEBOOK_SOURCE_FILES,
+    source_hashes,
+    verify_bundle,
+    verify_selection,
+    verify_sources,
+)
 from matching import fit_text
 from train import ROOT, TRIALS, calibrate, load_images, load_rows
 
@@ -51,6 +57,7 @@ def main() -> None:
             raise ValueError("選定した run と画像埋め込みまたは重みが一致しません")
     threshold, model = calibrate(rows, "E03" if trial == "E04" else trial, embeddings)
     encoders = fit_text(rows["title"].tolist(), words=trial == "E01")
+    verify_sources(record, source_hashes(ROOT / "src"))
     dataset = args.output / "dataset"
     dataset.mkdir(parents=True, exist_ok=False)
     dataset_id = f"{args.owner}/{args.slug}"
@@ -77,9 +84,10 @@ def main() -> None:
     }
     config_bytes = json.dumps(config).encode("utf-8")
     (dataset / "model.json").write_bytes(config_bytes)
-    for filename in hashes:
+    for filename in NOTEBOOK_SOURCE_FILES:
         shutil.copy2(ROOT / "src" / filename, dataset)
-    files = {**hashes, "model.json": hashlib.sha256(config_bytes).hexdigest()}
+    files = {name: hashes[name] for name in NOTEBOOK_SOURCE_FILES}
+    files["model.json"] = hashlib.sha256(config_bytes).hexdigest()
     if weights_sha256 is not None:
         shutil.copy2(weights, dataset)
         files[weights.name] = weights_sha256

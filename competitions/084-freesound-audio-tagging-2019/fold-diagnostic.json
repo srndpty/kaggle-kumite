@@ -1,0 +1,55 @@
+{
+  "public_rows": 3361,
+  "checkpoint_sha256": {
+    "fold0.pt": "25c74789194fa5bf71f5f19c2a6eb12c3ccf9cce81b0ca8e3075aa1742bf1ba3",
+    "fold1.pt": "de70d4f7b28189befc567e6ddcd98507654e24c80a22ba05488baf3633f920a4",
+    "fold2.pt": "3952f34bc2b4d8a349cc3c2253958bd4b5f9c2ed50a29efd9486261794019041"
+  },
+  "E01": {
+    "sha256": "48dcdcd277cda75b28e962c85273e879afcd9bfe7a51b80e00199d854353a286",
+    "top_tag_agreement_with_e05_fold": 0.41207973817316274,
+    "mean_rank_correlation_with_e05_fold": 0.8988885290067127,
+    "unique_top_tags": 70,
+    "most_frequent_top_tag": "Sneeze",
+    "most_frequent_top_count": 274,
+    "mean_score": 0.016743143289152385,
+    "mean_max_score": 0.15504317996166725
+  },
+  "final-E05": {
+    "sha256": "668e8e6fe0682cdae4110df1716bbe82385e7d38392141a26e0be20e9ea8f526",
+    "top_tag_agreement_with_e05_fold": 0.338887235941684,
+    "mean_rank_correlation_with_e05_fold": 0.8174268340704642,
+    "unique_top_tags": 60,
+    "most_frequent_top_tag": "Tick-tock",
+    "most_frequent_top_count": 404,
+    "mean_score": 0.014733729202211747,
+    "mean_max_score": 0.16505479418590324
+  },
+  "E05-fold": {
+    "sha256": "aeafc81865b1d25fa2f4d86f0b7a88bb7bbb912cadc5967c329691279ff2d79c",
+    "top_tag_agreement_with_e05_fold": 1.0,
+    "mean_rank_correlation_with_e05_fold": 1.0,
+    "unique_top_tags": 74,
+    "most_frequent_top_tag": "Tick-tock",
+    "most_frequent_top_count": 319,
+    "mean_score": 0.01727615335855495,
+    "mean_max_score": 0.15606394144771546
+  },
+  "kaggle": {
+    "run_id": "E05-fold-review",
+    "kernel_id": "shion5/kumite-freesound-e05-fold-diagnostic",
+    "kernel_version": 1,
+    "dataset": "shion5/kumite-freesound-e05-fold-review-weights",
+    "notebook_sha256": "652f33998478669b0a7d7687bd233fa406e9a90adc1f07414be7dce0fcaaffd7",
+    "submission_sha256": "8c1ab1057514dbd0ab0fcb613502d7d1a196233bc3d2b5bb9b94917ad23bb449",
+    "maximum_absolute_difference_from_local": 1.559654871585714e-06,
+    "scoring": {
+      "fileName": "submission.csv",
+      "date": "2026-11-24 03:46:02.277000",
+      "description": "Kumite review E05 three-fold diagnostic",
+      "status": "SubmissionStatus.COMPLETE",
+      "publicScore": "0.00000",
+      "privateScore": "0.38638"
+    }
+  }
+}

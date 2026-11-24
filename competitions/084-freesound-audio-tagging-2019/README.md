@@ -76,3 +76,10 @@ E05 では E01 の CNN と学習更新数を使い、最初の400更新を noisy
 - E03 には --baseline で E01 の run ID を指定する。E01 の保存済み重みを使って推論窓の集約だけを変える。
 - 初回のモデル提出は src/export.py に Kaggle ユーザー名、E01 の run ID、新しい出力先、--dataset に非公開データセットのスラッグを指定して生成する。weights/ をそのデータセットとして登録し、kernel/ を実行する。
 - src/analyze.py に新しい選定 JSON、E01 の run ID、比較 run ID を指定して、OOF の再採点と長さ・タグ数別の差を記録する。最終提出用の再学習には src/export.py に選定 run ID と --selection、--refit-run、--seconds を指定する。
+
+## レビュー対応
+
+- 再学習前に E01〜E05 の成果物と採点値を照合し、候補一覧、差の区間、スライス、採否を再計算する。レポートに使用した既存の `selection.json` は、この手順で再構成できることを確認した。
+- 新しいモデル提出 Notebook は配布テンプレートの3,361件の ID と順序を固定する。音源 ZIP は、配布分と完全一致する構成、配布分と互いに素な追加評価分1,120件、両者を合わせた4,481件のいずれかを許容する。差異の件数はログに出力する。1,120件は主催者が公表した総テスト4,481件から、実際に配布された3,361件を引いた数。 [主催者のデータセット論文](https://dcase.community/documents/workshop2019/proceedings/DCASE2019Workshop_Fonseca_33.pdf)
+- `src/diagnose.py` に過去の E01、final-E05 の公開出力 CSV と新しい出力先を順に渡すと、保存済み E05 の3 fold 平均を公開音源で推論し、タグ順位・予測分布を比較する。E05 を `src/export.py` に指定すると、同じ3 fold 平均の診断 Notebook を生成できる。
+- 事後診断 `E05-fold-review` の Private は **0.38638**。同じ3 fold 平均の E01 比 **+0.00902**。当初の選定と final-E05 の Private 0.26984 は歴史的な結果として保持した。 [診断結果](fold-diagnostic.json)

@@ -9,10 +9,11 @@ from dataclasses import replace
 from inspect import getsource
 from pathlib import Path
 
+import pandas as pd
 import torch
+from analyze import verify_selection
 from dataset import RATE, SEED, WINDOW, data_fingerprint, read_clips, read_wave, targets, windows
 from dummy import SLUG
-from metric import lwlrap
 from model import Tagger, fit, predict
 from train import ROOT
 
@@ -21,6 +22,9 @@ from kumite.kaggle_notebook import write_cpu_notebook
 from kumite.paths import REPO_ROOT
 from kumite.provenance import code_version, file_sha256
 from kumite.runs import RunStore
+
+PUBLIC_TEST_COUNT = 3361
+TOTAL_TEST_COUNT = 4481
 
 IMPORTS = """import hashlib
 from io import BytesIO
@@ -37,6 +41,28 @@ from torch import nn
 
 """
 
+
+def evaluation_ids(
+    public_ids: list[str], template_ids: list[str], archive_ids: list[str], private_count: int
+) -> list[str]:
+    public = set(public_ids)
+    mounted = set(archive_ids)
+    if len(mounted) != len(archive_ids):
+        raise ValueError("Duplicate test clip IDs in archive")
+    if template_ids != public_ids:
+        raise ValueError("Unexpected public template IDs or order")
+    missing = public - mounted
+    extra = mounted - public
+    if not missing and not extra:
+        return public_ids
+    print(
+        f"Test archive mismatch: {len(mounted)} WAVs, {len(missing)} missing public, {len(extra)} extra"
+    )
+    if len(extra) == private_count and (not missing or missing == public):
+        return sorted(mounted)
+    raise ValueError("Unexpected test archive manifest")
+
+
 INFERENCE = """
 torch.set_num_threads(4)
 sample, = Path('/kaggle/input').rglob('sample_submission.csv')
@@ -47,11 +73,7 @@ if list(template.columns) != ['fname', *TAGS]:
 audio = ZipFile(sample.with_name('test.zip'))
 members = [name for name in audio.namelist() if name.endswith('.wav')]
 files = {Path(name).name: name for name in members}
-if not files or template['fname'].duplicated().any() or template['fname'].isna().any():
-    raise ValueError('Invalid test clips')
-if len(files) != len(members):
-    raise ValueError('Duplicate test clip IDs in archive')
-names = template['fname'].tolist() if set(files) == set(template['fname']) else sorted(files)
+names = evaluation_ids(PUBLIC_IDS, template['fname'].tolist(), [Path(name).name for name in members], PRIVATE_COUNT)
 device = torch.device('cpu')
 models = []
 for fold, expected in enumerate(WEIGHTS):
@@ -79,11 +101,15 @@ submission.to_csv('/kaggle/working/submission.csv', index=False)
 """
 
 
-def notebook_source(tags: list[str], weights: list[str], maximum: bool) -> str:
+def notebook_source(
+    tags: list[str], weights: list[str], maximum: bool, public_ids: list[str], private_count: int
+) -> str:
     definitions = "\n\n".join(
-        getsource(item) for item in (read_wave, windows, Features, SmallCNN, Tagger, predict)
+        getsource(item)
+        for item in (read_wave, windows, Features, SmallCNN, Tagger, predict, evaluation_ids)
     )
     config = f"RATE = {RATE}\nWINDOW = {WINDOW}\nTAGS = {tags!r}\nWEIGHTS = {weights!r}\nMAXIMUM = {maximum!r}\n"
+    config += f"PUBLIC_IDS = {public_ids!r}\nPRIVATE_COUNT = {private_count}\n"
     source = IMPORTS + config + "\n\n" + definitions + "\n" + INFERENCE
     compile(source, "freesound-notebook", "exec")
     return source
@@ -98,16 +124,7 @@ def refit(store: RunStore, run_id: str, selected_run: str, selection: Path, seco
         experiment = source.params["experiment"]
         if experiment not in {"E01", "E02", "E03", "E04", "E05"} or source.params.get("benchmark"):
             raise ValueError("Unsupported final experiment")
-        if (
-            choice["selected_run"] != selected_run
-            or choice["data_hash"] != source.data_hash
-            or choice["split_hash"] != source.split_hash
-        ):
-            raise ValueError("Selection does not match the run")
-        labels = store.load_array(selected_run, "labels.npy")
-        oof = store.load_array(selected_run, "oof.npy")
-        if abs(lwlrap(labels, oof) - source.oof_score) > 1e-12:
-            raise ValueError("Selected OOF score changed")
+        verify_selection(store, choice, selected_run)
         root = ROOT / "data"
         curated = read_clips(root, "curated")
         noisy = read_clips(root, "noisy")
@@ -172,11 +189,15 @@ def main() -> None:
     record = store.record(args.run_id)
     if args.output.exists():
         raise FileExistsError(args.output)
+    public = pd.read_csv(ROOT / "data" / "sample_submission.csv", dtype={"fname": str})["fname"]
+    if len(public) != PUBLIC_TEST_COUNT or public.isna().any() or public.duplicated().any():
+        raise ValueError("Invalid official public manifest")
+    public_ids = public.tolist()
     if args.selection is None:
-        if record.params.get("experiment") != "E01" or record.params.get("benchmark"):
-            raise ValueError("A complete E01 CV run is required")
+        if record.params.get("experiment") not in {"E01", "E05"} or record.params.get("benchmark"):
+            raise ValueError("A complete E01 or E05 CV run is required")
         checkpoint_paths = [store.artifact_path(args.run_id, f"fold{i}.pt") for i in range(3)]
-        suffix = "baseline"
+        suffix = "baseline" if record.params["experiment"] == "E01" else "e05-fold-diagnostic"
     else:
         if not args.refit_run or args.seconds is None or args.seconds <= 0:
             parser.error("--selection requires --refit-run and a positive --seconds")
@@ -206,6 +227,8 @@ def main() -> None:
             record.params["tags"],
             [file_sha256(path) for path in checkpoint_paths],
             record.params["experiment"] == "E03",
+            public_ids,
+            TOTAL_TEST_COUNT - PUBLIC_TEST_COUNT,
         ),
         kernel_id=f"{args.owner}/kumite-freesound-{suffix}",
         title=f"Kumite Freesound {suffix}",

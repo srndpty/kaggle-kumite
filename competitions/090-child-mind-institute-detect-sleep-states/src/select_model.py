@@ -6,8 +6,9 @@ import numpy as np
 import polars as pl
 from metric import confidence_order, matches, score
 from pipeline import EVENTS
-from train import ROOT
+from train import ROOT, SEED, SPLIT, TRIALS
 
+from kumite.experiments import ExperimentRecord
 from kumite.runs import RunStore
 
 
@@ -52,15 +53,35 @@ def errors(truth: pl.DataFrame, oof: pl.DataFrame) -> dict[str, dict[str, int]]:
     return totals
 
 
+def validate_main_run(record: ExperimentRecord, data_hash: str, split_hash: str) -> None:
+    if (
+        record.competition_id != ROOT.name
+        or record.metric != "event_detection_ap"
+        or record.greater_is_better is not True
+        or record.split_version != SPLIT
+        or record.seed != SEED
+        or (record.data_hash, record.split_hash) != (data_hash, split_hash)
+        or len(record.fold_scores) != 3
+    ):
+        raise ValueError(f"{record.run_id}: incompatible main evaluation")
+
+
+def validate_candidates(run_ids: list[str]) -> None:
+    if len(set(run_ids)) != len(run_ids) or set(run_ids) != TRIALS.keys():
+        raise ValueError("Selection requires E00 through E04 exactly once")
+
+
 def select(run_ids: list[str]) -> None:
+    validate_candidates(run_ids)
     store = RunStore(ROOT)
     baseline = store.record("E00")
+    records = [store.record(run_id) for run_id in run_ids]
+    for record in records:
+        validate_main_run(record, baseline.data_hash, baseline.split_hash)
     truth = pl.read_csv(ROOT / "data/train_events.csv", schema_overrides={"series_id": pl.String})
     comparisons = []
-    for run_id in run_ids:
-        record = store.record(run_id)
-        if (record.data_hash, record.split_hash) != (baseline.data_hash, baseline.split_hash):
-            raise ValueError(f"{run_id}: incompatible evaluation")
+    for record in records:
+        run_id = record.run_id
         oof = pl.read_csv(
             store.artifact_path(run_id, "oof.csv"), schema_overrides={"series_id": pl.String}
         )

@@ -2,6 +2,8 @@
 
 import base64
 import gzip
+import hashlib
+import json
 from pathlib import Path
 
 import lightgbm as lgb
@@ -17,11 +19,13 @@ def bins(path: Path, clock: bool = False) -> pl.DataFrame:
     steps = pl.col("step").cast(pl.Int64)
     extra = [pl.col("timestamp")] if clock else []
     time_agg = [pl.col("timestamp").first()] if clock else []
-    return (
+    frame = (
         pl.scan_parquet(path)
         .select("series_id", steps, "anglez", "enmo", *extra)
+        .sort("series_id", "step")
+        .with_columns(steps.diff().over("series_id").alias("step_delta"))
         .with_columns(
-            (steps.diff().over("series_id") != 1).fill_null(True).alias("gap"),
+            (pl.col("step_delta") != 1).fill_null(True).alias("gap"),
             (steps // 12).alias("minute"),
         )
         .with_columns(pl.col("gap").cum_sum().over("series_id").alias("segment"))
@@ -30,12 +34,17 @@ def bins(path: Path, clock: bool = False) -> pl.DataFrame:
             pl.col("step").min().alias("first"),
             pl.col("step").max().alias("last"),
             pl.col("anglez", "enmo").mean(),
+            (pl.col("step_delta") == 0).any().alias("duplicate_step"),
             *time_agg,
         )
         .with_columns(((pl.col("first") + pl.col("last")) // 2).alias("step"))
         .sort("series_id", "step")
         .collect()
     )
+
+    if frame["duplicate_step"].any():
+        raise ValueError("Duplicate step within series")
+    return frame.drop("duplicate_step")
 
 
 def features(frame: pl.DataFrame, long_window: bool) -> np.ndarray:
@@ -127,7 +136,7 @@ def submission(events: pl.DataFrame, path: Path) -> pl.DataFrame:
 
 
 def limit_candidates(events: pl.DataFrame, frame: pl.DataFrame) -> pl.DataFrame:
-    """提出では、記録日数あたり各イベントの上位8候補を残す。"""
+    """系列の先頭から末尾までのstep幅を日換算し、各イベントの候補上限を決める。"""
     days = frame.group_by("series_id").agg(
         (((pl.col("step").max() - pl.col("step").min()) // 17280 + 1) * 8).alias("budget")
     )
@@ -139,6 +148,13 @@ def limit_candidates(events: pl.DataFrame, frame: pl.DataFrame) -> pl.DataFrame:
         .select(COLUMNS)
         .sort("series_id", "step", "event")
     )
+
+
+def read_model_bundle(path: Path, expected_sha256: str) -> dict[str, list[str]]:
+    payload = path.read_bytes()
+    if hashlib.sha256(payload).hexdigest() != expected_sha256:
+        raise ValueError("Model bundle SHA-256 mismatch")
+    return json.loads(payload)
 
 
 def predict(

@@ -45,10 +45,12 @@ E04 では16位の着眼点から、現地時刻を1日周期で符号化した�
 
 `uv run python src/select_model.py E00 E01 E02 E03 E04` で、主分割の保存 OOF から `selection.json` を新規生成する。保管済み選定記録はそのまま参照する。
 
-`uv run python src/export.py E04 <Kaggleユーザー名> outputs/final` で、候補数を記録日数あたり各イベント8件に制限したローカル予測、非公開データセット用の重み、CPU Notebook を生成する。Kaggle CLI の `datasets create -p dataset` と `kernels push -p notebook` は `outputs/final` を作業ディレクトリにして実行する。E00 も同じ操作で再現できる。 [選定記録](selection.json) [採点証跡](submission-evidence.json)
+`uv run python src/export.py E04 <Kaggleユーザー名> outputs/final` で、候補数を系列のstep幅に応じて制限したローカル予測、非公開データセット用の重み、CPU Notebook を生成する。Kaggle CLI の `datasets create -p dataset` と `kernels push -p notebook` は `outputs/final` を作業ディレクトリにして実行する。E00 や他の非選定 run は `--diagnostic` を指定する。最終モードは選定記録・主分割・6モデル・検証済み推論ソースを照合する。生成先の `export-manifest.json` に選定記録、推論ソース、モデルJSON、Notebook、各メタデータのハッシュを保存し、Notebook ではモデルJSONのハッシュを推論前に検査する。 [選定記録](selection.json) [採点証跡](submission-evidence.json)
 
-公式メトリックとの照合を再実行する場合は、公式 Notebook の出力 `metric.py` を `outputs/reference/metric.txt` に置いてから `dev test` を実行する。 [公式メトリック Notebook](https://www.kaggle.com/code/metric/event-detection-ap)
+リリース時は、公式 Notebook の出力 `metric.py` を `outputs/reference/metric.txt` に置いてから PowerShell で `$env:KUMITE_REQUIRE_OFFICIAL_METRIC = '1'` を設定し、`dev check` を実行する。この設定では参照ファイルが欠けると失敗する。 [公式メトリック Notebook](https://www.kaggle.com/code/metric/event-detection-ap)
 
 主分割上位2件の再検証では `uv run python src/train.py E01 --seed 2026 --run-id E01-seed2026` と `uv run python src/train.py E04 --seed 2026 --run-id E04-seed2026` を実行する。この分割では E01 が上回った。 [比較結果](report.md)
+
+候補上限は系列の最初と最後のビン代表stepの差を17,280で割って切り捨て、1を加えた値に8を掛ける。途中の欠測も含む経過期間で、実測のあった日付数とは定義が異なる。
 
 提出時の候補制限を OOF で確認するには、保存済みの主分割 run を使い、`uv run python src/train.py E00 --capped --run-id E00-capped` と `uv run python src/train.py E04 --capped --run-id E04-capped` を実行する。

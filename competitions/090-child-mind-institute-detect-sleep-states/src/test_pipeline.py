@@ -1,5 +1,6 @@
 """イベント採点と欠番処理の回帰テスト。"""
 
+import os
 from pathlib import Path
 from types import ModuleType
 
@@ -40,16 +41,24 @@ def test_boundary_duplicate_tie_and_empty() -> None:
     assert set(score(truth, predicted.clear()).values()) == {0}
 
 
-def test_official_metric_parity() -> None:
-    reference = Path(__file__).resolve().parents[1] / "outputs/reference/metric.txt"
+def load_official_metric(reference: Path) -> ModuleType:
     if not reference.is_file():
-        pytest.skip("Kaggle 公式メトリックの照合用コードが未取得")
+        message = "Kaggle 公式メトリックの照合用コードが未取得"
+        if os.environ.get("KUMITE_REQUIRE_OFFICIAL_METRIC") == "1":
+            pytest.fail(message)
+        pytest.skip(message)
     official = ModuleType("official_event_metric")
     # pandas 3 は apply にグループキー列を渡さない。
     source = reference.read_text(encoding="utf-8").replace(
         "class_counts[group[event_column_name].iat[0]]", "class_counts[group.name[0]]"
     )
     exec(compile(source, str(reference), "exec"), official.__dict__)
+    return official
+
+
+def test_official_metric_parity() -> None:
+    reference = Path(__file__).resolve().parents[1] / "outputs/reference/metric.txt"
+    official = load_official_metric(reference)
     truth, predicted = fixture()
     expected = official.score(
         pd.DataFrame(truth.drop_nulls("step").to_dict(as_series=False)),
@@ -105,3 +114,55 @@ def test_candidate_limit_keeps_best_per_event() -> None:
     assert result.height == 16
     assert result["step"].min() == 2
     assert result["step"].max() == 9
+
+
+def test_shuffled_input_and_duplicate_steps(tmp_path: Path) -> None:
+    path = tmp_path / "series.parquet"
+    raw = pl.DataFrame(
+        {
+            "series_id": ["a"] * 24 + ["b"] * 24,
+            "step": list(range(24)) * 2,
+            "anglez": list(range(48)),
+            "enmo": [0.1] * 48,
+            "timestamp": ["2018-08-14T22:26:00-0400"] * 48,
+        }
+    )
+    raw.write_parquet(path)
+    ordered = bins(path, clock=True)
+    raw.sample(fraction=1, shuffle=True, seed=42).write_parquet(path)
+    shuffled = bins(path, clock=True)
+    assert ordered.equals(shuffled)
+    np.testing.assert_array_equal(matrix(ordered, True, True), matrix(shuffled, True, True))
+
+    def detect(frame: pl.DataFrame) -> pl.DataFrame:
+        return candidates(
+            frame.with_columns(*((pl.col("step") / 24).alias(event) for event in EVENTS)), 15
+        )
+
+    assert detect(ordered).equals(detect(shuffled))
+    pl.concat([raw, raw.head(1)]).write_parquet(path)
+    with pytest.raises(ValueError, match="Duplicate step"):
+        bins(path)
+
+
+def test_candidate_limit_counts_elapsed_span() -> None:
+    frame = pl.DataFrame({"series_id": ["a", "a"], "step": [0, 17280 * 4]})
+    events = pl.DataFrame(
+        {
+            "series_id": ["a"] * 50,
+            "step": list(range(50)),
+            "event": ["onset"] * 50,
+            "score": [i / 50 for i in range(50)],
+        }
+    )
+    result = limit_candidates(events, frame)
+    assert result.height == 40
+    assert result["step"].min() == 10
+
+
+def test_required_official_metric_rejects_missing_reference(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("KUMITE_REQUIRE_OFFICIAL_METRIC", "1")
+    with pytest.raises(pytest.fail.Exception, match="Kaggle"):
+        load_official_metric(tmp_path / "missing.txt")

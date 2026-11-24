@@ -77,5 +77,9 @@ E04 は E00 にクラスタ中心までの距離だけを加える。各 fold �
 OOF MAE と事前に決めたブートストラップ基準で E02 を採用した。Late Public MAE は 1130.46572、Late Private MAE は 1144.12303。再現用の選定コマンドは以下のとおり。帯別の誤差と仮説の判定は振り返りに記録した。 [振り返り](report.md)
 
 ```powershell
-uv run python competitions/011-allstate-claims-severity/src/select_model.py E00 E01 E02 E03 E04
+uv run python competitions/011-allstate-claims-severity/src/select_model.py E00 E01 E02 E03 E04 --output competitions/011-allstate-claims-severity/outputs/selection-recheck.json
 ```
+
+選定は E00〜E04 の成果物ハッシュと OOF MAE を照合してから、新規ファイルに結果を保存する。再実行ごとに未使用の出力先を指定する。外部評価前の選定は [selection.json](selection.json)、同じ実験のハッシュ付き検証結果は [selection-review.json](selection-review.json) に記録した。
+
+現在の E03 実装は平方根空間の負の値を 0 に丸めてから二乗する。実験ログの E03 は当時の計測値であり、再学習時は別の run ID を指定する。

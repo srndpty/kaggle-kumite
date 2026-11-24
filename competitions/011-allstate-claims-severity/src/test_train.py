@@ -33,3 +33,9 @@ def test_submission_uses_sample_order():
     assert result.to_dict("list") == {"id": [5, 3], "loss": [11.0, 22.0]}
     with pytest.raises(ValueError):
         submission(sample, pd.Series([3, 5]), np.array([22.0, np.nan]))
+
+
+def test_negative_square_root_predictions_are_clipped_before_squaring():
+    np.testing.assert_array_equal(restore(np.array([-2.0, 3.0]), "E03", 2), [0.0, 9.0])
+    with pytest.raises(ValueError):
+        restore(np.array([-np.inf]), "E03", 1)

@@ -101,10 +101,11 @@ def add_distances(training: pd.DataFrame, apply: pd.DataFrame) -> tuple[pd.DataF
 
 
 def restore(pred: np.ndarray, variant: str, count: int) -> np.ndarray:
+    validate_regression(pred, count)
     if variant == "E02":
         pred = np.expm1(pred)
     elif variant == "E03":
-        pred = np.square(pred)
+        pred = np.square(np.maximum(pred, 0))
     validate_regression(pred, count)
     return np.maximum(pred, 0)
 

@@ -1,0 +1,202 @@
+{
+  "selected_run": "E05",
+  "data_hash": "04bbfda1808fdd2ab2ab46d35a07adde4ebbd2a6bd8074a07476c7867e91154f",
+  "split_hash": "9b18405751301056b6ee341ec7054ec0f0d51c1eed1a10e21d97b99451c22a48",
+  "comparisons": [
+    {
+      "run_id": "E01",
+      "lwlrap": 0.395605231271979,
+      "delta_ci95": [
+        0.0,
+        0.0
+      ],
+      "slices": {
+        "length/<=2s": {
+          "clips": 1498,
+          "paired_delta": 0.0
+        },
+        "length/2-5s": {
+          "clips": 1062,
+          "paired_delta": 0.0
+        },
+        "length/>5s": {
+          "clips": 2410,
+          "paired_delta": 0.0
+        },
+        "tags/1": {
+          "clips": 4269,
+          "paired_delta": 0.0
+        },
+        "tags/2+": {
+          "clips": 701,
+          "paired_delta": 0.0
+        },
+        "frequency/1-50": {
+          "positive_tags": 194,
+          "paired_delta": 0.0
+        },
+        "frequency/51-100": {
+          "positive_tags": 5558,
+          "paired_delta": 0.0
+        }
+      },
+      "oof_sha256": "f2c903f37fe1a73f3b601be7c8e40acbc3a5b9afd319390c3dba527d77de0d65"
+    },
+    {
+      "run_id": "E02",
+      "lwlrap": 0.3989841974247177,
+      "delta_ci95": [
+        -0.0052560506740295405,
+        0.012365668783555958
+      ],
+      "slices": {
+        "length/<=2s": {
+          "clips": 1498,
+          "paired_delta": -0.02294536523265962
+        },
+        "length/2-5s": {
+          "clips": 1062,
+          "paired_delta": 0.015141938541121051
+        },
+        "length/>5s": {
+          "clips": 2410,
+          "paired_delta": 0.013620275700385445
+        },
+        "tags/1": {
+          "clips": 4269,
+          "paired_delta": 0.004540058457784996
+        },
+        "tags/2+": {
+          "clips": 701,
+          "paired_delta": 3.6617501192544584e-05
+        },
+        "frequency/1-50": {
+          "positive_tags": 194,
+          "paired_delta": -0.08135702430327031
+        },
+        "frequency/51-100": {
+          "positive_tags": 5558,
+          "paired_delta": 0.006336645560523053
+        }
+      },
+      "oof_sha256": "1f9ff321756b268d837176f1253fa2f154e1e38cecbf738eabb26abafa6650d9"
+    },
+    {
+      "run_id": "E03",
+      "lwlrap": 0.38801796804940725,
+      "delta_ci95": [
+        -0.010682911731942865,
+        -0.004561163391173338
+      ],
+      "slices": {
+        "length/<=2s": {
+          "clips": 1498,
+          "paired_delta": 0.0
+        },
+        "length/2-5s": {
+          "clips": 1062,
+          "paired_delta": -0.0005157879842616689
+        },
+        "length/>5s": {
+          "clips": 2410,
+          "paired_delta": -0.014886670133956698
+        },
+        "tags/1": {
+          "clips": 4269,
+          "paired_delta": -0.004424072514803462
+        },
+        "tags/2+": {
+          "clips": 701,
+          "paired_delta": -0.01669290120737501
+        },
+        "frequency/1-50": {
+          "positive_tags": 194,
+          "paired_delta": -0.00020543657986575893
+        },
+        "frequency/51-100": {
+          "positive_tags": 5558,
+          "paired_delta": -0.007844923238528098
+        }
+      },
+      "oof_sha256": "872c35cd055c76da240ea346a8982772b49517ffbc658615e23060191c03991e"
+    },
+    {
+      "run_id": "E04",
+      "lwlrap": 0.36544422702520074,
+      "delta_ci95": [
+        -0.03531169611180794,
+        -0.02510937883998049
+      ],
+      "slices": {
+        "length/<=2s": {
+          "clips": 1498,
+          "paired_delta": -0.04289757664722184
+        },
+        "length/2-5s": {
+          "clips": 1062,
+          "paired_delta": -0.019229063644021334
+        },
+        "length/>5s": {
+          "clips": 2410,
+          "paired_delta": -0.027383777224900922
+        },
+        "tags/1": {
+          "clips": 4269,
+          "paired_delta": -0.03320729780611913
+        },
+        "tags/2+": {
+          "clips": 701,
+          "paired_delta": -0.02139186924689559
+        },
+        "frequency/1-50": {
+          "positive_tags": 194,
+          "paired_delta": -0.054977843063594274
+        },
+        "frequency/51-100": {
+          "positive_tags": 5558,
+          "paired_delta": -0.029294781373359387
+        }
+      },
+      "oof_sha256": "5537dd09799aa293d82973d6263b6976e2c598790b8d836f3523b6cf8dd7ef84"
+    },
+    {
+      "run_id": "E05",
+      "lwlrap": 0.4098190268199805,
+      "delta_ci95": [
+        0.005249471657718228,
+        0.023128762106751473
+      ],
+      "slices": {
+        "length/<=2s": {
+          "clips": 1498,
+          "paired_delta": -0.019987481438473738
+        },
+        "length/2-5s": {
+          "clips": 1062,
+          "paired_delta": 0.03809242119268307
+        },
+        "length/>5s": {
+          "clips": 2410,
+          "paired_delta": 0.023947391283389987
+        },
+        "tags/1": {
+          "clips": 4269,
+          "paired_delta": 0.01580866591482443
+        },
+        "tags/2+": {
+          "clips": 701,
+          "paired_delta": 0.009622762779311575
+        },
+        "frequency/1-50": {
+          "positive_tags": 194,
+          "paired_delta": -0.017709219439783982
+        },
+        "frequency/51-100": {
+          "positive_tags": 5558,
+          "paired_delta": 0.015328056956355281
+        }
+      },
+      "oof_sha256": "a0982ed8598a6a3bac730c0d057b89485fedc670958ebcd901141eb8f875bb74"
+    }
+  ]
+}

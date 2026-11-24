@@ -53,13 +53,17 @@ def main() -> None:
     parser.add_argument("weights", type=Path)
     parser.add_argument("output", type=Path)
     args = parser.parse_args()
+    source_hash = file_sha256(Path(__file__))
     names = sorted(pd.read_csv(args.csv, usecols=["image"])["image"].unique().tolist())
     values = embed(args.images, names, args.weights)
+    if file_sha256(Path(__file__)) != source_hash:
+        raise ValueError("埋め込み生成中に画像ソースが変更されました")
     np.savez(args.output, names=np.array(names), values=values)
     manifest = {
         "weights_sha256": file_sha256(args.weights),
         "csv_sha256": file_sha256(args.csv),
         "embeddings_sha256": file_sha256(args.output),
+        "images_source_sha256": source_hash,
         "preprocessing": repr(ResNet18_Weights.IMAGENET1K_V1.transforms()),
     }
     args.output.with_suffix(".json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")

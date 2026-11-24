@@ -41,6 +41,10 @@ def test_identical_scores_preserve_posting_id_order_and_cap() -> None:
     candidates = top_candidates(fit_text(titles, words=False), titles)
     np.testing.assert_array_equal(candidates.indices[0], np.arange(1, 51))
     assert accepted(candidates, 0.9)[0].sum() == 49
+    metrics = row_metrics(candidates, np.zeros(51, dtype=np.int64), 0.9)
+    np.testing.assert_allclose(metrics["f1"], 100 / 101)
+    np.testing.assert_allclose(metrics["oracle_f1"], 100 / 101)
+    np.testing.assert_allclose(metrics["candidate_recall"], 1)
 
 
 def test_image_retrieval_adds_a_candidate_without_changing_text_top_k() -> None:

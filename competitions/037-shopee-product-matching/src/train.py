@@ -7,6 +7,7 @@ from time import perf_counter
 
 import numpy as np
 import pandas as pd
+from export_checks import source_hashes, verify_sources
 from lightgbm import Booster
 from matching import (
     Candidates,
@@ -103,6 +104,10 @@ def load_images(
         raise ValueError("画像埋め込みの元 CSV が一致しません")
     if manifest["embeddings_sha256"] != file_sha256(cache_path):
         raise ValueError("画像埋め込みのハッシュが一致しません")
+    if manifest.get("images_source_sha256") != file_sha256(ROOT / "src/images.py"):
+        raise ValueError(
+            "画像埋め込みの生成ソースが未記録または不一致です。埋め込みを再生成してください"
+        )
     with np.load(cache_path) as cache:
         lookup = {name: i for i, name in enumerate(cache["names"].tolist())}
         images = cache["values"][[lookup[name] for name in rows["image"]]]
@@ -179,6 +184,7 @@ def main() -> None:
     split_path = ROOT / "outputs" / f"{SPLIT_VERSION}.csv"
     with store.reserve(run_id) as reservation:
         start = perf_counter()
+        hashes = source_hashes(ROOT / "src")
         version = code_version(ROOT.parent.parent)
         rows = load_rows(train_path, split_path)
         images = None
@@ -192,6 +198,7 @@ def main() -> None:
                 split_hash,
             ):
                 raise ValueError("E04 は同じデータと分割の E03 が必要です")
+            verify_sources(base, hashes)
             oof, pairs = evaluate_mutual(rows, store, args.base_run)
             inputs = base.inputs | {
                 f"{args.base_run}/{name}": base.artifacts[name]
@@ -205,6 +212,9 @@ def main() -> None:
                 )
             oof, pairs = evaluate(rows, args.trial, images)
         metrics = oof[["f1", "candidate_recall", "oracle_f1"]].mean().to_dict()
+        if source_hashes(ROOT / "src") != hashes:
+            raise ValueError("実験中に推論ソースが変更されました")
+        inputs.update({f"source/{name}": digest for name, digest in hashes.items()})
         hypothesis, change = TRIALS[args.trial]
         record = ExperimentRecord(
             competition_id=ROOT.name,

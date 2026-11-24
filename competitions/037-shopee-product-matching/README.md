@@ -97,18 +97,21 @@ uv run python "$d/src/train.py" E04
 
 各 run の候補、採用フラグ、行別 F1、fold、閾値を `outputs/runs/<run_id>/` に保存する。再実行は `--run-id E00-r2` のように別 ID を使う。
 
-## 最終モデルの再現
+## 最終モデルの証跡と再書き出し
 
 外側 OOF の平均 F1 が最大の E04 を、最終提出の採点前に選んだ。 [選定記録](selection.json)
+
+E00〜E04 の実測値と提出証跡は当時の記録として保存する。当時の CV では推論ソースのファイル別 SHA256 を記録していないため、新しい export では拒否される。新たに提出用バンドルを作るときは、画像埋め込みを再生成し、E00〜E04 を新しい run ID で評価する。E04 の `--base-run` には新しい E03 の ID を指定する。新 run の比較結果を別の選定 JSON に記録し、そのファイルを `--selection` で指定する。
+
+最終 export は選定 JSON の OOF・分割・採用規則を RunStore と照合する。`--diagnostic` は選定確認を省略してローカル用バンドルを生成する。どちらの経路でもソースと入力の照合を行う。提出 Notebook はマニフェストと収録ファイルを検証してから推論する。
 
 ```powershell
 $d = 'competitions/037-shopee-product-matching'
 $out = "$d/outputs/e04-reproduction"
 $owner = '<Kaggleユーザー名>'
-$slug = 'kumite-shopee-e04'
-uv run python "$d/src/export.py" E04 $owner $slug $out
+$slug = 'kumite-shopee-e04-r2'
+uv run python "$d/src/export.py" '<新しい選定runのID>' $owner $slug $out --selection "$d/outputs/selection-r2.json"
 uv run python "$d/src/inference.py" "$d/data" "$out/dataset" "$out/submission.csv"
-uv run python "$d/src/analyze.py" E04 "$out/analysis.csv"
 kaggle datasets create -p (Resolve-Path "$out/dataset").Path
 kaggle datasets status "$owner/$slug"
 kaggle kernels push -p "$out/notebook"

@@ -1,10 +1,13 @@
 """確定した run の設定で全データを学習し、非公開提出用の入力を作る。"""
 
 import argparse
+import hashlib
+import inspect
 import json
 import shutil
 from pathlib import Path
 
+from export_checks import source_hashes, verify_bundle, verify_selection, verify_sources
 from matching import fit_text
 from train import ROOT, TRIALS, calibrate, load_images, load_rows
 
@@ -19,9 +22,15 @@ def main() -> None:
     parser.add_argument("owner")
     parser.add_argument("slug")
     parser.add_argument("output", type=Path)
+    parser.add_argument("--selection", type=Path, default=ROOT / "selection.json")
+    parser.add_argument("--diagnostic", action="store_true")
     args = parser.parse_args()
     store = RunStore(ROOT)
+    if not args.diagnostic:
+        verify_selection(store, args.run_id, args.selection)
     record = store.record(args.run_id)
+    hashes = source_hashes(ROOT / "src")
+    verify_sources(record, hashes)
     trial = str(record.params["trial"])
     if trial not in TRIALS:
         raise ValueError(f"未知の実験設定: {trial}")
@@ -31,11 +40,13 @@ def main() -> None:
         raise ValueError("選定した run とデータまたは分割が一致しません")
     rows = load_rows(train, split)
     embeddings = None
+    weights_sha256 = None
     weights = ROOT / "outputs/resnet18-f37072fd.pth"
     if trial in {"E02", "E03", "E04"}:
         embeddings, inputs = load_images(rows, train, ROOT / "outputs/train-embeddings.npz")
+        weights_sha256 = inputs["weights_sha256"]
         if any(record.inputs.get(key) != value for key, value in inputs.items()) or (
-            file_sha256(weights) != inputs["weights_sha256"]
+            file_sha256(weights) != weights_sha256
         ):
             raise ValueError("選定した run と画像埋め込みまたは重みが一致しません")
     threshold, model = calibrate(rows, "E03" if trial == "E04" else trial, embeddings)
@@ -52,7 +63,8 @@ def main() -> None:
         "run_id": args.run_id,
         "threshold": threshold,
         "model": None if model is None else model.model_to_string(),
-        "weights_sha256": None if embeddings is None else file_sha256(weights),
+        "source_sha256": hashes,
+        "weights_sha256": weights_sha256,
         "text": [
             {
                 "analyzer": encoder.analyzer,
@@ -63,16 +75,30 @@ def main() -> None:
             for encoder in encoders
         ],
     }
-    (dataset / "model.json").write_text(json.dumps(config), encoding="utf-8")
-    for filename in ("matching.py", "images.py", "inference.py"):
+    config_bytes = json.dumps(config).encode("utf-8")
+    (dataset / "model.json").write_bytes(config_bytes)
+    for filename in hashes:
         shutil.copy2(ROOT / "src" / filename, dataset)
-    if embeddings is not None:
+    files = {**hashes, "model.json": hashlib.sha256(config_bytes).hexdigest()}
+    if weights_sha256 is not None:
         shutil.copy2(weights, dataset)
-    source = f"""import sys
+        files[weights.name] = weights_sha256
+    manifest_bytes = json.dumps(files).encode("utf-8")
+    (dataset / "manifest.json").write_bytes(manifest_bytes)
+    manifest_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
+    verify_bundle(dataset, manifest_sha256)
+    if args.diagnostic:
+        return
+    source = f"""import hashlib
+import json
+import sys
 from pathlib import Path
 
+{inspect.getsource(verify_bundle)}
+
 root = Path('/kaggle/input')
-bundle, = (path.parent for path in root.rglob('model.json') if path.parent.name == {args.slug!r})
+bundle, = (path.parent for path in root.rglob('manifest.json') if path.parent.name == {args.slug!r})
+verify_bundle(bundle, {manifest_sha256!r})
 data, = (path.parent for path in root.rglob('test.csv') if path.parent.name == 'shopee-product-matching')
 sys.path.insert(0, str(bundle))
 from inference import submission

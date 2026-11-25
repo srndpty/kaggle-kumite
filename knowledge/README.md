@@ -83,3 +83,4 @@
 | [K046](K046-base-pair-probability-features.md) | 仮説 | #094 で対合確率による相手位置の集約を GRU に足すと CV −0.00814、Private −0.00839 |
 | [K047](K047-fold-local-pseudo-labels.md) | 仮説 | #094 で fold 内教師の疑似ラベルは CV −0.00565、Private −0.00226 |
 | [K048](K048-collection-round-shift-vs-length.md) | 仮説 | #094 は CV ≈ Public だが Private は約 0.12 悪い。長さ外挿の位置はむしろ誤差が小さく、別の収集ラウンドが主因 |
+| [K049](K049-short-window-realized-volatility.md) | 仮説 | #025 で直近300秒・150秒の板 RV を10分 RV に加えると OOF RMSPE −0.01134 |

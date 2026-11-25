@@ -1,20 +1,28 @@
 """週単位の CV と提出用の全行再学習。"""
 
 import argparse
+import hashlib
+import io
 import json
 from dataclasses import replace
 from pathlib import Path
 from time import perf_counter
+from typing import NamedTuple
 
 import numpy as np
+import polars as pl
 from pipeline import PARAMS, TABLES, WEEK, fit_predict, fold_weeks, load, shards, stability
 
 from kumite.checks import validate_probabilities
-from kumite.experiments import ExperimentRecord, compare_runs
+from kumite.experiments import ExperimentRecord
 from kumite.kaggle_notebook import write_cpu_notebook
 from kumite.paths import REPO_ROOT
 from kumite.provenance import array_sha256, code_version, files_sha256, peak_memory_mb
 from kumite.runs import RunStore
+
+METRIC = "mean_window_gini_stability"
+SPLIT_VERSION = "week-expanding-v1"
+PIPELINE = Path(__file__).with_name("pipeline.py")
 
 ROOT = Path(__file__).resolve().parents[1]
 SLUG = "home-credit-credit-risk-model-stability"
@@ -37,6 +45,7 @@ def run(data: Path, trial: str, run_id: str) -> None:
     with store.reserve(run_id) as reservation:
         # 全試行で同じ入力一式をハッシュする。
         digest = input_hash(data, "train")
+        source = PIPELINE.read_bytes()
         version = code_version(REPO_ROOT)
         frame = load(data, "train", history=trial != "E00", max_amount=trial == "E04")
         weeks, target = frame[WEEK].to_numpy(), frame["target"].to_numpy()
@@ -58,13 +67,13 @@ def run(data: Path, trial: str, run_id: str) -> None:
         record = ExperimentRecord(
             competition_id="005",
             run_id=run_id,
-            metric="mean_window_gini_stability",
+            metric=METRIC,
             greater_is_better=True,
             data_version=trial,
             data_hash=digest,
-            split_version="week-expanding-v1",
+            split_version=SPLIT_VERSION,
             split_hash=array_sha256(fold),
-            seed=42,
+            seed=PARAMS["seed"],
             hypothesis=hypothesis,
             changed_one_thing=change,
             model="LightGBM",
@@ -76,7 +85,11 @@ def run(data: Path, trial: str, run_id: str) -> None:
             code_version=version,
         )
 
+        if PIPELINE.read_bytes() != source:
+            raise ValueError("CV 実行中に pipeline.py が変更されました")
+
         def save(output: Path) -> None:
+            (output / "pipeline.py").write_bytes(source)
             np.save(output / "oof.npy", oof)
             np.save(output / "fold.npy", fold)
             (output / "metrics.json").write_text(
@@ -86,9 +99,8 @@ def run(data: Path, trial: str, run_id: str) -> None:
         print(store.publish(reservation, record, save), flush=True)
 
 
-def write_notebook(trial: str, owner: str, output: Path) -> None:
+def write_notebook(trial: str, owner: str, output: Path, source: str) -> None:
     with_history = trial != "E00"
-    source = Path(__file__).with_name("pipeline.py").read_text(encoding="utf-8")
     source += f"""
 
 test_base, = Path('/kaggle/input').rglob('test_base.parquet')
@@ -114,14 +126,90 @@ test.select(ID).with_columns(pl.Series('score', prediction)).write_csv(
     )
 
 
-def export(data: Path, trial: str, owner: str, run_id: str, source_run: str) -> None:
-    store = RunStore(ROOT)
+class Evaluation(NamedTuple):
+    data_hash: str
+    weeks: np.ndarray
+    target: np.ndarray
+    fold: np.ndarray
+    source: bytes
+
+
+def evaluation(data: Path) -> Evaluation:
+    base = pl.read_parquet(shards(data, "train", "base"), columns=[WEEK, "target"])
+    weeks, target = base[WEEK].to_numpy(), base["target"].to_numpy()
+    fold = np.full(len(base), -1, dtype=np.int8)
+    for index, (_, valid) in enumerate(fold_weeks(weeks, target)):
+        fold[valid] = index
+    return Evaluation(input_hash(data, "train"), weeks, target, fold, PIPELINE.read_bytes())
+
+
+def verified_artifact(store: RunStore, record: ExperimentRecord, name: str) -> bytes:
+    if name not in record.artifacts:
+        raise ValueError(
+            f"{record.run_id}: {name} の証跡がありません。新しい run ID で CV を再実行してください"
+        )
+    contents = (store.runs_dir / record.run_id / name).read_bytes()
+    if hashlib.sha256(contents).hexdigest() != record.artifacts[name]:
+        raise ValueError(f"{record.run_id}: {name} の SHA256 が一致しません")
+    return contents
+
+
+def verify_cv(store: RunStore, record: ExperimentRecord, trial: str, expected: Evaluation) -> None:
+    if (
+        record.competition_id != "005"
+        or record.data_version != trial
+        or record.metric != METRIC
+        or record.greater_is_better is not True
+        or record.split_version != SPLIT_VERSION
+        or record.seed != PARAMS["seed"]
+        or record.model != "LightGBM"
+        or record.params != PARAMS
+        or record.data_hash != expected.data_hash
+        or len(record.fold_scores) != 3
+    ):
+        raise ValueError(f"{record.run_id}: CV run の評価条件が一致しません")
+    fold = np.load(io.BytesIO(verified_artifact(store, record, "fold.npy")), allow_pickle=False)
+    if (
+        not np.array_equal(fold, expected.fold)
+        or fold.dtype != expected.fold.dtype
+        or array_sha256(fold) != record.split_hash
+    ):
+        raise ValueError(f"{record.run_id}: fold 割当が一致しません")
+    pred = np.load(io.BytesIO(verified_artifact(store, record, "oof.npy")), allow_pickle=False)
+    if pred.shape != fold.shape or pred.dtype.kind != "f":
+        raise ValueError(f"{record.run_id}: OOF の形状または型が不正です")
+    valid = fold >= 0
+    validate_probabilities(np.column_stack((1 - pred[valid], pred[valid])), int(valid.sum()), 2)
+    metrics = json.loads(verified_artifact(store, record, "metrics.json"))
+    scores = []
+    for index in range(3):
+        rows = fold == index
+        scores.append(stability(expected.weeks[rows], expected.target[rows], pred[rows])["score"])
+    pooled = stability(expected.weeks[valid], expected.target[valid], pred[valid])["score"]
+    if (
+        len(metrics["folds"]) != 3
+        or not np.allclose(scores, [m["score"] for m in metrics["folds"]], rtol=0, atol=1e-12)
+        or not np.allclose(scores, record.fold_scores, rtol=0, atol=1e-12)
+        or not np.isclose(np.mean(scores), record.oof_score, rtol=0, atol=1e-12)
+        or not np.isclose(pooled, metrics["pooled"]["score"], rtol=0, atol=1e-12)
+    ):
+        raise ValueError(f"{record.run_id}: OOF の再計算スコアが一致しません")
+    if verified_artifact(store, record, "pipeline.py") != expected.source:
+        raise ValueError(f"{record.run_id}: CV 時の pipeline.py と一致しません")
+
+
+def export(
+    store: RunStore,
+    data: Path,
+    trial: str,
+    owner: str,
+    run_id: str,
+    selected: ExperimentRecord,
+    expected: Evaluation,
+) -> None:
     with store.reserve(run_id) as reservation:
-        selected = store.record(source_run)
-        if selected.data_version != trial:
-            raise ValueError("再学習する構成と CV run が一致しません")
-        if input_hash(data, "train") != selected.data_hash:
-            raise ValueError("再学習するデータのハッシュが CV run と一致しません")
+        verify_cv(store, selected, trial, expected)
+        source_run = selected.run_id
         record = replace(
             selected,
             run_id=run_id,
@@ -133,22 +221,31 @@ def export(data: Path, trial: str, owner: str, run_id: str, source_run: str) -> 
             peak_memory_mb=None,
             code_version=code_version(REPO_ROOT),
             inputs={
-                **store.input_hashes(source_run, "oof.npy", "fold.npy", "metrics.json"),
+                **{
+                    f"{source_run}/{name}": selected.artifacts[name]
+                    for name in ("oof.npy", "fold.npy", "metrics.json", "pipeline.py")
+                },
                 "test_parquet": input_hash(data, "test"),
             },
             conclusion="oof_score は選定した CV run の参照値",
         )
-        print(store.publish(reservation, record, lambda out: write_notebook(trial, owner, out)))
+        print(
+            store.publish(
+                reservation,
+                record,
+                lambda out: write_notebook(trial, owner, out, expected.source.decode("utf-8")),
+            )
+        )
 
 
-def select_final(store: RunStore) -> ExperimentRecord:
-    candidates = [store.record(trial) for trial in TRIALS]
-    baseline = candidates[0]
-    for candidate in candidates:
-        compare_runs(baseline, candidate)
-        if len(candidate.fold_scores) != 3 or not np.isfinite(candidate.oof_score):
-            raise ValueError(f"{candidate.run_id} の CV 結果が不完全です")
-    return max(candidates, key=lambda candidate: candidate.oof_score)
+def select_final(store: RunStore, expected: Evaluation, run_ids: list[str]) -> ExperimentRecord:
+    records = [store.record(run_id) for run_id in run_ids]
+    candidates = {record.data_version: record for record in records}
+    if len(records) != len(TRIALS) or candidates.keys() != TRIALS.keys():
+        raise ValueError("E00〜E04 の CV run を各1件指定してください")
+    for trial, candidate in candidates.items():
+        verify_cv(store, candidate, trial, expected)
+    return max((candidates[trial] for trial in TRIALS), key=lambda c: c.oof_score)
 
 
 def main() -> None:
@@ -158,20 +255,37 @@ def main() -> None:
     parser.add_argument("--run-id")
     parser.add_argument("--owner", help="指定すると提出 Notebook を生成する")
     parser.add_argument("--source-run", help="全行再学習で参照する CV run")
+    parser.add_argument("--candidate-run", action="append", help="best の CV 候補 ID。5件を指定")
     args = parser.parse_args()
     if args.trial == "best":
         if not args.owner or args.source_run:
             parser.error("best には --owner が必要です。--source-run は使えません")
-        selected = select_final(RunStore(ROOT))
+        store = RunStore(ROOT)
+        expected = evaluation(args.data)
+        selected = select_final(store, expected, args.candidate_run or list(TRIALS))
         print(f"選定: {selected.run_id} {selected.oof_score:.8f}", flush=True)
-        export(args.data, selected.data_version, args.owner, args.run_id or "F00", selected.run_id)
-    elif args.owner:
         export(
+            store,
+            args.data,
+            selected.data_version,
+            args.owner,
+            args.run_id or "F00",
+            selected,
+            expected,
+        )
+    elif args.candidate_run:
+        parser.error("--candidate-run は best 専用です")
+    elif args.owner:
+        store = RunStore(ROOT)
+        selected = store.record(args.source_run or args.trial)
+        export(
+            store,
             args.data,
             args.trial,
             args.owner,
             args.run_id or f"F-{args.trial}",
-            args.source_run or args.trial,
+            selected,
+            evaluation(args.data),
         )
     else:
         run(args.data, args.trial, args.run_id or args.trial)

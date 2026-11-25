@@ -93,10 +93,22 @@ def test_static_join_preserves_base_order_and_rejects_duplicates(tmp_path: Path)
         )
     bureau = directory / "test_static_cb_0.parquet"
     pl.DataFrame({ID: [2], "valueA": [5]}).write_parquet(bureau)
-    actual = load(tmp_path, "test", history=False)
+    for index, case in enumerate([2, 4, 9]):
+        pl.DataFrame({ID: [case], CREATED: ["2024-01-01"], AMOUNT: [1000.0]}).write_parquet(
+            directory / f"test_applprev_1_{index}.parquet"
+        )
+    actual = load(tmp_path, "test", history=True, max_amount=True)
+    assert actual[HISTORY[0]].to_list() == [0, 0, 0]
+    assert actual[MAX_AMOUNT].null_count() == 3
     assert actual[ID].to_list() == [9, 2, 4]
     assert actual["static_0__valueA"].to_list() == [2, 0, 1]
     assert actual["static_cb_0__valueA"].to_list() == [None, 5, None]
     pl.DataFrame({ID: [2, 2], "valueA": [5, 7]}).write_parquet(bureau)
     with pytest.raises(pl.exceptions.ComputeError, match="1:1"):
         load(tmp_path, "test", history=False)
+
+
+def test_constant_weekly_gini_has_no_penalties() -> None:
+    result = stability(np.repeat(np.arange(3), 2), np.tile([0, 1], 3), np.tile([0.2, 0.8], 3))
+    assert result["falling_penalty"] == pytest.approx(0, abs=1e-12)
+    assert result["residual_std"] == pytest.approx(0, abs=1e-12)

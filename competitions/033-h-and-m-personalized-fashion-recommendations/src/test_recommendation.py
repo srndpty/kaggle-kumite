@@ -4,15 +4,24 @@ import json
 from dataclasses import replace
 from pathlib import Path
 
+import final
 import numpy as np
 import polars as pl
 import pytest
 from candidates import Rule, Snapshot, candidate_matrix
 from data import CATEGORIES, Tables
-from evaluation import K, assessor, candidate_metrics, scores, split_hash, validation_windows
+from evaluation import (
+    K,
+    assessor,
+    candidate_metrics,
+    scores,
+    split_hash,
+    validation_windows,
+    window_truth,
+)
 from features import FEATURES, FeatureBuilder
 from final import submission_frame, validate_submission
-from model import METHODS, recommend, training_rows
+from model import METHODS, label_candidates, recommend, training_rows
 
 from kumite.experiments import ExperimentRecord
 
@@ -56,7 +65,9 @@ def tables() -> Tables:
     )
 
 
-@pytest.mark.parametrize("name", ["E00", "E01", "E02", "E03", "E04", "E06", "E07", "E08", "E09"])
+@pytest.mark.parametrize(
+    "name", ["E00", "E01", "E02", "E03", "E04", "E06", "E07", "E08", "E09", "E10"]
+)
 def test_predictions_ignore_transactions_from_cutoff_on(tables: Tables, name: str) -> None:
     """検証週のラベル（締切以降の購入）を差し替えても、予測・候補が変わらない。"""
     cutoff = N_DAYS - 7
@@ -70,21 +81,65 @@ def test_predictions_ignore_transactions_from_cutoff_on(tables: Tables, name: st
     assert not other.equals(tables.transactions)
     first = recommend(tables, METHODS[name], cutoff, customers)
     second = recommend(replace(tables, transactions=other), METHODS[name], cutoff, customers)
-    np.testing.assert_array_equal(first[0], second[0])
-    np.testing.assert_array_equal(first[1], second[1])
+    np.testing.assert_array_equal(first.top, second.top)
+    np.testing.assert_array_equal(first.pool, second.pool)
 
 
 def test_training_features_use_only_days_before_label_week(tables: Tables) -> None:
-    rule = METHODS["E04"].rule
+    method = METHODS["E04"]
     start = N_DAYS - 14
-    x, y, groups = training_rows(tables, rule, start)
+    rows = training_rows(tables, method, start)
+    x, y, groups = rows.x, rows.y, rows.groups
     assert x.shape == (groups * WIDTH, len(FEATURES)) and y.shape == (groups * WIDTH,)
     assert y.reshape(-1, WIDTH).any(axis=1).all()
     # ラベル週より後の取引は、候補・特徴・ラベルのどれにも影響しない
     cut = replace(tables, transactions=tables.transactions.filter(pl.col("day") < start + 7))
-    x2, y2, _ = training_rows(cut, rule, start)
-    np.testing.assert_array_equal(x, x2)
-    np.testing.assert_array_equal(y, y2)
+    again = training_rows(cut, method, start)
+    np.testing.assert_array_equal(x, again.x)
+    np.testing.assert_array_equal(y, again.y)
+
+
+def test_training_stats_count_excluded_customers(tables: Tables) -> None:
+    start = N_DAYS - 7
+    rows = training_rows(tables, METHODS["E04"], start)
+    truth = window_truth(tables.transactions, start)
+    stats = rows.stats
+    assert stats["buyers"] == len(truth.customers) and stats["kept"] == rows.groups
+    assert stats["excluded_share"] == pytest.approx(1 - rows.groups / len(truth.customers))
+    per_group = rows.y.reshape(rows.groups, WIDTH).sum(axis=1)
+    assert stats["positives_per_kept"] == pytest.approx(per_group.mean())
+    assert stats["positive_rate"] == pytest.approx(rows.y.mean())
+    assert stats["purchases_per_buyer"] == pytest.approx(truth.n_relevant.mean())
+
+
+def test_label_pool_trains_on_the_same_customers_as_the_narrow_candidates(tables: Tables) -> None:
+    """E10 は候補 300 件のまま、E04 と同じ顧客だけを教師にする。"""
+    start = N_DAYS - 7
+    kept: list[np.ndarray] = []
+    pools: list[np.ndarray] = []
+    customers = window_truth(tables.transactions, start).customers
+    for name in ("E04", "E10", "E08"):
+        method = METHODS[name]
+        snapshot = Snapshot.at(tables.transactions, tables.articles, start, method.rule)
+        frame, _, keep, _ = label_candidates(tables, snapshot, method.label_pool)
+        pools.append(candidate_matrix(frame, customers, method.rule.width, N_ARTICLES))
+        kept.append(keep)
+    np.testing.assert_array_equal(pools[0], pools[1][:, :WIDTH])
+    np.testing.assert_array_equal(kept[0], kept[1])
+    assert kept[2].sum() >= kept[1].sum()
+
+
+def test_export_requires_a_fixed_selection(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """選定記録がなければ、データを読む前に失敗し、記録も作らない。"""
+
+    def fail() -> None:
+        raise AssertionError("選定記録の前にデータを読みました")
+
+    monkeypatch.setattr(final, "COMP", tmp_path)
+    monkeypatch.setattr(final, "load_tables", fail)
+    with pytest.raises(FileNotFoundError, match="select"):
+        final.export(tmp_path / "plan.json", "S00", "F01")
+    assert not list(tmp_path.iterdir())
 
 
 def test_labels_do_not_change_features_of_the_same_customers(tables: Tables) -> None:

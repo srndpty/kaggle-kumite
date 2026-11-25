@@ -37,6 +37,10 @@ HYPOTHESES = {
     "E06": ("本人の購入を365日さかのぼると、直近に購入のない顧客で改善する", "本人の購入の期間"),
     "E07": ("購入した商品と同じ製品の別商品を候補に足すと改善する", "同じ製品の候補を追加"),
     "E08": ("候補を100件から300件に増やすと Recall が上がり MAP@12 も小幅に上がる", "候補数"),
+    "E10": (
+        "候補300件のまま教師の顧客を E04 と揃えると、E08 の悪化の一部が戻る",
+        "教師の顧客（候補の先頭100件に正解がある顧客）",
+    ),
     "E09": ("E06・E07・E08 の組み合わせが各単独より高い", "E06・E07・E08 の組み合わせ"),
 }
 
@@ -92,21 +96,22 @@ def run(run_ids: list[str], plan: SelectionPlan) -> None:
             ranked: list[np.ndarray] = []
             diagnostics: list[dict[str, object]] = []
             for window in windows:
-                top, pool, model = recommend(tables, METHODS[name], window.start, window.customers)
-                ranked.append(top.astype(np.int32))
-                gain = {} if model is None else _gain(model)
+                result = recommend(tables, METHODS[name], window.start, window.customers)
+                ranked.append(result.top.astype(np.int32))
+                gain = {} if result.model is None else _gain(result.model)
                 diagnostics.append(
                     {
                         "start": window.start,
                         "customers": len(window.customers),
-                        "candidates_sha256": array_sha256(pool),
-                        **candidate_metrics(window, pool, tables.n_articles),
+                        "candidates_sha256": array_sha256(result.pool),
+                        **candidate_metrics(window, result.pool, tables.n_articles),
+                        "training": result.training,
                         "gain": gain,
                     }
                 )
                 print(
                     f"{run_id} 開始日 {window.start} MAP@12 "
-                    f"{window_ap(window, top, tables.n_articles).mean():.5f} {diagnostics[-1]}",
+                    f"{window_ap(window, result.top, tables.n_articles).mean():.5f} {diagnostics[-1]}",
                     flush=True,
                 )
             oof = np.concatenate(ranked)

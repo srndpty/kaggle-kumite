@@ -49,6 +49,7 @@
 
 - `SelectionPlan(candidates, tolerance)` には候補を優先順で全件指定する。`select_runs` は勝敗に関係なく全候補で成果物・依存・ログ・再計算スコアを検査する。証跡に計画ハッシュがある候補は、引数の計画ハッシュと一致しなければならない。既存の `compare_runs` で評価条件を照合したうえで、最良の再計算値から許容差以内の最初の候補を選ぶ。
 - `write_selection` で候補、許容差、再計算値、勝者と CV 証跡ハッシュを新規ファイルに保存する。`verify_selection` には選定記録とは独立した事前計画を渡す。欠落や不一致は例外になり、候補を除外して続行することはない。
+- 選定の確定（`select_runs` と `write_selection`）と export は別の操作にする。`publish_export` は選定記録がなければ失敗する。コンペ側の export の入口で記録を自動生成しない。
 - `publish_export(..., required_outputs=(...), validate_outputs=...)` を最終 export の入口にする。`write(path, winner)` は照合済みの勝者と設定で成果物を一時ディレクトリに保存する。**コンペ側は、期待する列と順序・ID・件数・予測の有限性と値域を検査する読み取り専用の `validate_outputs(path)` を実装する。** 呼び出しは必須で、検査に失敗すると公開を中止する。Notebook export では生成した Notebook の構造を検査し、実行後は生成された提出物を提出前に検査する。
 - export の成果物とログはコンペの `outputs/exports/` をルートとする `RunStore` に保存する。候補の依存は `cv:E04/oof.npy` のような名前で保存する。`verify_export(export_store, export_id)` はこの配置から元の CV Store を特定し、公開時と同じ規則で全候補の成果物と間接依存を照合する。export の成果物とログの結び付きも `export_evidence.json` で照合する。CV run 同士の依存名は `E04/oof.npy` のまま。
 - export レコードの `metric` は `cv_reference:` で始まる。fold・OOF 値は選定済み CV の参照値で、提出先での実測結果は別に追跡する。提出には確定済み export 内のファイルを使う。

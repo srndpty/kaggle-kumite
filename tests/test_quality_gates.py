@@ -320,6 +320,11 @@ def test_export_rejects_invalid_evidence(tmp_path: Path, source: SourceSpec, mut
     (tmp_path / "model.py").write_text("model", encoding="utf-8")
     source = replace(source, settings={"features": ["a"], "seed": 42})
     receipt.unlink()
+    # 確定済みの選定記録がない export は、学習も公開もせず、記録も作らない
+    writes = list(called)
+    with pytest.raises(FileNotFoundError):
+        export()
+    assert called == writes and export_store.records() == [] and not receipt.exists()
     write_selection(receipt, selected)
     with pytest.raises(FileExistsError):
         write_selection(receipt, selected)

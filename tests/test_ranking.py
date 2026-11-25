@@ -34,3 +34,42 @@ def test_validate_full_rankings_rejects_invalid(ranked: np.ndarray) -> None:
 
 def test_validate_full_rankings_accepts_valid() -> None:
     validate_full_rankings(np.array([[4, 0]]), (1, 2), 5)
+
+
+@pytest.mark.parametrize(
+    ("hits", "n_relevant", "message"),
+    [
+        (np.array([[2, 0]]), np.array([5]), "0/1"),
+        (np.array([[-1, 0]]), np.array([5]), "0/1"),
+        (np.array([[np.nan, 0.0]]), np.array([5]), "0/1"),
+        (np.array([[1, 0]]), np.array([-1]), "非負整数"),
+        (np.array([[1, 0]]), np.array([1.5]), "非負整数"),
+        (np.array([[1, 1]]), np.array([1]), "正解数を超え"),
+    ],
+)
+def test_average_precision_rejects_invalid_values(
+    hits: np.ndarray, n_relevant: np.ndarray, message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        average_precision(hits, n_relevant)
+
+
+@pytest.mark.parametrize(
+    ("ranked", "rows", "items", "message"),
+    [
+        (np.array([[1]]), np.array([0, 0]), np.array([1]), "形"),
+        (np.array([1]), np.array([0]), np.array([1]), "形"),
+        (np.array([[1.0]]), np.array([0]), np.array([1]), "整数"),
+        (np.array([[1]]), np.array([1]), np.array([1]), "クエリ番号"),
+        (np.array([[1]]), np.array([-1]), np.array([1]), "クエリ番号"),
+        (np.array([[1]]), np.array([0]), np.array([5]), "商品番号"),
+        (np.array([[1]]), np.array([0]), np.array([-1]), "商品番号"),
+        # 1 行目の商品 5 は、2 行目の商品 0 と同じ通し番号になる
+        (np.array([[5], [1]]), np.array([1]), np.array([0]), "商品番号"),
+    ],
+)
+def test_sparse_hits_rejects_invalid_inputs(
+    ranked: np.ndarray, rows: np.ndarray, items: np.ndarray, message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        sparse_hits(ranked, rows, items, 5)

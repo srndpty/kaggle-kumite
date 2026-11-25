@@ -1,14 +1,16 @@
 """保存 OOF どうしの差を、顧客単位の bootstrap と顧客層別に調べる（選定・export には使わない）。
 
-例: uv run python src/analyze.py E00:E01 E03:E04
+例: uv run python src/analyze.py E00:E01 E03:E04 --training E04 E08
 """
 
 import argparse
 
 import numpy as np
 import polars as pl
+from candidates import Snapshot
 from data import COMP, FILES, LAST_DAY, Tables, load_tables
 from evaluation import (
+    HORIZON,
     K,
     Window,
     assessor,
@@ -16,6 +18,7 @@ from evaluation import (
     validation_windows,
     window_ap,
 )
+from model import METHODS, label_candidates
 
 from kumite.bootstrap import group_bootstrap_diff
 from kumite.provenance import files_sha256
@@ -92,8 +95,25 @@ def main(pairs: list[tuple[str, str]]) -> None:
         print(f"{base} → {other}: {-diff.point:+.6f} 95%区間 [{-diff.high:+.6f}, {-diff.low:+.6f}]")
 
 
+def print_training(names: list[str]) -> None:
+    """手法ごとに、教師に使う顧客と正例の構成を窓別に表示する（学習はしない）。"""
+    tables = load_tables()
+    for name in names:
+        method = METHODS[name]
+        for window in validation_windows(tables.transactions, LAST_DAY):
+            for week in range(method.label_weeks, 0, -1):
+                start = window.start - HORIZON * week
+                snapshot = Snapshot.at(tables.transactions, tables.articles, start, method.rule)
+                *_, stats = label_candidates(tables, snapshot, method.label_pool)
+                shown = " ".join(f"{key} {value:.5g}" for key, value in stats.items())
+                print(f"{name} 窓 {window.start} {shown}")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("pairs", nargs="+", help="基準:比較対象")
+    parser.add_argument("pairs", nargs="*", help="基準:比較対象")
+    parser.add_argument("--training", nargs="+", default=[], choices=METHODS, help="手法")
     args = parser.parse_args()
-    main([(base, other) for base, other in (pair.split(":") for pair in args.pairs)])
+    if args.pairs:
+        main([(base, other) for base, other in (pair.split(":") for pair in args.pairs)])
+    print_training(args.training)

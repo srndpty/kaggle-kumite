@@ -12,7 +12,7 @@ from cv_checks import evaluation_key, read_sources, source_hashes, verify_source
 from model import SteelUNet
 from select_model import read_oof
 from steel import SHAPE, load_labels
-from train import ROOT, WEIGHTS, SteelImages, fit, fit_presence
+from train import ROOT, WEIGHTS, SteelImages, fit, fit_presence, training_data_hash
 
 from kumite.experiments import ExperimentRecord
 from kumite.kaggle_notebook import write_cpu_notebook
@@ -183,6 +183,8 @@ def export(
         inputs.update(store.input_hashes(full_baseline, "steel-checkpoint.pt"))
     data = ROOT / "data"
     labels = load_labels(data)
+    if training_data_hash(data, labels) != cv.data_hash:
+        raise ValueError(f"{source} の CV 記録と現在の学習データのハッシュが一致しません")
     dataset = SteelImages(data / "train_images", labels, list(labels), shape, resize_masks=True)
     with store.reserve(run_id) as reservation:
         started = time.monotonic()

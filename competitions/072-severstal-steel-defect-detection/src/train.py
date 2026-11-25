@@ -4,6 +4,7 @@ import argparse
 import csv
 import json
 import time
+from collections.abc import Iterable
 from pathlib import Path
 
 import numpy as np
@@ -132,6 +133,16 @@ def predict(
     return masks
 
 
+def training_data_hash(data: Path, image_ids: Iterable[str]) -> str:
+    return files_sha256(
+        [
+            data / "train.csv",
+            data / WEIGHTS,
+            *(data / "train_images" / name for name in sorted(image_ids)),
+        ]
+    )
+
+
 def run(run_id: str, variant: str, baseline: str | None) -> None:
     hashes = source_hashes(read_sources())
     data = ROOT / "data"
@@ -144,9 +155,7 @@ def run(run_id: str, variant: str, baseline: str | None) -> None:
     ids = list(labels)
     folds = make_folds(data, labels)
     split_hash = array_sha256(np.array([folds[image_id] for image_id in ids]))
-    data_hash = files_sha256(
-        [data / "train.csv", weights, *(directory / image_id for image_id in ids)]
-    )
+    data_hash = training_data_hash(data, ids)
     if baseline is not None:
         source = store.record(baseline)
         verify_sources(source, hashes)

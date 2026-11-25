@@ -1,11 +1,15 @@
 import csv
 from dataclasses import replace
 from pathlib import Path
+from typing import Literal
 
+import export as steel_export
 import pytest
 from cv_checks import SOURCE_FILES, read_sources, source_hashes, verify_sources
 from export import verify_full_baseline
 from select_model import select
+from steel import load_labels
+from train import WEIGHTS, training_data_hash
 
 from kumite.experiments import ExperimentRecord
 from kumite.runs import RunStore
@@ -132,3 +136,47 @@ def test_rejects_model_source_change_and_missing_manifest(tmp_path: Path) -> Non
     (tmp_path / "model.py").write_text("changed", encoding="utf-8")
     with pytest.raises(ValueError, match="変更"):
         verify_sources(cv, source_hashes(read_sources(tmp_path)))
+
+
+@pytest.mark.parametrize("change", ["annotations", "image", "remove-empty-image", "weights"])
+def test_export_rejects_changed_training_data_before_reserving(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    change: Literal["annotations", "image", "remove-empty-image", "weights"],
+) -> None:
+    data = tmp_path / "data"
+    images = data / "train_images"
+    images.mkdir(parents=True)
+    annotations = data / "train.csv"
+    annotations.write_text("ImageId,ClassId,EncodedPixels\n0.jpg,1,1 1\n", encoding="utf-8")
+    for fold in range(3):
+        (images / f"{fold}.jpg").write_bytes(b"original image")
+    weights = data / WEIGHTS
+    weights.write_bytes(b"original weights")
+    labels = load_labels(data)
+    cv = replace(
+        record("base"),
+        params={"variant": "baseline"},
+        data_hash=training_data_hash(data, labels),
+        inputs=source_hashes(read_sources()),
+    )
+    store = RunStore(tmp_path)
+    publish_oof(store, cv, 0.5)
+    monkeypatch.setattr(steel_export, "ROOT", tmp_path)
+
+    match change:
+        case "annotations":
+            annotations.write_text("ImageId,ClassId,EncodedPixels\n0.jpg,1,1 2\n", encoding="utf-8")
+        case "image":
+            (images / "0.jpg").write_bytes(b"changed image")
+        case "remove-empty-image":
+            (images / "2.jpg").unlink()
+        case "weights":
+            weights.write_bytes(b"changed weights")
+
+    def unexpected_reservation(*_args: object) -> None:
+        pytest.fail("データ不一致のまま再学習の run を予約しました")
+
+    monkeypatch.setattr(RunStore, "reserve", unexpected_reservation)
+    with pytest.raises(ValueError, match="学習データのハッシュが一致しません"):
+        steel_export.export("owner", "full", "base", None, None)

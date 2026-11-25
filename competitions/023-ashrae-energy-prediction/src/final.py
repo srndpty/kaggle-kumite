@@ -5,7 +5,7 @@ import csv
 import json
 from dataclasses import replace
 from datetime import datetime, timedelta
-from math import isclose
+from math import isclose, isfinite
 from pathlib import Path
 from time import perf_counter
 
@@ -38,6 +38,7 @@ from kumite.provenance import array_sha256, code_version, files_sha256
 from kumite.runs import RunStore
 
 TEST_FILES = [DATA / f"{name}.csv" for name in ("test", "weather_test", "sample_submission")]
+RMSLE_TOLERANCE = 1e-5
 COMPLEXITY = {"E00": 0, "E01": 1, "E02": 2, "E03": 2, "E04": 3}
 
 
@@ -92,12 +93,24 @@ def write_submission(
             raise ValueError("全テスト行の予測が作成されていません")
 
 
+def choose_candidate(
+    candidates: list[ExperimentRecord], rmsle_tolerance: float
+) -> ExperimentRecord:
+    if not isfinite(rmsle_tolerance) or rmsle_tolerance < 0:
+        raise ValueError("RMSLE の許容差には有限の非負値を指定してください")
+    best = min(row.oof_score for row in candidates)
+    equivalent = [row for row in candidates if row.oof_score <= best + rmsle_tolerance]
+    return min(equivalent, key=lambda row: (COMPLEXITY[row.model], row.run_id))
+
+
 def select_candidate(
     store: RunStore,
     candidate_ids: list[str],
     data_hash: str,
     roles: np.ndarray,
     target: np.ndarray,
+    *,
+    rmsle_tolerance: float = RMSLE_TOLERANCE,
 ) -> ExperimentRecord:
     split_hash = array_sha256(roles)
     valid = np.any(roles == 2, axis=0)
@@ -130,10 +143,10 @@ def select_candidate(
             raise ValueError(f"検証窓内の OOF が不正です: {run_id}") from error
         if not isclose(score, candidate.oof_score, rel_tol=0.0, abs_tol=1e-12):
             raise ValueError(f"OOF の再計算スコアがログと一致しません: {run_id}")
-    return min(candidates, key=lambda row: (row.oof_score, COMPLEXITY[row.model], row.run_id))
+    return choose_candidate(candidates, rmsle_tolerance)
 
 
-def final(run_id: str, candidate_ids: list[str]) -> None:
+def final(run_id: str, candidate_ids: list[str], *, rmsle_tolerance: float) -> None:
     store = RunStore(COMPETITION)
     with store.reserve(run_id) as reservation:
         start = perf_counter()
@@ -142,7 +155,12 @@ def final(run_id: str, candidate_ids: list[str]) -> None:
         splits, _ = splits_for(meters.get_column(TIME))
         roles = split_roles(meters.height, splits)
         selected = select_candidate(
-            store, candidate_ids, data_hash, roles, meters[TARGET].to_numpy()
+            store,
+            candidate_ids,
+            data_hash,
+            roles,
+            meters[TARGET].to_numpy(),
+            rmsle_tolerance=rmsle_tolerance,
         )
         inputs = store.input_hashes(selected.run_id, "oof.npy", "split.npy", "validation.parquet")
         print(f"選定: {selected.run_id} OOF RMSLE {selected.oof_score:.9f}", flush=True)
@@ -168,6 +186,7 @@ def final(run_id: str, candidate_ids: list[str]) -> None:
             meta = {
                 "candidates": candidate_ids,
                 "selected": selected.run_id,
+                "rmsle_tolerance": rmsle_tolerance,
                 "method": method,
                 "offsets": offsets,
                 "test_hash": test_hash,
@@ -194,5 +213,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("run_id")
     parser.add_argument("candidates", nargs="+")
+    parser.add_argument("--rmsle-tolerance", type=float, default=RMSLE_TOLERANCE)
     args = parser.parse_args()
-    final(args.run_id, args.candidates)
+    final(args.run_id, args.candidates, rmsle_tolerance=args.rmsle_tolerance)

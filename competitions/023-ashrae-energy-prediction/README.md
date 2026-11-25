@@ -89,13 +89,17 @@ foreach ($method in 'E00', 'E01', 'E02', 'E03') {
 
 E04 では1位の気温ラグに着目し、P4 の OOF 最小値を記録した E02 に、同じサイトのちょうど24時間前の気温を1列追加する。建物の熱慣性により冷暖房メーターで改善を予想する。該当時刻の観測がなければ欠測を保持する。検証境界より前の観測気温は利用でき、未来の観測や目的変数を使わない。E04 を将来提出する場合は、学習期間の気象ファイルも参照してテスト初日のラグを計算する。
 
-E04 は E02 より全体で +0.001437。最後の窓では改善したが、前2窓の悪化が上回った。選定条件は OOF RMSLE の実測最小値、同点なら特徴追加の少なさ、次いで run ID。最小値の E02 を全学習行で再学習した F00 を提出した。E01との差は約 0.000000017 で、実質同等と解釈する。選定時は全候補の OOF と分割のハッシュを照合し、元データで RMSLE を再計算する。
+E04 は E02 より全体で +0.001437。最後の窓では改善したが、前2窓の悪化が上回った。F00 当時の選定条件は OOF RMSLE の実測最小値、厳密な同点では特徴追加の少なさ、次いで run ID。最小値の E02 を全学習行で再学習した F00 を提出した。E01との差は約 0.000000017 で、実質同等と解釈する。選定時は全候補の OOF と分割のハッシュを照合し、元データで RMSLE を再計算する。
 
 ```powershell
 uv run python competitions/023-ashrae-energy-prediction/src/run.py E04
-uv run python competitions/023-ashrae-energy-prediction/src/final.py F00 E00 E01 E02 E03 E04
+uv run python competitions/023-ashrae-energy-prediction/src/final.py F00-repro E00 E01 E02 E03 E04 --rmsle-tolerance 0
 uv run python competitions/023-ashrae-energy-prediction/src/analyze.py --run-id E02
 ```
+
+## 今後の選定規則
+
+次回の比較実験では、全検証行の OOF RMSLE に対する絶対許容差を 0.00001 とする。約470万行をまとめた RMSLE は小数第5位までを実用上の比較単位とし、最小スコアとの差が許容差以内の候補から、特徴追加の少なさ、run ID の順で選ぶ。許容差は設定ファイル `selection.json` に保存する。上の再現コマンドは F00 当時の選定規則を使う。
 
 ## 最終提出と知見
 

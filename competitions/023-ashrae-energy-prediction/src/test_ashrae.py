@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -210,6 +211,14 @@ def test_candidate_oof_validation(
             final.select_candidate(store, ["E01"], "train", roles, target)
     else:
         assert final.select_candidate(store, ["E01"], "train", roles, target).run_id == "E01"
+        simple = replace(record, oof_score=1.0014602544571356)
+        complex_model = replace(record, run_id="E02", model="E02", oof_score=1.001460237522191)
+        outside_tolerance = replace(simple, run_id="E00", model="E00", oof_score=1.00148)
+        candidates = [outside_tolerance, complex_model, simple]
+        assert final.choose_candidate(candidates, final.RMSLE_TOLERANCE) == simple
+        assert final.choose_candidate(candidates, 0) == complex_model
+        with pytest.raises(ValueError, match="許容差"):
+            final.choose_candidate(candidates, np.nan)
 
 
 def test_temperature_lag_crosses_files_without_ambiguous_keys(tmp_path: Path) -> None:

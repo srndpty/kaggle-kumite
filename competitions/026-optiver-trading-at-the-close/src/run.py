@@ -57,7 +57,7 @@ def source_for(method: str) -> SourceSpec:
     )
 
 
-def run(methods: list[str]) -> None:
+def run(methods: list[str], plan: SelectionPlan) -> None:
     rows = load_rows()
     y = rows["target"].to_numpy()
     splits = splits_for(rows["date_id"].to_numpy(), y)
@@ -79,7 +79,7 @@ def run(methods: list[str]) -> None:
         method = run_id.split("-")[0]
         source = source_for(method)
         started = perf_counter()
-        with reserve_cv(store, run_id, source, {}) as (reservation, start):
+        with reserve_cv(store, run_id, source, {}, plan) as (reservation, start):
             x = feature_matrix(rows, method)
 
             def fit(
@@ -118,4 +118,4 @@ if __name__ == "__main__":
     plan = load_plan(args.plan)
     if any(run_id not in plan.candidates for run_id in args.runs):
         parser.error("選定計画に登録済みの run ID を指定してください")
-    run(args.runs)
+    run(args.runs, plan)

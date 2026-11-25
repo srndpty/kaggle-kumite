@@ -71,7 +71,10 @@ def fit_model(x: pd.DataFrame, y: np.ndarray) -> lgb.Booster:
 
 
 class Replay:
-    """現在の取引日の直近60秒だけを保持する。"""
+    """現在の取引日の直近60秒だけを保持する。
+
+    逐次APIは、同じ取引日・秒位置のバッチを再送しない。このクラスはその再入を拒否する。
+    """
 
     def __init__(self, method: str) -> None:
         self.method = method
@@ -79,8 +82,23 @@ class Replay:
         self.last_batch: tuple[int, int] | None = None
 
     def transform(self, batch: pd.DataFrame) -> pd.DataFrame:
+        """1取引日・1秒位置のバッチを特徴量にする。
+
+        バッチは空であってはならない。KEYS は欠損なしで一意であり、取引日と秒位置は1組だけを要求する。
+        """
         batch = batch[list(dict.fromkeys([*KEYS, *BASE]))].reset_index(drop=True)
-        ((day, second),) = batch[KEYS[:2]].drop_duplicates().itertuples(index=False, name=None)
+        keys = batch[KEYS]
+        one_time = (
+            not batch.empty
+            and not bool(keys.isna().any().any())
+            and not bool(keys.duplicated().any())
+            and keys["date_id"].nunique() == 1
+            and keys["seconds_in_bucket"].nunique() == 1
+        )
+        if not one_time:
+            raise ValueError("Batch keys must be non-null and unique at one time")
+        day = int(keys["date_id"].iloc[0])
+        second = int(keys["seconds_in_bucket"].iloc[0])
         if self.last_batch is not None and (day, second) <= self.last_batch:
             raise ValueError("Batches must be strictly chronological")
         past = self.history if self.last_batch is not None and day == self.last_batch[0] else None

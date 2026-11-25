@@ -1,5 +1,6 @@
 """新規 run の公開・選定・export で、保存した証跡を検証する。"""
 
+import hashlib
 import json
 import math
 from collections.abc import Callable, Generator, Mapping, Sequence
@@ -108,9 +109,20 @@ def _record_identity(record: ExperimentRecord) -> dict[str, object]:
     return evidence
 
 
+def _sealed_plan_hash(record: ExperimentRecord, payload: Mapping[str, object]) -> str | None:
+    if "plan_hash" not in payload:
+        return None
+    plan_hash = payload["plan_hash"]
+    if not isinstance(plan_hash, str) or len(plan_hash) != 64:
+        raise ValueError(f"{record.run_id}: 選定計画のハッシュが不正です")
+    if any(character not in "0123456789abcdef" for character in plan_hash):
+        raise ValueError(f"{record.run_id}: 選定計画のハッシュが不正です")
+    return plan_hash
+
+
 def _read_evidence(
     store: RunStore, record: ExperimentRecord, name: str = CV_EVIDENCE
-) -> tuple[Path, str]:
+) -> tuple[Path, str, str | None]:
     evidence = store.artifact_path(record.run_id, name)
     decoded: object = json.loads(evidence.read_text(encoding="utf-8"))
     if not isinstance(decoded, dict):
@@ -118,14 +130,37 @@ def _read_evidence(
     payload = cast(dict[str, object], decoded)
     manifest = {key: digest for key, digest in record.artifacts.items() if key != name}
     source = payload.get("source")
-    if (
-        not manifest
-        or not isinstance(source, str)
-        or _json(payload)
-        != _json({"source": source, "record": _record_identity(record), "artifacts": manifest})
-    ):
+    if not manifest or not isinstance(source, str):
         raise ValueError(f"{record.run_id}: {name} の証跡と実験ログが一致しません")
-    return evidence, source
+    sealed_plan = _sealed_plan_hash(record, payload)
+    document: dict[str, object] = {
+        "source": source,
+        "record": _record_identity(record),
+        "artifacts": manifest,
+    }
+    if sealed_plan is not None:
+        document["plan_hash"] = sealed_plan
+    if _json(payload) != _json(document):
+        raise ValueError(f"{record.run_id}: {name} の証跡と実験ログが一致しません")
+    return evidence, source, sealed_plan
+
+
+@dataclass(frozen=True)
+class SelectionPlan:
+    """事前に固定する候補の全件と同点判定。許容差内では候補順を優先する。"""
+
+    candidates: tuple[str, ...]
+    tolerance: float = 0.0
+
+
+def selection_plan_hash(plan: SelectionPlan) -> str:
+    """候補の順序と許容差から、学習前に固定する SHA-256 を作る。"""
+    if not plan.candidates or len(set(plan.candidates)) != len(plan.candidates):
+        raise ValueError("選定候補は重複なく 1 件以上必要です")
+    if not math.isfinite(plan.tolerance) or plan.tolerance < 0:
+        raise ValueError("選定の許容差は有限の非負値が必要です")
+    canonical = _json({"candidates": list(plan.candidates), "tolerance": float(plan.tolerance)})
+    return hashlib.sha256(canonical.encode()).hexdigest()
 
 
 @dataclass(frozen=True)
@@ -133,16 +168,30 @@ class CVStart:
     reservation: Reservation
     source: str
     inputs: tuple[tuple[str, str], ...]
+    plan_hash: str | None = None
 
 
 @contextmanager
 def reserve_cv(
-    store: RunStore, run_id: str, source: SourceSpec, inputs: Mapping[str, str]
+    store: RunStore,
+    run_id: str,
+    source: SourceSpec,
+    inputs: Mapping[str, str],
+    plan: SelectionPlan | None = None,
 ) -> Generator[tuple[Reservation, CVStart]]:
-    """学習前に ID を予約し、依存先を検査してソースと設定を採取する。"""
+    """学習前に ID を予約し、依存先を検査してソースと設定を採取する。
+
+    `plan` を渡すと、その候補・順序・許容差のハッシュを学習開始時に固定する。
+    """
+    plan_hash = None if plan is None else selection_plan_hash(plan)
+    if plan is not None and run_id not in plan.candidates:
+        raise ValueError("run ID が学習前の選定計画に含まれていません")
     with store.reserve(run_id) as reservation:
         verify_dependencies(store, inputs, run_id=run_id)
-        yield reservation, CVStart(reservation, source.snapshot(), tuple(sorted(inputs.items())))
+        yield (
+            reservation,
+            CVStart(reservation, source.snapshot(), tuple(sorted(inputs.items())), plan_hash),
+        )
 
 
 def publish_gated_cv(
@@ -173,32 +222,30 @@ def publish_gated_cv(
     def seal(artifacts: Mapping[str, str]) -> str:
         if source.snapshot() != before_training.source:
             raise ValueError("学習開始時からソースまたは設定が変わりました")
-        return (
-            _json(
-                {
-                    "source": before_training.source,
-                    "record": _record_identity(record),
-                    "artifacts": dict(artifacts),
-                }
-            )
-            + "\n"
-        )
+        document: dict[str, object] = {
+            "source": before_training.source,
+            "record": _record_identity(record),
+            "artifacts": dict(artifacts),
+        }
+        if before_training.plan_hash is not None:
+            document["plan_hash"] = before_training.plan_hash
+        return _json(document) + "\n"
 
     return store.publish(reservation, record, checked_write, seal=(CV_EVIDENCE, seal))
 
 
 def verify_cv_run(store: RunStore, run_id: str, assess: AssessOOF) -> ExperimentRecord:
     """証跡・全成果物・依存先・再計算スコアを照合する。"""
-    record, _ = _verify_cv_run(store, run_id, assess)
+    record, _, _ = _verify_cv_run(store, run_id, assess)
     return record
 
 
 def _verify_cv_run(
     store: RunStore, run_id: str, assess: AssessOOF
-) -> tuple[ExperimentRecord, float]:
+) -> tuple[ExperimentRecord, float, str | None]:
     validate_run_id(run_id)
     record = store.record(run_id)
-    evidence, _ = _read_evidence(store, record)
+    evidence, _, sealed_plan = _read_evidence(store, record)
     paths = {
         name: store.artifact_path(run_id, name) for name in record.artifacts if name != CV_EVIDENCE
     }
@@ -207,7 +254,7 @@ def _verify_cv_run(
     verify_dependencies(store, record.inputs, run_id=run_id)
     scores = assess(paths.__getitem__, record)
     _verify_scores(record, scores)
-    return record, scores[1]
+    return record, scores[1], sealed_plan
 
 
 def dense_oof(
@@ -240,14 +287,6 @@ def dense_oof(
 
 
 @dataclass(frozen=True)
-class SelectionPlan:
-    """事前に固定する候補の全件と同点判定。許容差内では候補順を優先する。"""
-
-    candidates: tuple[str, ...]
-    tolerance: float = 0.0
-
-
-@dataclass(frozen=True)
 class Selection:
     plan: SelectionPlan
     winner: str
@@ -256,15 +295,19 @@ class Selection:
 
 
 def select_runs(store: RunStore, plan: SelectionPlan, assess: AssessOOF) -> Selection:
-    if not plan.candidates or len(set(plan.candidates)) != len(plan.candidates):
-        raise ValueError("選定候補は重複なく 1 件以上必要です")
-    if not math.isfinite(plan.tolerance) or plan.tolerance < 0:
-        raise ValueError("選定の許容差は有限の非負値が必要です")
+    expected_hash = selection_plan_hash(plan)
     verified = [_verify_cv_run(store, run_id, assess) for run_id in plan.candidates]
-    records = [record for record, _ in verified]
+    mismatched = [
+        record.run_id
+        for record, _, sealed in verified
+        if sealed is not None and sealed != expected_hash
+    ]
+    if mismatched:
+        raise ValueError("選定計画が学習前の登録と一致しません: " + ", ".join(mismatched))
+    records = [record for record, _, _ in verified]
     for record in records[1:]:
         compare_runs(records[0], record)
-    scores = {record.run_id: score for record, score in verified}
+    scores = {record.run_id: score for record, score, _ in verified}
     direction = 1 if records[0].greater_is_better else -1
     best = max(direction * value for value in scores.values())
     winner = next(
@@ -306,7 +349,7 @@ def _verify_export_dependencies(store: RunStore, inputs: Mapping[str, str]) -> N
 def verify_export(store: RunStore, run_id: str) -> ExperimentRecord:
     """公開済み export Store から、成果物・ログ・CV 依存を再照合する。"""
     record = store.record(run_id)
-    evidence, _ = _read_evidence(store, record, EXPORT_EVIDENCE)
+    evidence, _, _ = _read_evidence(store, record, EXPORT_EVIDENCE)
     if {item.name for item in evidence.parent.iterdir()} != set(record.artifacts):
         raise ValueError(f"{run_id}: 成果物の一覧が記録と一致しません")
     for name in record.artifacts.keys() - {EXPORT_EVIDENCE}:
@@ -336,7 +379,7 @@ def publish_export(
     ):
         raise ValueError("選定後に候補の CV 証跡が変わりました")
     winner = candidates[selected.winner]
-    _, expected = _read_evidence(store, winner)
+    _, expected, _ = _read_evidence(store, winner)
     if source.snapshot() != expected:
         raise ValueError("export のソースまたは設定が選定された CV と一致しません")
 

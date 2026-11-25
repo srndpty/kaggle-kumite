@@ -46,7 +46,7 @@ CV run の公開には共通 Quality Gate が必須。評価単位・分割・�
 
 ## 検証設計
 
-末尾90取引日を30日ずつ3区間に分ける。各 fold の学習は検証区間の開始より前の取引日をすべて使う。`date-forward-v1` の主指標は全検証行の OOF MAE。目的値欠損行の説明変数は同時刻の集約とラグに含める。現バッチと同日の過去バッチだけから特徴量を計算し、翌日には履歴を引き継がない。
+末尾90取引日を30日ずつ3区間に分ける。各 fold の学習は検証区間の開始より前の取引日をすべて使う。`date-forward-v1` の主指標は全検証行の OOF MAE。目的値欠損行の説明変数は同時刻の集約とラグに含める。現バッチと同日の過去バッチだけから特徴量を計算し、翌日には履歴を引き継がない。逐次推論の1バッチは、空でない単一の取引日・秒位置で、キーに欠損も重複もない。同じ取引日・秒位置の再入は拒否する。
 
 [選定計画](selection-p4.json) の候補順は E00、E01、E02、E03。同点許容差は0。定数ゼロの OOF MAE は 6.02155。E00 は現時点の板・オークション入力を使う CPU LightGBM L1 回帰で、seed は42、学習は1,000ラウンドに固定する。
 
@@ -71,7 +71,7 @@ CV run の公開には共通 Quality Gate が必須。評価単位・分割・�
 
 ## 再現手順
 
-リポジトリルートから実行する。P0 の Notebook は Kaggle CLI 2.2.5 で push し、完了したバージョンを Code Competition として提出する。最終 export は `outputs/exports/outputs/runs/F00/` に保存される。Kaggle のソース上限に合わせ、export を照合した上で `outputs/deployment/F00/` の Dataset と読み込み用 Notebook に梱包する。すでに公開済みの run ID を再実行するときは、新しい ID と事前選定計画を用意する。
+リポジトリルートから実行する。P0 の Notebook は Kaggle CLI 2.2.5 で push し、完了したバージョンを Code Competition として提出する。最終 export は `outputs/exports/outputs/runs/F00/` に保存される。Kaggle のソース上限に合わせ、export を照合した上で `outputs/deployment/F00/` の Dataset と読み込み用 Notebook に梱包する。梱包のたびに `deployment-manifest.json` へ export ID、元 Notebook、ペイロードと読み込み Notebook の SHA-256、Dataset ID を残す。内容が違う再梱包は拒否する。`run.py` は学習開始時の選定計画ハッシュを CV 証跡へ残す。この変更より前に公開した run にそのハッシュはない。すでに公開済みの run ID を再実行するときは、新しい ID と事前選定計画を用意する。
 
 ```powershell
 $comp = 'competitions/026-optiver-trading-at-the-close'

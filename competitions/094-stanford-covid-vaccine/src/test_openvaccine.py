@@ -2,9 +2,11 @@ import json
 from dataclasses import replace
 from pathlib import Path
 
+import models
 import numpy as np
 import pandas as pd
 import pytest
+import run
 import torch
 from analyze import require_selection
 from data import (
@@ -23,6 +25,7 @@ from external import private_breakdown
 from models import GRUConfig, TrainGroup, batch_loss, fit_predict_gru, window_frame
 from run import SOURCE_FILES, Method, load_method, source_spec, to_five, training_weights
 
+from kumite.checks import check_label_independence
 from kumite.crossfit import CrossFitResult, split_roles
 from kumite.cv_run import Evaluation, Trial, publish_cv_run
 from kumite.paths import REPO_ROOT
@@ -224,3 +227,58 @@ def test_quality_gate_with_masked_mcrmse(tmp_path: Path) -> None:
     np.save(published / "oof.npy", tampered)
     with pytest.raises(ValueError, match="ハッシュ"):
         select_runs(store, SelectionPlan(("E00",)), assess)
+
+
+def test_pseudo_labels_do_not_depend_on_outer_validation_labels(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """実際の fold_fitter を通し、教師の出力（疑似ラベル）と学生の学習入力が外側の検証ラベルに依存しない。"""
+    rng = np.random.default_rng(0)
+    n, lengths = 6, (70, 75)
+    train_mols = _molecules(*("".join(rng.choice(list("ACGU"), 70)) for _ in range(n)))
+    test_mols = Molecules(
+        ("t0", "t1"),
+        tuple("".join(rng.choice(list("ACGU"), k)) for k in lengths),
+        tuple("." * k for k in lengths),
+        tuple("E" * k for k in lengths),
+    )
+    sample = tmp_path / "sample.csv"
+    ids = [f"t{i}_{p}" for i, k in enumerate(lengths) for p in range(k)]
+    pd.DataFrame({"id_seqpos": ids, **dict.fromkeys(TARGETS, 0.0)}).to_csv(sample, index=False)
+    y = rng.normal(size=(n, 68, 5))
+    error = np.full_like(y, 0.2)
+    sn = np.ones(n, dtype=bool)
+    train, valid = np.arange(4), np.arange(4, n)
+    method = replace(load_method("E08"), use_bpp=False)
+    assert method.pseudo_label
+    for key, value in {"hidden": 8, "epochs": 2, "batch_size": 2}.items():
+        monkeypatch.setitem(run.GRU, key, value)
+    monkeypatch.setattr(models, "DEVICE", torch.device("cpu"))  # CI と同じ CPU で決定的に比べる
+    calls: list[tuple[list[TrainGroup], list[np.ndarray]]] = []
+
+    def recording(
+        groups: list[TrainGroup], queries: list[np.ndarray], config: GRUConfig
+    ) -> list[np.ndarray]:
+        outputs = models.fit_predict_gru(groups, queries, config)
+        calls.append((list(groups), outputs))
+        return outputs
+
+    monkeypatch.setattr(run, "fit_predict_gru", recording)
+
+    def build(rows: np.ndarray, labels: np.ndarray) -> list[np.ndarray]:
+        calls.clear()
+        fitted = run.fold_fitter(
+            method, train_mols, Labels(labels, error, sn, np.ones(n)), test_mols, sample
+        )
+        fitted(rows, valid)
+        (_, teacher), (student, _) = calls
+        assert len(student) == 1 + len(lengths)  # 通常ラベルの組 + 長さごとの疑似ラベルの組
+        inputs = [a for g in student for a in (g.x, g.y, g.weight, np.array([g.loss_scale]))]
+        return [*teacher, *inputs]
+
+    perturbed = y.copy()
+    perturbed[valid] += 5.0
+    check_label_independence(lambda labels: build(train, labels), y, perturbed)
+    # 検出力の確認: 検証行を教師の学習に混ぜると、疑似ラベルが検証ラベルに依存して失敗する
+    with pytest.raises(AssertionError, match="依存"):
+        check_label_independence(lambda labels: build(np.arange(n), labels), y, perturbed)

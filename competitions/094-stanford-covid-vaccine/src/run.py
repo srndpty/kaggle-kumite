@@ -14,6 +14,7 @@ from data import (
     COMPETITION,
     KMER,
     N_FOLDS,
+    SAMPLE,
     SCORED_INDEX,
     TARGETS,
     TEST_JSON,
@@ -191,8 +192,12 @@ def fold_fitter(
     molecules: Molecules,
     labels: Labels,
     test: Molecules,
+    sample: Path = SAMPLE,
 ) -> FitFold:
-    """fold ごとに学習し、検証 (分子, 68, 3) と、サンプル順の test (行, 5) を返す関数を作る。"""
+    """fold ごとに学習し、検証 (分子, 68, 3) と、サンプル順の test (行, 5) を返す関数を作る。
+
+    `sample` は行の並びを決める公式サンプル（テストでは合成データのサンプルを渡す）。
+    """
     features = position_features(molecules, method.use_bpp)
     test_features = position_features(test, method.use_bpp)
     y = labels.y[:, :, method.target_index()]
@@ -240,7 +245,7 @@ def fold_fitter(
                 for row, i in zip(out, g, strict=True):
                     test_pred[i] = row
         scored = scored_of(valid_pred, method)
-        query = sample_rows(test, [to_five(p, method) for p in test_pred])
+        query = sample_rows(test, [to_five(p, method) for p in test_pred], sample)
         truth = labels.scored()[valid]
         print(f"fold MCRMSE {mcrmse(truth, scored):.5f}", flush=True)
         return FoldOutput(scored, query, {"n_train": len(train), "n_valid": len(valid)})

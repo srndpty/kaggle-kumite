@@ -65,7 +65,7 @@ CV run の公開には共通 Quality Gate が必須。評価単位・分割・�
 
 ## 再現手順
 
-リポジトリルートから、実験ログのない作業コピーで実行する。
+既存の CV 証跡と F00 のソースは、レビュー修正前のコミット `6860db5` に対応する。当時と同じ条件で再生成する場合は、そのコミットの別作業ツリーを使う。次のコマンドは実験ログと出力が空の状態から実行する。
 
 ```powershell
 $comp = 'competitions/025-optiver-realized-volatility-prediction'
@@ -74,6 +74,8 @@ uv run python "$comp/src/run.py" E00-r2 E01-r2 E02-r2 E03-r2 E04
 New-Item -ItemType Directory -Force "$comp/outputs/selections" | Out-Null
 uv run python "$comp/src/final.py" <Kaggleユーザー名>
 ```
+
+現行コードには板・約定価格、板数量、集計 RV の検証と、生成 Notebook を Kaggle 相当の入力構成で実行するテストを追加した。入力のないバケットや価格観測が1件だけの窓では RV の欠損を許容する。実行テストでは `OPTIVER_INPUT_ROOT` と `OPTIVER_WORKING_DIR` を一時ディレクトリに向ける。
 
 ## 結果
 

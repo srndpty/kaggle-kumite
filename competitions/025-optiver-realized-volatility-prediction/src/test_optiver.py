@@ -1,14 +1,119 @@
 """分割・集約・採点の契約を小さなデータで検査する。"""
 
+import json
+import subprocess
+import sys
 from pathlib import Path
 
+import features as optiver_features
 import numpy as np
 import polars as pl
 import pytest
 from features import KEYS, add_peers, aggregate, features, rmspe, validate_submission
+from final import notebook_source, write_notebook
 from run import splits_for
 
 from kumite.checks import check_label_independence
+
+
+def book_rows() -> pl.DataFrame:
+    return pl.DataFrame(
+        {
+            "time_id": [1, 1, 2, 2, 3, 3],
+            "seconds_in_bucket": [0, 599] * 3,
+            "bid_price1": [1.0, 1.01, 1.0, 1.02, 1.0, 1.03],
+            "ask_price1": [1.0, 1.01, 1.0, 1.02, 1.0, 1.03],
+            "bid_size1": [1] * 6,
+            "ask_size1": [1] * 6,
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        (pl.lit(0).alias("bid_size1"), pl.lit(0).alias("ask_size1")),
+        (pl.lit(-1.0).alias("bid_price1"),),
+        (pl.lit(float("nan")).alias("ask_price1"),),
+        (pl.lit(float("inf")).alias("ask_price1"),),
+        (pl.lit(None, dtype=pl.Float64).alias("ask_price1"),),
+    ],
+)
+def test_rejects_invalid_book(tmp_path: Path, changes: tuple[pl.Expr, ...]) -> None:
+    path = tmp_path / "stock_id=0" / "part.parquet"
+    path.parent.mkdir()
+    book_rows().with_columns(*changes).write_parquet(path)
+    with pytest.raises(ValueError, match="価格または板数量"):
+        aggregate(path, "book")
+
+
+@pytest.mark.parametrize("price", [0.0, -1.0, float("nan"), float("inf")])
+def test_rejects_invalid_trade(tmp_path: Path, price: float) -> None:
+    path = tmp_path / "stock_id=0" / "part.parquet"
+    path.parent.mkdir()
+    pl.DataFrame(
+        {
+            "time_id": [1],
+            "seconds_in_bucket": [0],
+            "price": [price],
+            "size": [1],
+            "order_count": [1],
+        }
+    ).write_parquet(path)
+    with pytest.raises(ValueError, match="価格または板数量"):
+        aggregate(path, "trade")
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf")])
+def test_rejects_non_finite_aggregated_rv(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, value: float
+) -> None:
+    path = tmp_path / "stock_id=0" / "part.parquet"
+    path.parent.mkdir()
+    book_rows().write_parquet(path)
+    monkeypatch.setattr(optiver_features, "rv", lambda _: pl.lit(value))
+    with pytest.raises(ValueError, match="実現ボラティリティが非有限"):
+        aggregate(path, "book")
+
+
+def test_generated_notebook_executes_on_three_test_rows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    inputs = tmp_path / "input"
+    data = inputs / "competitions" / "optiver"
+    work = tmp_path / "working"
+    work.mkdir()
+    train = pl.DataFrame(
+        {"stock_id": [0, 0, 0], "time_id": [1, 2, 3], "target": [0.01, 0.02, 0.03]}
+    )
+    test = (
+        train.select("stock_id", "time_id")
+        .reverse()
+        .with_columns(row_id=pl.Series(["0-3", "0-2", "0-1"]))
+    )
+    for split in ("train", "test"):
+        book = data / f"book_{split}.parquet" / "stock_id=0"
+        trade = data / f"trade_{split}.parquet" / "stock_id=0"
+        book.mkdir(parents=True)
+        trade.mkdir(parents=True)
+        book_rows().write_parquet(book / "part.parquet")
+        book_rows().select(
+            "time_id",
+            "seconds_in_bucket",
+            pl.col("bid_price1").alias("price"),
+            pl.lit(1).alias("size"),
+            pl.lit(1).alias("order_count"),
+        ).write_parquet(trade / "part.parquet")
+    train.write_csv(data / "train.csv")
+    test.write_csv(data / "test.csv")
+    (inputs / "train.csv").write_text("unrelated\n", encoding="utf-8")
+    write_notebook(tmp_path, "test-owner", notebook_source("E01"))
+    notebook = json.loads((tmp_path / "submit.ipynb").read_text(encoding="utf-8"))
+    (cell,) = notebook["cells"]
+    monkeypatch.setenv("OPTIVER_INPUT_ROOT", str(inputs))
+    monkeypatch.setenv("OPTIVER_WORKING_DIR", str(work))
+    subprocess.run([sys.executable, "-c", "".join(cell["source"])], check=True)
+    validate_submission(work / "submission.csv", test["row_id"])
 
 
 def test_window_and_bucket_boundaries(tmp_path: Path) -> None:

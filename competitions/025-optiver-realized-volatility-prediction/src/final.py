@@ -23,6 +23,28 @@ SLUG = COMP.name[4:]
 RECEIPT = COMP / "outputs" / "selections" / "P7.json"
 
 
+def notebook_source(method: str) -> str:
+    features = Path(__file__).with_name("features.py").read_text(encoding="utf-8")
+    return features + (
+        "\n\nfrom os import environ\n"
+        "inputs = Path(environ.get('OPTIVER_INPUT_ROOT', '/kaggle/input'))\n"
+        "working = Path(environ.get('OPTIVER_WORKING_DIR', '/kaggle/working'))\n"
+        "data, = (path.parent for path in inputs.rglob('train.csv')"
+        " if (path.parent / 'book_train.parquet').is_dir())\n"
+        f"predict_submission(data, {method!r}, working / 'submission.csv')\n"
+    )
+
+
+def write_notebook(path: Path, owner: str, source: str) -> None:
+    write_cpu_notebook(
+        path,
+        source,
+        kernel_id=f"{owner}/kumite-optiver-final",
+        title="Kumite Optiver Final",
+        competition=SLUG,
+    )
+
+
 def export(owner: str) -> Path:
     rows = load_rows(DATA, "train")
     y = rows["target"].to_numpy()
@@ -35,24 +57,13 @@ def export(owner: str) -> Path:
         selection = select_runs(store, PLAN, assess)
         write_selection(RECEIPT, selection)
     method = selection.winner.split("-")[0]
-    source = Path(__file__).with_name("features.py").read_text(encoding="utf-8")
-    source += (
-        "\n\ndata, = (path.parent for path in Path('/kaggle/input').rglob('train.csv')"
-        " if (path.parent / 'book_train.parquet').is_dir())\n"
-        f"predict_submission(data, {method!r}, Path('/kaggle/working/submission.csv'))\n"
-    )
+    source = notebook_source(method)
 
     def write(path: Path, winner: ExperimentRecord) -> None:
         if winner.run_id != selection.winner:
             raise ValueError("選定結果が一致しません")
         predict_submission(DATA, method, path / "submission.csv")
-        write_cpu_notebook(
-            path,
-            source,
-            kernel_id=f"{owner}/kumite-optiver-final",
-            title="Kumite Optiver Final",
-            competition=SLUG,
-        )
+        write_notebook(path, owner, source)
 
     def validate(path: Path) -> None:
         notebook: dict[str, Any] = json.loads((path / "submit.ipynb").read_text(encoding="utf-8"))

@@ -34,6 +34,10 @@ def rv(price: pl.Expr) -> pl.Expr:
     return pl.when(returns.count() > 0).then(returns.pow(2).sum().sqrt())
 
 
+def invalid_positive(value: pl.Expr) -> pl.Expr:
+    return value.is_null() | ~value.is_finite() | (value <= 0)
+
+
 def aggregate(path: Path, kind: str) -> pl.DataFrame:
     series = pl.read_parquet(path).sort(["time_id", SECOND])
     stock = int(path.parent.name.removeprefix("stock_id="))
@@ -41,18 +45,29 @@ def aggregate(path: Path, kind: str) -> pl.DataFrame:
         bid = pl.col("bid_size1").cast(pl.Float64)
         ask = pl.col("ask_size1").cast(pl.Float64)
         wap = (pl.col("bid_price1") * ask + pl.col("ask_price1") * bid) / (bid + ask)
+        invalid = pl.any_horizontal(
+            invalid_positive(pl.col("bid_price1")),
+            invalid_positive(pl.col("ask_price1")),
+            invalid_positive(bid + ask),
+            (bid < 0).fill_null(True),
+            (ask < 0).fill_null(True),
+            invalid_positive(wap),
+        )
         stats = [
             rv(wap).alias("book_rv"),
             rv(wap.filter(pl.col(SECOND) >= 300)).alias("book_rv_300"),
             rv(wap.filter(pl.col(SECOND) >= 450)).alias("book_rv_150"),
         ]
     else:
+        invalid = invalid_positive(pl.col("price"))
         stats = [
             rv(pl.col("price")).alias("trade_rv"),
             pl.col("size").sum().alias("volume"),
             pl.col("order_count").sum().alias("orders"),
         ]
-    return (
+    if series.select(invalid.any()).item():
+        raise ValueError(f"価格または板数量が不正です: {path}")
+    summary = (
         series.group_by("time_id")
         .agg(stats)
         .with_columns(
@@ -60,6 +75,11 @@ def aggregate(path: Path, kind: str) -> pl.DataFrame:
             pl.col("time_id").cast(pl.Int64),
         )
     )
+    if summary.select(
+        pl.any_horizontal(~pl.col("^.*_rv.*$").is_finite().fill_null(True)).any()
+    ).item():
+        raise ValueError(f"実現ボラティリティが非有限です: {path}")
+    return summary
 
 
 def input_paths(data: Path, split: str, kind: str) -> list[Path]:

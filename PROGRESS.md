@@ -9,11 +9,11 @@
 
 | 状態 | 件数 |
 |---|---:|
-| 完了 | 34 |
+| 完了 | 35 |
 | 実装・学習完了、外部評価未達 | 1 |
 | P0 で中断 | 1 |
 | 差し替え | 1 |
-| 未着手 | 63 |
+| 未着手 | 62 |
 | **合計** | **100** |
 
 完了は個別の進捗チェックリストを終えたコンペを指す。#091 は外部評価未達のため、完了件数から除く。
@@ -113,7 +113,7 @@
 | 069 | ISIC 2024 - Skin Cancer Detection with 3D-TBP | 未着手 | — |
 | 070 | [TGS Salt Identification Challenge](competitions/070-tgs-salt-identification-challenge/README.md) | 完了 | — |
 | 071 | Carvana Image Masking Challenge | 未着手 | — |
-| 072 | Severstal: Steel Defect Detection | 未着手 | — |
+| 072 | [Severstal: Steel Defect Detection](competitions/072-severstal-steel-defect-detection/README.md) | 完了 | E04 の OOF Dice 0.92488、Late Private Dice 0.88359。 |
 | 073 | Airbus Ship Detection Challenge | 未着手 | — |
 | 074 | [Global Wheat Detection](competitions/074-global-wheat-detection/README.md) | 完了 | — |
 | 075 | VinBigData Chest X-ray Abnormalities Detection | 未着手 | — |

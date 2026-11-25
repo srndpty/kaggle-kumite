@@ -76,3 +76,4 @@
 | [K039](K039-sensor-event-window-length.md) | 仮説 | #091 の過去3秒窓は過去1秒窓より Turn AP +0.03172、StartHesitation AP −0.00870 |
 | [K040](K040-l1-for-original-scale-mae.md) | 仮説 | #011 で元尺度 L1 は L2 より全体 MAE が 29.02 改善し、実測上位 1% の MAE は悪化 |
 | [K041](K041-patent-peer-similarity.md) | 仮説 | #054 で同じ anchor・CPC の他候補の類似度を加えると OOF Pearson +0.00118 |
+| [K042](K042-empty-vs-positive-mask-dice.md) | 仮説 | #072 で非空 Dice が +0.09924 でも、空マスクの誤検出が増えて全体 Dice は −0.28264 |

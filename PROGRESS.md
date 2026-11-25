@@ -9,11 +9,11 @@
 
 | 状態 | 件数 |
 |---|---:|
-| 完了 | 35 |
+| 完了 | 36 |
 | 実装・学習完了、外部評価未達 | 1 |
 | P0 で中断 | 1 |
 | 差し替え | 1 |
-| 未着手 | 62 |
+| 未着手 | 61 |
 | **合計** | **100** |
 
 完了は個別の進捗チェックリストを終えたコンペを指す。#091 は外部評価未達のため、完了件数から除く。
@@ -49,7 +49,7 @@
 | 020 | Corporación Favorita Grocery Sales Forecasting | 未着手 | — |
 | 021 | [M5 Forecasting - Accuracy](competitions/021-m5-forecasting-accuracy/README.md) | 完了 | — |
 | 022 | [M5 Forecasting - Uncertainty](competitions/022-m5-forecasting-uncertainty/README.md) | 完了 | — |
-| 023 | ASHRAE - Great Energy Predictor III | 未着手 | — |
+| 023 | [ASHRAE - Great Energy Predictor III](competitions/023-ashrae-energy-prediction/README.md) | 完了 | F00 の Late Private RMSLE 1.442。 |
 | 024 | [Recruit Restaurant Visitor Forecasting](competitions/024-recruit-restaurant-visitor-forecasting/README.md) | 完了 | — |
 | 025 | Optiver Realized Volatility Prediction | 未着手 | — |
 | 026 | Optiver - Trading at the Close | 未着手 | — |

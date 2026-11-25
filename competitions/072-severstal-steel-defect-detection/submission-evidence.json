@@ -1,0 +1,41 @@
+{
+  "competition": "severstal-steel-defect-detection",
+  "scored_date_jst": "2026-11-25",
+  "selection_sha256": "ae7b8d5d27cd6d2ebd818a41a2f78cafaa8ed80f7a22e0de3e3864d8be3c71c7",
+  "submissions": [
+    {
+      "run_id": "late-E00",
+      "source_cv_run": "E00-r2",
+      "kernel_id": "shion5/kumite-steel-late-e00",
+      "kernel_version": 1,
+      "device": "cpu",
+      "dataset_id": "shion5/kumite-steel-late-e00-weights",
+      "dataset_version": 1,
+      "submission_id": 58855506,
+      "public_score": 0.84655,
+      "private_score": 0.85225,
+      "notebook_sha256": "8c64a63bb5cbcd65f229e16ef0391e261350c38588cbfa9fa6802338f360fd36",
+      "weights_sha256": "b4a6698e491931467ac48e60b449f5b2c1e8991665effaade3e79ab64b1ba3b4",
+      "public_environment_csv_sha256": "d72f71237c51fbb61e7aa734f71c4d261943bcb19e9117fc83e32ef08054799f",
+      "public_environment_rows": 22024,
+      "public_environment_nonempty_masks": 3393
+    },
+    {
+      "run_id": "final",
+      "source_cv_run": "E04",
+      "kernel_id": "shion5/kumite-steel-final",
+      "kernel_version": 1,
+      "device": "cpu",
+      "dataset_id": "shion5/kumite-steel-final-weights",
+      "dataset_version": 1,
+      "submission_id": 58856834,
+      "public_score": 0.88413,
+      "private_score": 0.88359,
+      "notebook_sha256": "8c64a63bb5cbcd65f229e16ef0391e261350c38588cbfa9fa6802338f360fd36",
+      "weights_sha256": "4a624d64f07a1783152b7066a7460e4e114d81fa55c7c496ed6c4e10c99284df",
+      "public_environment_csv_sha256": "5f1669dd6242aafe367edd30fa9ca9bd37fa21412f6a2da425e6aa7f51d56b55",
+      "public_environment_rows": 22024,
+      "public_environment_nonempty_masks": 2109
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "baseline": "E00-r2",
+  "candidates": {
+    "E00-r2": 0.9061800715305874,
+    "E01": 0.6235394716378271,
+    "E02": 0.9069487246945956,
+    "E03": 0.9080650268631298,
+    "E04": 0.924883705353509
+  },
+  "highest_oof": "E04",
+  "paired_dice_difference": {
+    "point": 0.018703633822921506,
+    "low": 0.017251918842718646,
+    "high": 0.02024220317648503,
+    "share_negative": 0.0
+  },
+  "selected_run": "E04",
+  "oof_hashes": {
+    "E00-r2": "1d79d5ca348d05c79ab2280d50a0f7969c1ce78be823df3f524adff19000c3c0",
+    "E01": "a294e3a73dabe8ef0bc52ffc9c01a7c68b69078fb5346a57278fa66daba15ee0",
+    "E02": "d545d8eea4361629335d540ada84a53e2251b295ea8cb4dac31d2c874cb45aaa",
+    "E03": "2cf3f0f3aa1434666ee69ed445fe656f1bcfa9ac0b30274b8f492e9cbe5de966",
+    "E04": "0ebbbeeb49d36d06e8fa6eadc48dbf67b18c5e5066023d9570a97bda20890a73"
+  }
+}

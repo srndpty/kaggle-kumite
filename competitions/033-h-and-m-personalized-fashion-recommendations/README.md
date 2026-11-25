@@ -61,7 +61,7 @@ CV run の公開には共通 Quality Gate が必須。
 | E06 | 本人の購入を365日さかのぼる（E04） | 改善。直近28日に購入のない顧客で効く | P4 の層別で、この層（47.6%）の MAP は 0.011 | 8位（期間は自分で固定） | +0.00255 |
 | E07 | 購入した商品と同じ product_code の商品を候補に追加（E04） | 小幅改善 | 色違いの購入 | 8位 | −0.00011（改善なし） |
 | E08 | 候補を100件から300件に（E04） | Recall は改善、MAP は小幅改善 | 候補100件の MAP 上限は 0.15 前後 | 3位 | −0.00182（Recall は約2倍、予想に反する） |
-| E10 | 候補300件のまま、教師の顧客を E04 と揃える（E08） | E08 の悪化の一部が戻る | レビュー指摘。E08 は候補数と教師の顧客が同時に変わる | 診断（選定外） | |
+| E10 | 候補300件のまま、教師の顧客を E04 と揃える（E08） | E08 の悪化の一部が戻る | レビュー指摘。E08 は候補数と教師の顧客が同時に変わる | 診断（選定外） |+0.00171。E04 とは −0.00011 で、悪化はほぼ解消 |
 | E09 | E06・E07・E08 の組み合わせ（E04） | 各単独より高い | 補う顧客・商品が違う | 組み合わせ | +0.00071（E06 に届かず、予想に反する） |
 
 ## 上位解法
@@ -80,7 +80,14 @@ P4 の記録を commit してから読んだ。いずれも本人の writeup。
 - 各窓の予測は、窓の開始日より前の取引だけで行う。入口の `recommend` で取引表を物理的に切り落としてから候補・特徴・教師を作る。再ランキングの教師は窓の直前の週（E05 は直前4週）の購入で、各教師週の候補と特徴もその週の開始日より前の取引から作る。ラウンド数は200に固定し、検証窓は学習の打ち切りに使わない。
 - 締切以降の取引を差し替えても予測・候補・特徴が変わらないことをテストする。締切の条件を1日緩めるとテストが落ちることも確かめた。
 - 候補は締切前の直近7日または28日に売れた商品だけ。初めて売れた商品（購入ペアの 2.5〜5.4%）は拾えない。
-- `customers.csv` は取得時点のスナップショットなので、会員状態・通知設定などの列は使わず、年齢だけを使う。年齢も取得時点の値であり、窓ごとの値との差は確認できない。
+- 取引以外の静的な表には締切を適用できない。使う列を次のように分ける。年齢を除いた場合の比較はしていないので、影響の大きさは未検証。
+
+| 分類 | 列 | 扱い |
+|---|---|---|
+| 商品の識別・分類（比較的安定） | `product_code`、`product_type_no`、`department_no`、`garment_group_no`、`index_group_no`、`colour_group_code` | 使う。不変とみなすが、後から更新された値が含まれるかは確認できない |
+| 時間とともに変わる | `age` | 使う。取得時点の値で、各窓・各教師週の時点の値ではない |
+| 基準時点が不明で、締切以降の行動を反映しうる | `FN`、`Active`、`club_member_status`、`fashion_news_frequency` | 使わない |
+| 使っていない | `postal_code`、商品の文章・画像 | 使わない |
 - 候補の品質は、候補100件の Recall と、候補内の正解を先頭に並べた場合の MAP@12 で測る。
 - [選定計画](selection-p4.json) の候補順は E00〜E05。実質同点の許容差は MAP@12 で 0.0001。実測前に決めた値で、単純な構成を優先する。P6 の後は、P4 の勝者の再実行と P6 の候補だけで選定計画を作り直す。
 
@@ -100,20 +107,27 @@ P4 の記録を commit してから読んだ。いずれも本人の writeup。
 | E06（F00） | 本人の購入を365日 | **0.03348** | 0.119〜0.134 | 0.02861 / **0.02899** | 最終選定 |
 | E07 | 同じ製品の候補 | 0.03082 | 0.125〜0.141 | | 改善なし |
 | E08 | 候補300件 | 0.02911 | 0.233〜0.251 | | 悪化 |
+| E10 | 候補300件、教師の顧客は E04 と同じ | 0.03082 | 0.233〜0.251 | | 診断（選定外） |
 | E09 | E06＋E07＋E08 | 0.03164 | 0.237〜0.254 | | E06 に届かず |
+
+E10 は最終選定と F00 の採点の後に、レビューを受けて追加した診断で、選定には使わない。[selection-review.json](selection-review.json) は Gate に渡す計画で、実行前に commit した。E08-r2 の OOF は E08 とバイト単位で一致した。
 
 E03・E04・E05 の候補は、保存したハッシュが3窓とも一致する。E04-r2 の OOF は E04 とバイト単位で一致した。Late は提出 B00・F00 のもので、B00 は E00 を単独候補の計画（[selection-p3.json](selection-p3.json)）で再実行した E00-p3 の export。この計画は E00 の結果を見た後に作ったが、候補が1つなので選定には影響しない。
 
 ## 再現手順
 
-リポジトリルートから実行する。公式データは画像を除く4本だけを取得する（Kaggle CLI は zip のまま `.csv` の名前で保存するので展開する）。公開済みの run ID は再利用できないので、再実行では新しい ID と計画を使う。E00〜E05 はコミット `3c7ab00`、E06〜E09 と F00 は `a208e41` のソースで学習した。
+リポジトリルートから実行する。公式データは画像を除く4本だけを取得する（Kaggle CLI は zip のまま `.csv` の名前で保存するので展開する）。公開済みの run ID は再利用できないので、再実行では新しい ID と計画を使う。E00〜E05 はコミット `3c7ab00`、E06〜E09 と F00 は `a208e41`、E08-r2 と E10 は `115dc91` のソースで学習した。B00 と F00 の選定記録は、選定と export が1つの操作だった当時の `final.py` が作った。現在は `select` で確定した記録がなければ `export` は失敗する。
 
 ```powershell
 $comp = 'competitions/033-h-and-m-personalized-fashion-recommendations'
 uv run python "$comp/src/run.py" E00 E01 E02 E03 E04 E05
 uv run python "$comp/src/run.py" --plan "$comp/selection-p3.json" E00-p3
-uv run python "$comp/src/final.py" "$comp/selection-p3.json" B00
+uv run python "$comp/src/final.py" select "$comp/selection-p3.json" B00
+uv run python "$comp/src/final.py" export "$comp/selection-p3.json" B00 B00
 uv run python "$comp/src/run.py" --plan "$comp/selection-p7.json" E04-r2 E06 E07 E08 E09
 uv run python "$comp/src/analyze.py" E01:E03 E03:E04-r2 E04-r2:E06 E04-r2:E08
-uv run python "$comp/src/final.py" "$comp/selection-p7.json" F00
+uv run python "$comp/src/final.py" select "$comp/selection-p7.json" F00
+uv run python "$comp/src/final.py" export "$comp/selection-p7.json" F00 F00
+uv run python "$comp/src/run.py" --plan "$comp/selection-review.json" E08-r2 E10
+uv run python "$comp/src/analyze.py" E08-r2:E10 E04-r2:E10 --training E04 E06 E07 E08 E10
 ```

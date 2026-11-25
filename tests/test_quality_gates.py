@@ -21,6 +21,7 @@ from kumite.quality_gates import (
     publish_gated_cv,
     reserve_cv,
     select_runs,
+    selection_plan_hash,
     verify_cv_run,
     verify_dependencies,
     verify_export,
@@ -74,10 +75,12 @@ def _publish(
     source: SourceSpec,
     record: ExperimentRecord,
     oof: np.ndarray | None = None,
+    *,
+    plan: SelectionPlan | None = None,
 ) -> Path:
     if oof is None:
         oof = np.array([np.nan, 5 + record.oof_score, 5 + record.oof_score])
-    with reserve_cv(store, record.run_id, source, record.inputs) as (reservation, snapshot):
+    with reserve_cv(store, record.run_id, source, record.inputs, plan) as (reservation, snapshot):
         return publish_gated_cv(
             store,
             reservation,
@@ -142,6 +145,27 @@ def test_selection_checks_even_losing_candidate(
             store.log_path.write_text(log.replace(old, file_sha256(path)), encoding="utf-8")
         with pytest.raises(ValueError, match=r"ハッシュ|証跡"):
             select_runs(store, plan, ASSESS)
+
+
+def test_selection_plan_hash_is_fixed_at_training_start(tmp_path: Path, source: SourceSpec) -> None:
+    store = RunStore(tmp_path)
+    plan = SelectionPlan(("E00", "E01"))
+    _publish(store, source, _record("E00"), plan=plan)
+    _publish(store, source, _record("E01", 1.0), plan=plan)
+    assert select_runs(store, plan, ASSESS).winner == "E00"
+    evidence = json.loads(
+        store.artifact_path("E00", "cv_evidence.json").read_text(encoding="utf-8")
+    )
+    assert evidence["plan_hash"] == selection_plan_hash(plan)
+    with pytest.raises(ValueError, match="一致しません"):
+        select_runs(store, SelectionPlan(("E01", "E00")), ASSESS)
+    with (
+        pytest.raises(ValueError, match="含まれていません"),
+        reserve_cv(store, "E02", source, {}, SelectionPlan(("E00",))),
+    ):
+        pass
+    assert [record.run_id for record in store.records()] == ["E00", "E01"]
+    assert store.orphans() == []
 
 
 def test_legacy_run_cannot_enter_strict_selection(tmp_path: Path) -> None:

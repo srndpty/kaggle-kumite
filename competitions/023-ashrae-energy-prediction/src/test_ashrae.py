@@ -17,9 +17,12 @@ from features import (
     weather_for,
 )
 from final import predict, write_submission
-from run import CATEGORICAL, PARAMS, splits_for, to_pandas
+from run import CATEGORICAL, PARAMS, SPLIT_VERSION, splits_for, to_pandas
 
+from kumite.experiments import ExperimentRecord
 from kumite.gbdt import fit_lightgbm_fixed
+from kumite.provenance import array_sha256
+from kumite.runs import RunStore
 
 
 def test_join_and_missing_flags() -> None:
@@ -102,20 +105,32 @@ def test_submission_checks_sample_order(tmp_path: Path, monkeypatch: pytest.Monk
     test = tmp_path / "test.csv"
     sample = tmp_path / "sample_submission.csv"
     test.write_text(
-        "row_id,building_id,meter,timestamp\n1,1,0,2017-01-01 00:00:00\n"
-        "2,1,0,2017-01-01 01:00:00\n",
+        "row_id,building_id,meter,timestamp\n0,1,0,2017-01-01 00:00:00\n"
+        "1,1,0,2017-01-01 01:00:00\n",
         encoding="utf-8",
     )
-    sample.write_text("row_id,meter_reading\n1,0\n2,0\n", encoding="utf-8")
+    sample.write_text("row_id,meter_reading\n0,0\n1,0\n", encoding="utf-8")
     monkeypatch.setattr(final, "TEST_FILES", [test, tmp_path / "weather.csv", sample])
     monkeypatch.setattr(final, "predict", lambda *args: np.zeros(args[1].height))
     monkeypatch.setattr(final, "CHUNK_ROWS", 1)
     output = tmp_path / "submission.csv"
     model = final.lgb.Booster(model_str=_tiny_model())
     write_submission(model, pl.DataFrame(), "E00", None, output)
-    assert pl.read_csv(output).get_column("row_id").to_list() == [1, 2]
-    sample.write_text("row_id,meter_reading\n2,0\n1,0\n", encoding="utf-8")
+    assert pl.read_csv(output).get_column("row_id").to_list() == [0, 1]
+    sample.write_text("row_id,meter_reading\n1,0\n0,0\n", encoding="utf-8")
     with pytest.raises(ValueError, match="ID 順"):
+        write_submission(model, pl.DataFrame(), "E00", None, output)
+
+    sample.write_text("row_id,meter_reading\n0,0\n", encoding="utf-8")
+    with pytest.raises(ValueError):
+        write_submission(model, pl.DataFrame(), "E00", None, output)
+    sample.write_text("row_id,meter_reading\n0,0\n0,0\n", encoding="utf-8")
+    test.write_text(
+        "row_id,building_id,meter,timestamp\n0,1,0,2017-01-01 00:00:00\n"
+        "0,1,0,2017-01-01 01:00:00\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="連続"):
         write_submission(model, pl.DataFrame(), "E00", None, output)
 
 
@@ -145,3 +160,77 @@ def test_temperature_lag_uses_exact_site_and_hour(tmp_path: Path) -> None:
     lagged = weather_for(path, "E04")
     assert lagged is not None
     assert lagged.get_column(TEMPERATURE_LAG).to_list() == [None, None, 11.0, 22.0, None]
+
+
+@pytest.mark.parametrize(
+    ("value", "outside", "tamper", "error"),
+    [
+        (1.0, np.nan, False, None),
+        (1.0, np.nan, True, "ハッシュ"),
+        (1.0, 0.0, False, "検証窓外"),
+        (np.nan, np.nan, False, "検証窓内"),
+        (2.0, np.nan, False, "再計算"),
+    ],
+)
+def test_candidate_oof_validation(
+    tmp_path: Path, value: float, outside: float, tamper: bool, error: str | None
+) -> None:
+    store = RunStore(tmp_path)
+    roles = np.array([[1, 2]], dtype=np.int8)
+    target = np.array([1.0, 1.0])
+    record = ExperimentRecord(
+        competition_id="ashrae-energy-prediction",
+        run_id="E01",
+        metric="rmsle",
+        greater_is_better=False,
+        data_version="E01",
+        data_hash="train",
+        split_version=SPLIT_VERSION,
+        split_hash=array_sha256(roles),
+        seed=42,
+        hypothesis="",
+        changed_one_thing="",
+        model="E01",
+        params=PARAMS,
+        fold_scores=[0.0],
+        oof_score=0.0,
+        code_version="test",
+    )
+
+    def write(path: Path) -> None:
+        np.save(path / "split.npy", roles)
+        np.save(path / "oof.npy", np.array([outside, value]))
+
+    with store.reserve("E01") as reservation:
+        published = store.publish(reservation, record, write)
+    if tamper:
+        np.save(published / "oof.npy", np.array([np.nan, 2.0]))
+    if error:
+        with pytest.raises(ValueError, match=error):
+            final.select_candidate(store, ["E01"], "train", roles, target)
+    else:
+        assert final.select_candidate(store, ["E01"], "train", roles, target).run_id == "E01"
+
+
+def test_temperature_lag_crosses_files_without_ambiguous_keys(tmp_path: Path) -> None:
+    train = tmp_path / "train.csv"
+    test = tmp_path / "test.csv"
+    train.write_text(
+        "site_id,timestamp,air_temperature\n0,2016-12-31 00:00:00,11\n", encoding="utf-8"
+    )
+    test.write_text(
+        "site_id,timestamp,air_temperature\n0,2017-01-01 00:00:00,45\n", encoding="utf-8"
+    )
+    lagged = weather_for(test, "E04", history=train)
+    assert lagged is not None
+    assert lagged.get_column(TEMPERATURE_LAG).to_list() == [11.0]
+
+    with pytest.raises(pl.exceptions.ComputeError, match="1:1"):
+        weather_for(test, "E04", history=test)
+
+
+def test_unknown_building_is_rejected() -> None:
+    meters = pl.DataFrame({"building_id": [2]})
+    buildings = pl.DataFrame({"building_id": [1], "site_id": [0]})
+    with pytest.raises(ValueError, match="building_id"):
+        join_features(meters, buildings)

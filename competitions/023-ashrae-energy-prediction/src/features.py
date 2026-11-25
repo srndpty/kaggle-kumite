@@ -58,12 +58,13 @@ def read_weather(path: Path) -> pl.DataFrame:
     )
 
 
-def weather_for(path: Path, method: str) -> pl.DataFrame | None:
+def weather_for(path: Path, method: str, *, history: Path | None = None) -> pl.DataFrame | None:
     if method == "E00":
         return None
     frame = read_weather(path)
     if method == "E04":
-        previous_day = frame.select(
+        observations = pl.concat([read_weather(history), frame]) if history else frame
+        previous_day = observations.select(
             "site_id",
             (pl.col(TIME) + pl.duration(days=1)).alias(TIME),
             pl.col("air_temperature").alias(TEMPERATURE_LAG),

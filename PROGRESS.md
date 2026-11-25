@@ -1,6 +1,6 @@
 # Kaggle 100本ノックの全体進捗
 
-更新日 2026-11-25
+更新日 2026-11-26
 
 コンペ番号と分類は [カタログ CSV](catalog/kaggle100_catalog.csv) に準拠する。着手済みのコンペ名から個別 README を開ける。
 進捗を変更したときは、個別 README のチェックリストに合わせて、この表の該当行と集計を更新する。
@@ -9,11 +9,11 @@
 
 | 状態 | 件数 |
 |---|---:|
-| 完了 | 37 |
+| 完了 | 39 |
 | 実装・学習完了、外部評価未達 | 1 |
 | P0 で中断 | 1 |
 | 差し替え | 1 |
-| 未着手 | 60 |
+| 未着手 | 58 |
 | **合計** | **100** |
 
 完了は個別の進捗チェックリストを終えたコンペを指す。#091 は外部評価未達のため、完了件数から除く。
@@ -51,7 +51,7 @@
 | 022 | [M5 Forecasting - Uncertainty](competitions/022-m5-forecasting-uncertainty/README.md) | 完了 | — |
 | 023 | [ASHRAE - Great Energy Predictor III](competitions/023-ashrae-energy-prediction/README.md) | 完了 | F00 の Late Private RMSLE 1.442。 |
 | 024 | [Recruit Restaurant Visitor Forecasting](competitions/024-recruit-restaurant-visitor-forecasting/README.md) | 完了 | — |
-| 025 | Optiver Realized Volatility Prediction | 未着手 | — |
+| 025 | [Optiver Realized Volatility Prediction](competitions/025-optiver-realized-volatility-prediction/README.md) | 完了 | F00 の Late Private RMSPE 0.25143。 |
 | 026 | Optiver - Trading at the Close | 未着手 | — |
 | 027 | Jane Street Market Prediction | 未着手 | — |
 | 028 | Jane Street Real-Time Market Data Forecasting | 未着手 | — |
@@ -145,7 +145,7 @@
 | # | コンペ | 状態 | 補足 |
 |---:|---|---|---|
 | 093 | [Mechanisms of Action (MoA) Prediction](competitions/093-lish-moa/README.md) | 完了 | — |
-| 094 | OpenVaccine: COVID-19 mRNA Vaccine Degradation Prediction | 未着手 | — |
+| 094 | [OpenVaccine: COVID-19 mRNA Vaccine Degradation Prediction](competitions/094-stanford-covid-vaccine/README.md) | 完了 | — |
 | 095 | Open Problems - Multimodal Single-Cell Integration | 未着手 | — |
 | 096 | Open Problems – Single-Cell Perturbations | 未着手 | — |
 | 097 | Stanford Ribonanza RNA Folding | 未着手 | — |

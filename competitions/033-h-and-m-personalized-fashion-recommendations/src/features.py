@@ -5,7 +5,7 @@ from functools import cached_property
 
 import numpy as np
 import polars as pl
-from candidates import Snapshot
+from candidates import Rule, Snapshot
 from data import CATEGORIES, Tables
 
 HISTORY_DAYS = 365
@@ -41,6 +41,11 @@ FEATURES = [
     *(f"share_{name}" for name in AFFINITIES),
     *STATIC,
 ]
+
+
+def feature_names(rule: Rule) -> list[str]:
+    """候補源を増やした規則だけ、その順位を特徴に加える。"""
+    return [*FEATURES, *(["product_rank"] if rule.product else [])]
 
 
 @dataclass(frozen=True)
@@ -85,7 +90,7 @@ class FeatureBuilder:
         )
 
     def matrix(self, candidates: pl.DataFrame) -> np.ndarray:
-        """candidates と同じ行順の FEATURES 行列。無い値は NaN。"""
+        """candidates と同じ行順の feature_names 行列。無い値は NaN。"""
         target = candidates.select("customer").unique()
         history = self.year.join(target, on="customer", how="semi")
         frame = (
@@ -107,7 +112,7 @@ class FeatureBuilder:
                 age_gap=(pl.col("age") - pl.col("item_buyer_age")).abs(),
                 price_ratio=pl.col("item_price") / pl.col("customer_price"),
             )
-            .select(pl.col(FEATURES).cast(pl.Float32))
+            .select(pl.col(feature_names(self.snapshot.rule)).cast(pl.Float32))
             .collect()
         )
         if result.height != candidates.height:

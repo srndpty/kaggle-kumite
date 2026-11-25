@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 import pytest
-from candidates import WIDTH, Rule, Snapshot, candidate_matrix
+from candidates import Rule, Snapshot, candidate_matrix
 from data import CATEGORIES, Tables
 from evaluation import K, assessor, candidate_metrics, scores, split_hash, validation_windows
 from features import FEATURES, FeatureBuilder
@@ -16,7 +16,8 @@ from model import METHODS, recommend, training_rows
 
 from kumite.experiments import ExperimentRecord
 
-N_ARTICLES = 160
+N_ARTICLES = 320
+WIDTH = 100
 N_CUSTOMERS = 300
 N_DAYS = 70
 
@@ -55,7 +56,7 @@ def tables() -> Tables:
     )
 
 
-@pytest.mark.parametrize("name", ["E00", "E01", "E02", "E03", "E04"])
+@pytest.mark.parametrize("name", ["E00", "E01", "E02", "E03", "E04", "E06", "E07", "E08", "E09"])
 def test_predictions_ignore_transactions_from_cutoff_on(tables: Tables, name: str) -> None:
     """検証週のラベル（締切以降の購入）を差し替えても、予測・候補が変わらない。"""
     cutoff = N_DAYS - 7
@@ -98,10 +99,16 @@ def test_labels_do_not_change_features_of_the_same_customers(tables: Tables) -> 
     rule = METHODS["E04"].rule
     results: list[np.ndarray] = []
     for rows in (tables.transactions, other):
-        snapshot = Snapshot.at(rows, start, rule)
+        snapshot = Snapshot.at(rows, tables.articles, start, rule)
         builder = FeatureBuilder(replace(tables, transactions=rows), snapshot)
         results.append(builder.matrix(snapshot.candidates(customers)))
     np.testing.assert_array_equal(results[0], results[1])
+
+
+ARTICLES = pl.DataFrame(
+    {"article": np.arange(N_ARTICLES), "product_code": np.arange(N_ARTICLES) // 2},
+    schema={"article": pl.Int32, "product_code": pl.Int32},
+)
 
 
 def small(rows: list[tuple[int, int, int]]) -> pl.DataFrame:
@@ -121,9 +128,9 @@ def test_rule_order_is_own_then_covisit_then_popular() -> None:
         *((15, c, a) for c in (2, 3, 4) for a in (140, 130)),
         *((28, c, 120) for c in range(10, 20)),
     ]
-    snapshot = Snapshot.at(small(rows), 30, Rule(own=True, half_life=None, covisit=True))
+    snapshot = Snapshot.at(small(rows), ARTICLES, 30, Rule(own=True, half_life=None, covisit=True))
     frame = snapshot.candidates(np.array([1, 5], dtype=np.int32))
-    matrix = candidate_matrix(frame, np.array([1, 5]), N_ARTICLES)
+    matrix = candidate_matrix(frame, np.array([1, 5]), WIDTH, N_ARTICLES)
     assert matrix[0, :4].tolist() == [140, 150, 130, 120]
     # 履歴のない顧客は人気順だけ
     assert matrix[1, 0] == 120
@@ -131,15 +138,27 @@ def test_rule_order_is_own_then_covisit_then_popular() -> None:
 
 
 def test_own_items_outside_the_recent_window_are_ignored() -> None:
-    snapshot = Snapshot.at(small([(1, 1, 150)]), 30, Rule(own=True, half_life=None, covisit=False))
+    snapshot = Snapshot.at(
+        small([(1, 1, 150)]), ARTICLES, 30, Rule(own=True, half_life=None, covisit=False)
+    )
     frame = snapshot.candidates(np.array([1], dtype=np.int32))
     assert frame["own_rank"].null_count() == WIDTH
+
+
+def test_longer_own_history_and_same_product_are_added() -> None:
+    rule = Rule(own=True, half_life=None, covisit=False, own_days=365, product=True)
+    frame = Snapshot.at(small([(1, 1, 150)]), ARTICLES, 30, rule).candidates(
+        np.array([1], dtype=np.int32)
+    )
+    # 150 と 151 は同じ product_code
+    assert frame["article"].to_list()[:2] == [150, 151]
+    assert frame["product_rank"].to_list()[:2] == [None, 0]
 
 
 def test_half_life_prefers_newer_sales() -> None:
     rows = [*((20, c, 150) for c in range(8)), *((29, c, 140) for c in range(4))]
     rule = Rule(own=False, half_life=3.0, covisit=False)
-    assert Snapshot.at(small(rows), 30, rule).popular["article"][0] == 140
+    assert Snapshot.at(small(rows), ARTICLES, 30, rule).popular["article"][0] == 140
 
 
 def test_scores_and_candidate_metrics_by_hand() -> None:

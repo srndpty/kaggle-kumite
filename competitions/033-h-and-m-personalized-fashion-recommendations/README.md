@@ -24,9 +24,9 @@ CV run の公開には共通 Quality Gate が必須。
 - [x] P0. 参加・評価環境の確認（Rules 承諾、データ取得、ダミー提出で採点されるか）
 - [x] P1. 問題設定・EDA（予測仮説を3件以上。予想する結果も先に書く）
 - [x] P2. 検証分割の設計（リーク経路の洗い出し、fold の確定）
-- [ ] P3. Baseline の固定（seed・fold・指標・前処理。可能なら初回の Late Submission）
-- [ ] P4. 自力の仮説検証（上位解法を読む前に 3〜6 実験）
-- [ ] P5. 上位解法の調査（アプローチの異なる上位解法を 2〜3 件。出典の種類を記録）
+- [x] P3. Baseline の固定（seed・fold・指標・前処理。可能なら初回の Late Submission）
+- [x] P4. 自力の仮説検証（上位解法を読む前に 3〜6 実験）
+- [x] P5. 上位解法の調査（アプローチの異なる上位解法を 2〜3 件。出典の種類を記録）
 - [ ] P6. 上位解法の着眼点の再現（1〜3 件をアブレーション）
 - [ ] P7. 最終評価・エラー分析（事前に決めたモデルの外部評価と CV との整合性）
 - [ ] P8. 知見の保存（`report.md`、`knowledge/` のカード）
@@ -58,6 +58,20 @@ CV run の公開には共通 Quality Gate が必須。
 | E03 | 直近購入と共購入された商品を人気の前に追加（E01） | 候補 Recall は改善、MAP は横ばい | K038（検索の改善と順位の改善は別） | 自力 | |
 | E04 | E03 の候補100件を固定し、LambdaRank で並べ替え（E03） | 大きく改善 | K038 | 自力 | |
 | E05 | 学習週を1週から4週に（E04） | 改善 | 教師が増える。季節の変化は小さいと見る | 自力 | |
+| E06 | 本人の購入を365日さかのぼる（E04） | 改善。直近28日に購入のない顧客で効く | P4 の層別で、この層（47.6%）の MAP は 0.011 | 8位（期間は自分で固定） | |
+| E07 | 購入した商品と同じ product_code の商品を候補に追加（E04） | 小幅改善 | 色違いの購入 | 8位 | |
+| E08 | 候補を100件から300件に（E04） | Recall は改善、MAP は小幅改善 | 候補100件の MAP 上限は 0.15 前後 | 3位 | |
+| E09 | E06・E07・E08 の組み合わせ（E04） | 各単独より高い | 補う顧客・商品が違う | 組み合わせ | |
+
+## 上位解法
+
+P4 の記録を commit してから読んだ。いずれも本人の writeup。
+
+- 1位は、多様な検索で1人100件の候補を作り、相互作用の特徴と GBDT で順位付けした。教師は6週、負例は週100万件程度に間引いた。画像と文章の特徴は効かなかったという。 [1位](https://www.kaggle.com/competitions/h-and-m-personalized-fashion-recommendations/writeups/senkin13-30crmnsia-1st-place-solution)
+- 3位は、候補源ごとの順位を特徴にして候補を数十件から数百件に増やした。週ごとに学習した BPR 行列分解の類似度も加えた。 [3位](https://www.kaggle.com/competitions/h-and-m-personalized-fashion-recommendations/writeups/sirius-3rd-place-solution)
+- 8位は、過去の購入・同じ product_code・顧客ベースの協調フィルタ・属性別の人気を候補源に、LGBMRanker を3週の教師で学習した。 [8位](https://www.kaggle.com/competitions/h-and-m-personalized-fashion-recommendations/writeups/kazuki-8th-place-solution)
+
+1位が公開した候補100件の命中数は、開始日 09-02 / 09-09 / 09-16 で 41,019 / 38,427 / 39,142。E04 の候補100件は 30,989 / 28,216 / 30,212（Recall × 購入ペア数）で、候補の差が大きい。P6 では候補側の着眼点を選び、教師の週数・間引き・行列分解は扱わない。
 
 ## 検証設計
 

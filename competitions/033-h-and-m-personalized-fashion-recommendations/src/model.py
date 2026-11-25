@@ -5,10 +5,10 @@ from typing import Any
 
 import lightgbm as lgb
 import numpy as np
-from candidates import WIDTH, Rule, Snapshot, candidate_matrix
+from candidates import Rule, Snapshot, candidate_matrix
 from data import Tables
 from evaluation import HORIZON, K, window_truth
-from features import FEATURES, FeatureBuilder
+from features import HISTORY_DAYS, FeatureBuilder, feature_names
 
 from kumite.ranking import sparse_hits
 
@@ -42,12 +42,33 @@ METHODS = {
     "E03": Method(Rule(own=True, half_life=None, covisit=True)),
     "E04": Method(Rule(own=True, half_life=None, covisit=True), label_weeks=1),
     "E05": Method(Rule(own=True, half_life=None, covisit=True), label_weeks=4),
+    "E06": Method(
+        Rule(own=True, half_life=None, covisit=True, own_days=HISTORY_DAYS), label_weeks=1
+    ),
+    "E07": Method(Rule(own=True, half_life=None, covisit=True, product=True), label_weeks=1),
+    "E08": Method(Rule(own=True, half_life=None, covisit=True, width=300), label_weeks=1),
+    "E09": Method(
+        Rule(
+            own=True,
+            half_life=None,
+            covisit=True,
+            own_days=HISTORY_DAYS,
+            product=True,
+            width=300,
+        ),
+        label_weeks=1,
+    ),
 }
 
 
 def settings(name: str) -> dict[str, object]:
-    method = asdict(METHODS[name])
-    return {"method": method, "params": PARAMS, "rounds": ROUNDS, "features": FEATURES}
+    method = METHODS[name]
+    return {
+        "method": asdict(method),
+        "params": PARAMS,
+        "rounds": ROUNDS,
+        "features": feature_names(method.rule),
+    }
 
 
 def training_rows(
@@ -58,12 +79,12 @@ def training_rows(
     候補内に正解のない顧客は順位学習に寄与しないので除く。
     """
     truth = window_truth(tables.transactions, label_start)
-    snapshot = Snapshot.at(tables.transactions, label_start, rule)
+    snapshot = Snapshot.at(tables.transactions, tables.articles, label_start, rule)
     candidates = snapshot.candidates(truth.customers)
-    ranked = candidate_matrix(candidates, truth.customers, tables.n_articles)
+    ranked = candidate_matrix(candidates, truth.customers, rule.width, tables.n_articles)
     labels = sparse_hits(ranked, truth.rows, truth.items, tables.n_articles)
     keep = labels.any(axis=1)
-    kept = candidates.filter(np.repeat(keep, WIDTH))
+    kept = candidates.filter(np.repeat(keep, rule.width))
     x = FeatureBuilder(tables, snapshot).matrix(kept)
     return x, labels[keep].ravel(), int(keep.sum())
 
@@ -77,8 +98,8 @@ def fit(tables: Tables, method: Method, cutoff: int) -> lgb.Booster:
     data = lgb.Dataset(
         np.concatenate([x for x, _, _ in parts]),
         np.concatenate([y for _, y, _ in parts]).astype(np.int8),
-        group=np.full(sum(n for _, _, n in parts), WIDTH),
-        feature_name=FEATURES,
+        group=np.full(sum(n for _, _, n in parts), method.rule.width),
+        feature_name=feature_names(method.rule),
     )
     return lgb.train(PARAMS, data, num_boost_round=ROUNDS)
 
@@ -86,8 +107,8 @@ def fit(tables: Tables, method: Method, cutoff: int) -> lgb.Booster:
 def recommend(
     tables: Tables, method: Method, cutoff: int, customers: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray, lgb.Booster | None]:
-    """cutoff より前の取引だけから、各顧客の上位 K 件と候補 WIDTH 件を返す。customers は昇順。"""
-    past = Snapshot.at(tables.transactions, cutoff, method.rule)
+    """cutoff より前の取引だけから、各顧客の上位 K 件と候補 width 件を返す。customers は昇順。"""
+    past = Snapshot.at(tables.transactions, tables.articles, cutoff, method.rule)
     visible = Tables(
         past.history, tables.articles, tables.ages, tables.customer_ids, tables.article_ids
     )
@@ -98,12 +119,12 @@ def recommend(
     for begin in range(0, len(customers), CHUNK):
         part = customers[begin : begin + CHUNK]
         frame = past.candidates(part)
-        matrix = candidate_matrix(frame, part, tables.n_articles)
+        matrix = candidate_matrix(frame, part, method.rule.width, tables.n_articles)
         pool.append(matrix)
         if model is None:
             top.append(matrix[:, :K])
             continue
-        score = np.asarray(model.predict(builder.matrix(frame))).reshape(-1, WIDTH)
+        score = np.asarray(model.predict(builder.matrix(frame))).reshape(-1, method.rule.width)
         order = np.argsort(-score, axis=1, kind="stable")[:, :K]
         top.append(np.take_along_axis(matrix, order, axis=1))
     return np.concatenate(top), np.concatenate(pool), model

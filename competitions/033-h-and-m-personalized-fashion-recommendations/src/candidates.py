@@ -1,6 +1,6 @@
 """締切前の取引だけから候補を作り、規則の順に並べる。
 
-並びは「本人の直近購入 → 共購入 → 人気」。同じ商品は最初に現れた位置だけを残す。
+並びは「本人の購入 → 共購入 → 同じ製品の別商品 → 人気」。同じ商品は最初に現れた位置だけを残す。
 """
 
 from dataclasses import dataclass
@@ -18,9 +18,12 @@ MAX_NEIGHBOURS = 50
 MAX_BASKET = 50
 MIN_COUNT = 2
 MAX_COVISIT = 50
-WIDTH = 100
+MAX_PRODUCT = 30
 _NO_NEIGHBOURS = pl.DataFrame(
     schema={"article": pl.Int32, "neighbour": pl.Int32, "weight": pl.Float64}
+)
+_NO_PRODUCTS = pl.DataFrame(
+    schema={"customer": pl.Int32, "article": pl.Int32, "product_rank": pl.Int64}
 )
 
 
@@ -31,6 +34,9 @@ class Rule:
     own: bool
     half_life: float | None  # None なら直近 POPULAR_DAYS 日の件数
     covisit: bool
+    own_days: int = RECENT_DAYS  # 本人の購入をさかのぼる日数
+    product: bool = False  # 購入した商品と同じ product_code の商品
+    width: int = 100  # 顧客ごとの候補数
 
 
 @dataclass(frozen=True)
@@ -39,11 +45,14 @@ class Snapshot:
 
     cutoff: int
     history: pl.DataFrame
+    articles: pl.DataFrame
     rule: Rule
 
     @classmethod
-    def at(cls, transactions: pl.DataFrame, cutoff: int, rule: Rule) -> "Snapshot":
-        return cls(cutoff, transactions.filter(pl.col("day") < cutoff), rule)
+    def at(
+        cls, transactions: pl.DataFrame, articles: pl.DataFrame, cutoff: int, rule: Rule
+    ) -> "Snapshot":
+        return cls(cutoff, transactions.filter(pl.col("day") < cutoff), articles, rule)
 
     def last_days(self, days: int) -> pl.DataFrame:
         return self.history.filter(pl.col("day") >= self.cutoff - days)
@@ -54,7 +63,7 @@ class Snapshot:
 
     @cached_property
     def popular(self) -> pl.DataFrame:
-        """人気上位 WIDTH 件（article, popular_rank）。"""
+        """人気上位 width 件（article, popular_rank）。"""
         if self.rule.half_life is None:
             scored = self.last_days(POPULAR_DAYS).group_by("article").agg(score=pl.len())
         else:
@@ -64,8 +73,8 @@ class Snapshot:
                 .group_by("article")
                 .agg(score=pl.col("w").sort().sum())
             )
-        top = scored.sort(["score", "article"], descending=[True, False]).head(WIDTH)
-        if top.height != WIDTH:
+        top = scored.sort(["score", "article"], descending=[True, False]).head(self.rule.width)
+        if top.height != self.rule.width:
             raise ValueError("人気候補が不足しています")
         return top.select("article").with_row_index("popular_rank")
 
@@ -91,9 +100,10 @@ class Snapshot:
         )
 
     def own(self, customers: pl.DataFrame) -> pl.DataFrame:
-        """本人の直近購入（新しい順、own_rank・own_days・own_count）。"""
+        """本人の own_days 日以内の購入（新しい順、own_rank・own_days・own_count）。"""
         return (
-            self.recent.join(customers, on="customer", how="semi")
+            self.last_days(self.rule.own_days)
+            .join(customers, on="customer", how="semi")
             .group_by("customer", "article")
             .agg(last=pl.col("day").max(), own_count=pl.len())
             .sort(
@@ -109,7 +119,7 @@ class Snapshot:
         )
 
     def covisit(self, own: pl.DataFrame) -> pl.DataFrame:
-        """本人の直近購入と一緒に買われた商品（covisit_rank・covisit_score）。"""
+        """本人の購入と直近に一緒に買われた商品（covisit_rank・covisit_score）。"""
         neighbours = self.neighbours if self.rule.covisit else _NO_NEIGHBOURS
         return (
             own.select("customer", "article")
@@ -122,20 +132,43 @@ class Snapshot:
             .filter(pl.col("covisit_rank") < MAX_COVISIT)
         )
 
+    def same_product(self, own: pl.DataFrame) -> pl.DataFrame:
+        """本人の購入と同じ product_code で、直近に売れた別商品（product_rank）。"""
+        if not self.rule.product:
+            return _NO_PRODUCTS
+        codes = self.articles.select("article", "product_code")
+        sold = self.recent.group_by("article").agg(sold=pl.len()).join(codes, on="article")
+        return (
+            own.select("customer", "own_rank", owned="article")
+            .join(codes.rename({"article": "owned"}), on="owned")
+            .join(sold, on="product_code")
+            .filter(pl.col("article") != pl.col("owned"))
+            .sort(
+                ["customer", "own_rank", "sold", "article"],
+                descending=[False, False, True, False],
+            )
+            .unique(["customer", "article"], keep="first", maintain_order=True)
+            .with_columns(product_rank=pl.int_range(pl.len()).over("customer"))
+            .filter(pl.col("product_rank") < MAX_PRODUCT)
+            .select("customer", "article", "product_rank")
+        )
+
     def candidates(self, customers: np.ndarray) -> pl.DataFrame:
-        """顧客ごとに WIDTH 件（customer・position 順）。候補源の値が無ければ null。"""
+        """顧客ごとに width 件（customer・position 順）。候補源の値が無ければ null。"""
         target = pl.DataFrame({"customer": customers}, schema={"customer": pl.Int32})
         own = self.own(target)
         if not self.rule.own:
             own = own.clear()
         covisit = self.covisit(own)
+        product = self.same_product(own)
         sources = [
             own.select("customer", "article", source=pl.lit(0), order=pl.col("own_rank")),
             covisit.select("customer", "article", source=pl.lit(1), order=pl.col("covisit_rank")),
+            product.select("customer", "article", source=pl.lit(2), order=pl.col("product_rank")),
             target.join(self.popular, how="cross").select(
                 "customer",
                 "article",
-                source=pl.lit(2),
+                source=pl.lit(3),
                 order=pl.col("popular_rank").cast(pl.Int64),
             ),
         ]
@@ -144,25 +177,26 @@ class Snapshot:
             .sort("customer", "source", "order")
             .unique(["customer", "article"], keep="first", maintain_order=True)
             .with_columns(position=pl.int_range(pl.len()).over("customer"))
-            .filter(pl.col("position") < WIDTH)
+            .filter(pl.col("position") < self.rule.width)
         )
         return (
             merged.join(own, on=["customer", "article"], how="left")
             .join(covisit, on=["customer", "article"], how="left")
+            .join(product, on=["customer", "article"], how="left")
             .join(self.popular, on="article", how="left")
             .sort("customer", "position")
         )
 
 
 def candidate_matrix(
-    candidates: pl.DataFrame, customers: np.ndarray, n_articles: int
+    candidates: pl.DataFrame, customers: np.ndarray, width: int, n_articles: int
 ) -> np.ndarray:
     """（顧客, 位置）の商品番号。customers は昇順。"""
-    if candidates.height != len(customers) * WIDTH:
+    if candidates.height != len(customers) * width:
         raise ValueError("候補の件数が顧客数と一致しません")
-    ids = candidates["customer"].to_numpy().reshape(-1, WIDTH)
+    ids = candidates["customer"].to_numpy().reshape(-1, width)
     if not (ids == customers[:, None]).all():
         raise ValueError("候補の顧客の順序が一致しません")
-    matrix = candidates["article"].to_numpy().reshape(-1, WIDTH)
-    validate_full_rankings(matrix, (len(customers), WIDTH), n_articles)
+    matrix = candidates["article"].to_numpy().reshape(-1, width)
+    validate_full_rankings(matrix, (len(customers), width), n_articles)
     return matrix

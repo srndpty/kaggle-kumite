@@ -23,7 +23,17 @@
 - 提出形式: File（`id_seqpos` + 5 列の CSV、457,953 行）
 - Late Submission: 可。2026-11-25 に公式サンプル（全 0）を提出し、Public 0.64846 / Private 0.71003 で採点された
 - データ概要: 学習 2,400 配列（長さ 107、先頭 68 位置にラベル、5 目的と各測定誤差、`signal_to_noise`・`SN_filter`）。test 3,634 配列（長さ 107 が 629、長さ 130 が 3,005）。bpp 行列 6,034 個
-- **Private 正解の公開**: `data/post_deadline_files/private_test_labels.csv`（2,493 配列、`test_filter` 列付き）。`test_filter == 1` の 1,172 配列 × 先頭 91 位置で全 0 提出を採点すると 0.71003 になり、Kaggle の値と一致した。この条件をローカル Private 採点（`data.private_score`）として固定した。**外部評価にだけ使い、選定には使わない**
+- **Private 正解の公開**: `data/post_deadline_files/private_test_labels.csv`（2,493 配列、`test_filter` 列付き）。`test_filter == 1` の 1,172 配列 × 先頭 91 位置で全 0 提出を採点すると 0.71003 になり、Kaggle の値と一致した。この条件をローカル Private 採点として固定した。**外部評価にだけ使い、選定には使わない**
+- Private の採点コードは `external.py` に分け、学習・選定・export のソース（`run.SOURCE_FILES`）からは参照しない（テストで検査）。`analyze.py private` は、指定した選定計画の記録が `outputs/selections/` に確定している場合だけ実行できる
+
+### Private 観測の時系列（レビュー対応で明記）
+
+選定コードは CV の OOF だけを使うが、**研究者は最終選定の前から Private を見ていた**。コードの独立性とは別の保証なので、事実を残す。
+
+1. P3 の後（E00・E00R・E00-s2・E01・E01-s2）: 各 run の Private と位置帯別の分解を観測した。**P4 の手法（E02〜E05）を定義する前**。仮説 H6（長さ外挿）が否定的だと知ったのはこの時点
+2. P4〜P6 の後（E02〜E07）: 最終選定の前に、全 run の Private を観測した
+3. P4 の手法・E06 の組み合わせ規則・最終選定は CV だけで決めた。ただし Private を見たことが方針に影響しなかったとは証明できない
+4. 次のコンペでは、P4〜P6 の間は Private 評価を実行せず、最終選定記録の確定後に解禁する（`analyze.py private` の鍵はこのために入れた）
 
 ## 進捗
 
@@ -89,6 +99,7 @@
 | E06 | E02+E04+E05 | 0.25677 | −0.03376 [−0.0397, −0.0296] | 0.37560 | 採用 |
 | E06-r2 | 学習関数の一般化後に E06 を再実行 | 0.25677 | 同上（fold まで一致） | 0.37560 | 再現性確認 |
 | E07 | E06 + fold 内教師による疑似ラベル | 0.25112 | −0.03941 [−0.0446, −0.0359] | 0.37335 | **最終** |
+| E08 | 疑似ラベルのバッチ損失を実際に 0.5 倍にする（E07 との比較） | 0.25092 | E07 との差 −0.00020 [−0.0020, +0.0014] | 0.37276 | 実質同点。選定後・Private 観測後の追加実験 |
 
 E07 − E06-r2 は −0.00565 [−0.00694, −0.00414]、5/5 fold で改善。
 
@@ -104,14 +115,23 @@ Kaggle の議論ページは本文を取得できなかったため、主催者�
 
 ## P6. 着眼点の再現
 
-- 疑似ラベル（E07）: fold ごとに E06 と同じ設定の教師を、その fold の学習行だけで学習し、test 全配列（長さ 107・130）の全位置に疑似ラベルを付けた。要素重みは学習行の重みの中央値 × 0.5（実験前に固定）。検証ラベルが疑似ラベルに入らない（K004）
+- 疑似ラベル（E07）: fold ごとに E06 と同じ設定の教師を、その fold の学習行だけで学習し、test 全配列（長さ 107・130）の全位置に疑似ラベルを付けた。検証ラベルが疑似ラベルに入らない（K004）
+- **E07 の疑似ラベル重みの訂正（レビュー対応）**: 意図は「要素重み = 学習行の重みの中央値 × 0.5」だったが、疑似ラベルは通常ラベルと別のバッチになり、損失はバッチ内で重みの和により正規化される。一律の重みは相殺され、**E07 の疑似ラベルの寄与は実効的に 1 倍（係数なし）**だった。さらに 1 エポックのバッチ数は疑似ラベル側（長さごとに 10 + 47）が通常ラベル側（約 30）より多く、ステップ数では疑似ラベルの方が多かった。E07 の測定値と最終提出はこのまま残す
+- E08: 損失を「バッチ内で正規化した重み付き二乗誤差 × 組の係数（`TrainGroup.loss_scale`）」に変え、疑似ラベルの組に 0.5 を掛けた。E07 との差は −0.00020（95% 区間 [−0.00196, +0.00138]）で実質同点。疑似ラベルの寄与を半分にしても CV は変わらなかった。最終選定と Private 観測の後に行った実験なので、選定には使わない
 - 再現しなかった着眼点: Arnie による別構造の入力拡張（EternaFold・CONTRAfold などが未導入）、注意機構・CNN の併用
 - 6 位のグラフ畳み込みは、E02 の `bpp @ onehot`（1 層・学習なしの集約）に近い
 
 ## P7. 最終評価
 
-- 選定計画 `final`（候補 E06-r2 → E07、許容差 0.002）。`final.py select final` で E07 を選定し、`outputs/selections/final.json` に記録した。**この計画は E07 の実行後に書いた**。許容差と優先順の規則は P3 で固定したものに従い、候補は現行コードで export できる run（コードの一般化後）に限った。E01〜E06 は一般化前のコードで学習したため、Gate の export 対象にならない
-- export: `final.py export final X01` → `outputs/exports/outputs/runs/X01/submission.csv`（E07 の fold 平均 test 予測。Gate が選定記録・ソース・設定・候補の OOF を再検証）
+- 選定計画 `final`（候補 E06-r2 → E07、許容差 0.002）。`final.py select final` で E07 を選定し、`outputs/selections/final.json` に記録した
+  - **この計画は E07 の実行後に書いた（事後登録。この判定は書き換えない）**。許容差と優先順の規則は P3 で固定したものに従い、候補は当時のコードで export できる run（コードの一般化後）に限った。E01〜E06 は一般化前のコードで学習したため、Gate の export 対象にならない
+  - Gate は選定記録の改変や再計算の不一致を検出するが、候補集合と優先順が実験前に固定されたことは保証しない
+  - E07 と E06-r2 の差（0.0056479）は許容差 0.002 を大きく上回り、候補の順を逆にしても E07 が選ばれる
+  - 次のコンペでは、比較実験の開始前に `selections.toml` の候補集合と優先順を確定し、その時点で commit する
+- export: `final.py export final X01` → `outputs/exports/outputs/runs/X01/submission.csv`
+  - **提出するのは、CV 公開時に保存した E07 の fold 平均 test 予測（`test.npy`）そのもの**。Gate が保証するのは、選定記録・ソース・設定・候補の OOF の再検証と、保存予測のバイト列が export まで改変されていないこと。export 時にモデルの推論を再実行して同値性を確かめてはいない
+  - 学習と提出で推論コードを二重に持たないため、再実装の差は入らない
+- レビュー対応で `models.py`・`run.py`・`data.py` を変えたため、E06-r2・E07 も現行コードでは export できない（Gate がソースの不一致を拒否する）。X01 は変更前のコードで生成済み・提出済みの確定 export として残す
 - Late Submission（2026-11-25、X01）: **Public 0.25489 / Private 0.37334**。ローカル Private 採点（0.37335）と一致
 - CV と外部評価: CV 0.25112 ≈ Public 0.25489 だが、Private は 0.122 悪い
   - Public は学習と同じ設計ラウンド（RYOS-I）、Private は大会開始後に集めた別ラウンド（RYOS-II、長さ 130）（論文）
@@ -126,8 +146,12 @@ Kaggle の議論ページは本文を取得できなかったため、主催者�
 
 ```powershell
 dev download 94
-uv run python competitions/094-stanford-covid-vaccine/src/run.py E07 --run-id E07-r2
-uv run python competitions/094-stanford-covid-vaccine/src/analyze.py --base E01 E07-r2
+uv run python competitions/094-stanford-covid-vaccine/src/run.py E08 --run-id E08-r2
+uv run python competitions/094-stanford-covid-vaccine/src/analyze.py compare --base E07 E08-r2
 uv run python competitions/094-stanford-covid-vaccine/src/final.py select <計画名>
 uv run python competitions/094-stanford-covid-vaccine/src/final.py export <計画名> <export ID>
+# 選定記録の確定後だけ実行できる外部評価
+uv run python competitions/094-stanford-covid-vaccine/src/analyze.py private --after-selection <計画名> --export <export ID>
 ```
+
+E07 を同じ値で再現するには、レビュー対応前のコード（`loss_scale` 導入前）が必要。

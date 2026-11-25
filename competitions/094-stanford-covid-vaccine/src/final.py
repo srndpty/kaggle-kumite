@@ -12,7 +12,6 @@ from pathlib import Path
 from data import (
     COMPETITION,
     mcrmse,
-    private_score,
     read_train,
     validate_submission,
     write_submission,
@@ -90,9 +89,8 @@ def export(name: str, export_id: str) -> None:
         required_outputs=(SUBMISSION,),
         validate_outputs=lambda path: validate_submission(path / SUBMISSION),
     )
+    # export は提出成果物の生成で完了する。Private 評価は analyze.py private で明示的に実行する
     print(f"出力: {published / SUBMISSION}")
-    score = private_score(published / SUBMISSION)
-    print(f"ローカル Private MCRMSE（外部評価。選定には使わない）: {score:.5f}")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,5 @@
 """OpenVaccine の読み込み・符号化・分割・採点。"""
 
-import json
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -18,7 +17,6 @@ TRAIN_JSON = DATA / "train.json"
 TEST_JSON = DATA / "test.json"
 SAMPLE = DATA / "sample_submission.csv"
 BPPS = DATA / "bpps"
-PRIVATE_LABELS = DATA / "post_deadline_files" / "private_test_labels.csv"
 
 TARGETS = ("reactivity", "deg_Mg_pH10", "deg_pH10", "deg_Mg_50C", "deg_50C")
 ERRORS = (
@@ -31,7 +29,6 @@ ERRORS = (
 SCORED = ("reactivity", "deg_Mg_pH10", "deg_Mg_50C")
 SCORED_INDEX = tuple(TARGETS.index(name) for name in SCORED)
 TRAIN_SCORED = 68
-PRIVATE_SCORED = 91  # P0 で Kaggle の Private スコアと一致した採点位置数
 VOCAB = {"sequence": "ACGU", "structure": "().", "predicted_loop_type": "BEHIMSX"}
 N_TOKENS = sum(len(v) for v in VOCAB.values())
 
@@ -211,18 +208,3 @@ def validate_submission(path: Path, sample: Path = SAMPLE) -> None:
         raise ValueError("id_seqpos の集合または順序が公式サンプルと一致しません")
     if not np.isfinite(actual[list(TARGETS)].to_numpy(dtype=np.float64)).all():
         raise ValueError("予測に NaN または Inf があります")
-
-
-def private_score(path: Path, labels: Path = PRIVATE_LABELS) -> float:
-    """公開済みの Private 正解で提出 CSV を採点する（外部評価。選定には使わない）。"""
-    truth = pd.read_csv(labels)
-    truth = truth[truth["test_filter"] == 1]
-    submission = pd.read_csv(path).set_index("id_seqpos")
-    y: list[np.ndarray] = []
-    predicted: list[np.ndarray] = []
-    for row in truth.itertuples(index=False):
-        values = [json.loads(str(getattr(row, c)))[:PRIVATE_SCORED] for c in SCORED]
-        y.append(np.array(values).T)
-        keys = [f"{row.id}_{p}" for p in range(PRIVATE_SCORED)]
-        predicted.append(submission.loc[keys, list(SCORED)].to_numpy(dtype=np.float64))
-    return mcrmse(np.stack(y), np.stack(predicted))

@@ -1,31 +1,24 @@
 """run の比較とエラー分析。
 
-- クラスタ単位 bootstrap: 類似配列クラスタを再標本化し、MCRMSE の差の 95% 区間を出す
-- 外部評価: 各 run の fold 平均 test 予測を公開済み Private 正解で採点する（選定には使わない）
+- `compare`: 類似配列クラスタを再標本化し、CV の MCRMSE の差の 95% 区間を出す（開発中に使う）
+- `private`: 公開済み Private 正解による外部評価。指定した選定計画の記録（outputs/selections）が
+  確定している場合だけ実行する。選定前に Private を見て方針を決めないための運用上の鍵
 """
 
 import argparse
-import json
 import tempfile
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from data import (
-    COMPETITION,
-    PRIVATE_LABELS,
-    PRIVATE_SCORED,
-    SCORED,
-    TRAIN_SCORED,
-    kmer_clusters,
-    mcrmse,
-    read_train,
-    write_submission,
-)
+from data import COMPETITION, TRAIN_SCORED, kmer_clusters, read_train, write_submission
+from external import private_breakdown
+from final import SELECTIONS, SUBMISSION
 
 from kumite.runs import RunStore
 
 N_BOOTSTRAP = 2000
+EXPORTS = COMPETITION / "outputs" / "exports"
 
 
 def cluster_bootstrap(base: str, other: str, store: RunStore) -> tuple[float, float, float, float]:
@@ -57,47 +50,57 @@ def cluster_bootstrap(base: str, other: str, store: RunStore) -> tuple[float, fl
     return point, float(low), float(high), float((diff < 0).mean())
 
 
-def private_truth() -> tuple[list[str], np.ndarray]:
-    truth = pd.read_csv(PRIVATE_LABELS)
-    truth = truth[truth["test_filter"] == 1]
-    y = np.stack([np.array([json.loads(v)[:PRIVATE_SCORED] for v in truth[c]]) for c in SCORED], -1)
-    return list(truth["id"]), y
+def compare(base: str, runs: list[str]) -> None:
+    store = RunStore(COMPETITION)
+    print(f"{base}: CV {store.record(base).oof_score:.5f}")
+    for run_id in runs:
+        record = store.record(run_id)
+        if record.split_hash != store.record(base).split_hash:
+            print(f"{run_id}: CV {record.oof_score:.5f}（分割が異なるため bootstrap なし）")
+            continue
+        point, low, high, share = cluster_bootstrap(base, run_id, store)
+        print(
+            f"{run_id}: CV {record.oof_score:.5f} | {run_id} - {base}: {point:+.5f} "
+            f"95%区間 [{low:+.5f}, {high:+.5f}] 負の割合 {share:.3f}"
+        )
 
 
-def private_breakdown(run_id: str, store: RunStore) -> dict[str, float]:
-    """Private の全体・学習で見た位置（0〜67）・外挿位置（68〜90）の MCRMSE。"""
-    ids, y = private_truth()
-    with tempfile.TemporaryDirectory() as directory:
-        path = Path(directory) / "submission.csv"
-        write_submission(path, store.load_array(run_id, "test.npy"))
-        submission = pd.read_csv(path).set_index("id_seqpos")
-    keys = [f"{i}_{p}" for i in ids for p in range(PRIVATE_SCORED)]
-    predicted = submission.loc[keys, list(SCORED)].to_numpy().reshape(y.shape)
-    return {
-        "all": mcrmse(y, predicted),
-        "seen_0_67": mcrmse(y[:, :TRAIN_SCORED], predicted[:, :TRAIN_SCORED]),
-        "extrapolated_68_90": mcrmse(y[:, TRAIN_SCORED:], predicted[:, TRAIN_SCORED:]),
-    }
+def require_selection(plan: str, selections: Path = SELECTIONS) -> None:
+    """選定記録が確定していなければ Private 評価を拒否する。"""
+    if not (selections / f"{plan}.json").is_file():
+        raise ValueError(f"選定計画 {plan} の記録がないため、Private 評価はまだ実行できません")
+
+
+def private(plan: str, runs: list[str], exports: list[str]) -> None:
+    require_selection(plan)
+    store = RunStore(COMPETITION)
+    export_store = RunStore(EXPORTS)
+    targets: list[tuple[str, Path | None]] = [(r, None) for r in runs]
+    targets += [(e, export_store.artifact_path(e, SUBMISSION)) for e in exports]
+    for name, path in targets:
+        with tempfile.TemporaryDirectory() as directory:
+            if path is None:
+                path = Path(directory) / SUBMISSION
+                write_submission(path, store.load_array(name, "test.npy"))
+            parts = private_breakdown(path)
+        print(f"{name}: Private " + " ".join(f"{k} {v:.5f}" for k, v in parts.items()))
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--base", required=True)
-    parser.add_argument("runs", nargs="+")
+    sub = parser.add_subparsers(dest="command", required=True)
+    c = sub.add_parser("compare")
+    c.add_argument("--base", required=True)
+    c.add_argument("runs", nargs="+")
+    p = sub.add_parser("private")
+    p.add_argument("--after-selection", required=True, help="確定済みの選定計画名")
+    p.add_argument("runs", nargs="*")
+    p.add_argument("--export", action="append", default=[])
     args = parser.parse_args()
-    store = RunStore(COMPETITION)
-    for run_id in [args.base, *args.runs]:
-        record = store.record(run_id)
-        parts = private_breakdown(run_id, store)
-        text = " ".join(f"{k} {v:.5f}" for k, v in parts.items())
-        print(f"{run_id}: CV {record.oof_score:.5f} | Private {text}")
-    for run_id in args.runs:
-        if store.record(run_id).split_hash != store.record(args.base).split_hash:
-            continue
-        point, low, high, share = cluster_bootstrap(args.base, run_id, store)
-        print(
-            f"{run_id} - {args.base}: {point:+.5f} 95%区間 [{low:+.5f}, {high:+.5f}] 負の割合 {share:.3f}"
-        )
+    if args.command == "compare":
+        compare(args.base, args.runs)
+    else:
+        private(args.after_selection, args.runs, args.export)
 
 
 if __name__ == "__main__":

@@ -131,3 +131,16 @@ weights = "inverse_variance"
 targets = "all"
 seed = 42
 pseudo_label = true
+
+# --- レビュー対応（最終選定・Private 観測の後に追加した実験。選定には使わない） ---
+
+[E08]
+hypothesis = "E07 では疑似ラベルの 0.5 倍がバッチ内の正規化で相殺されていた。正規化後の損失を実際に 0.5 倍にすると、疑似ラベルの誤りの影響が減って改善する"
+changed_one_thing = "疑似ラベルのバッチ損失に 0.5 を掛ける（E07 は実効的に 1 倍）"
+model = "gru"
+split = "cluster"
+use_bpp = true
+weights = "inverse_variance"
+targets = "all"
+seed = 42
+pseudo_label = true

@@ -125,20 +125,35 @@ def _seed(seed: int) -> None:
 class TrainGroup:
     """同じ長さの学習分子の組。`x` (分子, 長さ, 特徴)、`y`・`weight` (分子, ラベル位置, 目的)。
 
-    損失はラベルのある先頭 `y.shape[1]` 位置だけで計算する。
+    損失はラベルのある先頭 `y.shape[1]` 位置だけで計算する。`weight` は組の中の相対的な重みで、
+    バッチごとの正規化で全体の大きさは消える。組全体の寄与は `loss_scale` で変える。
     """
 
     x: np.ndarray
     y: np.ndarray
     weight: np.ndarray
+    loss_scale: float = 1.0
 
     def __post_init__(self) -> None:
         if self.weight.shape != self.y.shape or self.y.shape[:1] != self.x.shape[:1]:
             raise ValueError("学習ラベルまたは重みの形が想定外です")
+        if not np.isfinite(self.loss_scale) or self.loss_scale <= 0:
+            raise ValueError("loss_scale は正の有限値が必要です")
         if self.y.shape[1] > self.x.shape[1]:
             raise ValueError("ラベル位置が配列長を超えています")
         if not np.isfinite(self.y[self.weight > 0]).all():
             raise ValueError("重みが正の学習ラベルに NaN があります")
+
+
+def batch_loss(
+    predicted: torch.Tensor, y: torch.Tensor, weight: torch.Tensor, loss_scale: float
+) -> torch.Tensor:
+    """バッチ内で正規化した重み付き二乗誤差に、組の係数を掛ける。
+
+    重みを一律に何倍しても正規化で相殺されるので、組の寄与は `loss_scale` だけで変わる。
+    """
+    weighted = (weight * (predicted - y) ** 2).sum() / weight.sum().clamp_min(1e-12)
+    return loss_scale * weighted
 
 
 def fit_predict_gru(
@@ -185,8 +200,7 @@ def fit_predict_gru(
         for k, batch in batches:
             x, y, w = tensors[k]
             predicted = model(x[batch])[:, : y.shape[1]]
-            wb = w[batch]
-            loss = (wb * (predicted - y[batch]) ** 2).sum() / wb.sum().clamp_min(1e-12)
+            loss = batch_loss(predicted, y[batch], w[batch], groups[k].loss_scale)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()

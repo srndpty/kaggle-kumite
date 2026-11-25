@@ -5,6 +5,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
+import torch
+from analyze import require_selection
 from data import (
     TARGETS,
     Labels,
@@ -12,17 +14,18 @@ from data import (
     cluster_splits,
     mcrmse,
     partners,
-    private_score,
     sample_rows,
     tokens,
     validate_submission,
     write_submission,
 )
-from models import GRUConfig, TrainGroup, fit_predict_gru, window_frame
-from run import Method, load_method, source_spec, to_five, training_weights
+from external import private_breakdown
+from models import GRUConfig, TrainGroup, batch_loss, fit_predict_gru, window_frame
+from run import SOURCE_FILES, Method, load_method, source_spec, to_five, training_weights
 
 from kumite.crossfit import CrossFitResult, split_roles
 from kumite.cv_run import Evaluation, Trial, publish_cv_run
+from kumite.paths import REPO_ROOT
 from kumite.provenance import array_sha256
 from kumite.quality_gates import SelectionPlan, SourceSpec, dense_oof, reserve_cv, select_runs
 from kumite.runs import RunStore
@@ -120,7 +123,41 @@ def test_private_score_uses_filtered_molecules_and_first_91_positions(tmp_path: 
     )
     path = tmp_path / "submission.csv"
     submission.to_csv(path, index=False)
-    assert private_score(path, labels) == pytest.approx(1.0)
+    parts = private_breakdown(path, labels)
+    assert parts == {"all": 1.0, "seen_0_67": 1.0, "extrapolated_68_90": 1.0}
+
+
+def test_training_and_export_sources_cannot_reach_private_labels() -> None:
+    """選定経路のソースは外部評価のモジュールと Private 正解のファイルを参照しない。"""
+    for name in SOURCE_FILES:
+        text = (REPO_ROOT / name).read_text(encoding="utf-8")
+        assert "external" not in text, name
+        assert "post_deadline" not in text, name
+        assert "private_test_labels" not in text, name
+
+
+def test_private_evaluation_requires_a_selection_record(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="選定計画 final"):
+        require_selection("final", tmp_path)
+    (tmp_path / "final.json").write_text("{}", encoding="utf-8")
+    require_selection("final", tmp_path)
+
+
+def test_group_loss_scale_is_not_cancelled_by_batch_normalisation() -> None:
+    predicted = torch.tensor([[1.0], [3.0]])
+    y = torch.zeros(2, 1)
+    weight = torch.ones(2, 1)
+    base = float(batch_loss(predicted, y, weight, 1.0))
+    # 重みを一律に縮めても、バッチ内の正規化で相殺される（E07 の実装で起きていたこと）
+    assert float(batch_loss(predicted, y, 0.5 * weight, 1.0)) == pytest.approx(base)
+    # 組の係数は相殺されない
+    assert float(batch_loss(predicted, y, weight, 0.5)) == pytest.approx(0.5 * base)
+    ratio = float(batch_loss(predicted, y, weight, 0.5)) / float(
+        batch_loss(predicted, y, weight, 0.1)
+    )
+    assert ratio == pytest.approx(5.0)
+    with pytest.raises(ValueError, match="loss_scale"):
+        TrainGroup(np.zeros((1, 2, 1)), np.zeros((1, 2, 1)), np.ones((1, 2, 1)), loss_scale=0.0)
 
 
 def test_methods_are_valid_and_source_imports_are_declared() -> None:

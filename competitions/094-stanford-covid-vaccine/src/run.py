@@ -69,7 +69,9 @@ IMPORT_ROOTS = ("src", SRC)
 
 WINDOW = 4
 TAU = 0.3  # 逆分散重みの下限側の残差。実験前に固定（調整しない）
-PSEUDO_WEIGHT = 0.5  # 疑似ラベルの要素重み = 学習行の重みの中央値 × この値。実験前に固定
+# 疑似ラベルのバッチの損失に掛ける係数（正規化後の損失の 0.5 倍）。E07 では要素重みに掛けたため
+# バッチ内の正規化で相殺され、実効的に 1 だった（README の P6 を参照）。
+PSEUDO_WEIGHT = 0.5
 LIGHTGBM = {
     "objective": "regression",
     "num_boost_round": 600,
@@ -225,9 +227,8 @@ def fold_fitter(
             if method.pseudo_label:
                 # 教師はこの fold の学習行だけで学習する（検証ラベルを疑似ラベルに混ぜない）
                 teacher = fit_predict_gru([labeled], test_x, config)
-                scale = PSEUDO_WEIGHT * float(np.median(weight[train]))
                 training += [
-                    TrainGroup(x, p, np.full(p.shape, scale))
+                    TrainGroup(x, p, np.ones(p.shape), loss_scale=PSEUDO_WEIGHT)
                     for x, p in zip(test_x, teacher, strict=True)
                 ]
             valid_out, *test_out = fit_predict_gru(

@@ -9,11 +9,11 @@
 
 | 状態 | 件数 |
 |---|---:|
-| 完了 | 39 |
+| 完了 | 40 |
 | 実装・学習完了、外部評価未達 | 1 |
 | P0 で中断 | 1 |
 | 差し替え | 1 |
-| 未着手 | 58 |
+| 未着手 | 57 |
 | **合計** | **100** |
 
 完了は個別の進捗チェックリストを終えたコンペを指す。#091 は外部評価未達のため、完了件数から除く。
@@ -52,7 +52,7 @@
 | 023 | [ASHRAE - Great Energy Predictor III](competitions/023-ashrae-energy-prediction/README.md) | 完了 | F00 の Late Private RMSLE 1.442。 |
 | 024 | [Recruit Restaurant Visitor Forecasting](competitions/024-recruit-restaurant-visitor-forecasting/README.md) | 完了 | — |
 | 025 | [Optiver Realized Volatility Prediction](competitions/025-optiver-realized-volatility-prediction/README.md) | 完了 | F00 の Late Private RMSPE 0.25143。 |
-| 026 | Optiver - Trading at the Close | 未着手 | — |
+| 026 | [Optiver - Trading at the Close](competitions/026-optiver-trading-at-the-close/README.md) | 完了 | E01-r2 の OOF MAE 5.93363、F00 の Late Private MAE 5.5239。 |
 | 027 | Jane Street Market Prediction | 未着手 | — |
 | 028 | Jane Street Real-Time Market Data Forecasting | 未着手 | — |
 | 029 | Ubiquant Market Prediction | 未着手 | — |

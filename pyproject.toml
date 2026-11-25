@@ -88,7 +88,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "PTH", "RUF"]
 ignore = ["E501", "RUF001", "RUF002", "RUF003"]
 
 [tool.pyright]
-include = ["src", "tests", "competitions"]
+include = ["src", "tests", "competitions/*/src"]
 typeCheckingMode = "strict"
 pythonVersion = "3.12"
 venvPath = "."

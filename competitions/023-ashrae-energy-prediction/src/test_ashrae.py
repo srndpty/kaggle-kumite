@@ -20,9 +20,12 @@ from features import (
 from final import predict, write_submission
 from run import CATEGORICAL, PARAMS, SPLIT_VERSION, splits_for, to_pandas
 
+from kumite.crossfit import CrossFitResult, split_roles
+from kumite.cv_run import Evaluation, Trial, publish_cv_run
 from kumite.experiments import ExperimentRecord
 from kumite.gbdt import fit_lightgbm_fixed
 from kumite.provenance import array_sha256
+from kumite.quality_gates import SelectionPlan, SourceSpec, dense_oof, reserve_cv, select_runs
 from kumite.runs import RunStore
 
 
@@ -243,3 +246,41 @@ def test_unknown_building_is_rejected() -> None:
     buildings = pl.DataFrame({"building_id": [1], "site_id": [0]})
     with pytest.raises(ValueError, match="building_id"):
         join_features(meters, buildings)
+
+
+def test_quality_gate_with_ashrae_rmsle(tmp_path: Path) -> None:
+    store = RunStore(tmp_path)
+    y = np.array([99.0, 3.0, 7.0])
+    splits = [(np.array([0]), np.array([1])), (np.array([0, 1]), np.array([2]))]
+    evaluation = Evaluation(
+        "ashrae-energy-prediction",
+        "rmsle",
+        False,
+        rmsle,
+        "synthetic",
+        SPLIT_VERSION,
+        array_sha256(split_roles(len(y), splits)),
+        42,
+    )
+    source = SourceSpec(Path(__file__).parent, ("features.py", "run.py"), PARAMS)
+    trial = Trial("基準", "なし", "fixture", "synthetic")
+    result = CrossFitResult(np.array([np.nan, 3.0, 7.0]), np.array([1.0]), [{}, {}])
+    with reserve_cv(store, "E00", source, trial.inputs) as (reservation, start):
+        published = publish_cv_run(
+            store,
+            reservation,
+            evaluation,
+            trial,
+            y,
+            splits,
+            result,
+            0.0,
+            lambda _: None,
+            gate=(source, start, y.shape),
+        )
+    assess = dense_oof(y, splits, rmsle, expected_shape=y.shape, data_hash=evaluation.data_hash)
+    plan = SelectionPlan(("E00",))
+    assert select_runs(store, plan, assess).scores == {"E00": 0.0}
+    np.save(published / "oof.npy", np.array([99.0, 3.0, 7.0]))
+    with pytest.raises(ValueError, match="ハッシュ"):
+        select_runs(store, plan, assess)

@@ -17,7 +17,7 @@ import re
 import shutil
 import time
 import uuid
-from collections.abc import Callable, Generator
+from collections.abc import Callable, Generator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import datetime
@@ -37,6 +37,8 @@ from kumite.provenance import file_sha256
 _TMP_PREFIX = ".tmp-"
 _LOG_LOCK_TIMEOUT_SEC = 30.0
 _RUN_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
+CV_EVIDENCE = "cv_evidence.json"
+QUALITY_GATE_MARKER = "quality-gates.toml"
 
 
 def validate_run_id(run_id: str) -> None:
@@ -150,8 +152,17 @@ class RunStore:
         reservation: Reservation,
         record: ExperimentRecord,
         write_outputs: Callable[[Path], None],
+        *,
+        seal: tuple[str, Callable[[Mapping[str, str]], str]] | None = None,
     ) -> Path:
-        """write_outputs(一時ディレクトリ) で成果物を書かせ、ハッシュを記録して公開する。"""
+        """一時ディレクトリに成果物を書き、ハッシュを記録して公開する。
+
+        seal があれば、成果物のハッシュを渡して証跡を生成し、同じ確定処理に含める。
+        """
+        if (self.competition_dir / QUALITY_GATE_MARKER).is_file() and (
+            seal is None or seal[0] != CV_EVIDENCE
+        ):
+            raise ValueError("このコンペの CV run は publish_gated_cv で公開してください")
         run_id = reservation.run_id
         if record.run_id != run_id:
             raise ValueError(f"予約 {run_id} と記録 {record.run_id} の run_id が違います")
@@ -164,6 +175,14 @@ class RunStore:
         try:
             write_outputs(tmp)
             artifacts = {p.name: file_sha256(p) for p in sorted(tmp.iterdir())}
+            if seal is not None:
+                name, content = seal
+                if Path(name).name != name or name in {"", ".", ".."}:
+                    raise ValueError(f"証跡ファイル名が不正です: {name}")
+                path = tmp / name
+                with path.open("x", encoding="utf-8") as evidence:
+                    evidence.write(content(artifacts))
+                artifacts[name] = file_sha256(path)
             tmp.rename(final)
         except BaseException:
             shutil.rmtree(tmp, ignore_errors=True)
@@ -242,6 +261,9 @@ class RunStore:
 
     def artifact_path(self, run_id: str, name: str) -> Path:
         """ハッシュを照合したうえで成果物のパスを返す。"""
+        validate_run_id(run_id)
+        if not name or name in {".", ".."} or any(c in name for c in "/\\:"):
+            raise ValueError(f"成果物名が不正です: {name}")
         expected = self.record(run_id).artifacts.get(name)
         if expected is None:
             raise LookupError(f"run {run_id} の成果物に {name} はありません")

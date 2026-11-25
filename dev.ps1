@@ -55,7 +55,7 @@ $commands = [ordered]@{
         }
     }
     test     = @{ Description = "pytest を実行（tests/ と各コンペの src/ を別々に。追加引数があればそのまま渡す）"; Action = { Invoke-Test } }
-    check    = @{ Description = "lint + 整形確認 + 型検査 + テスト（引数でコンペのパスを指定可能）"; Action = {
+    check    = @{ Description = "lint + 整形確認 + 型検査 + Quality Gate を含むテスト（引数でコンペのパスを指定可能）"; Action = {
             Invoke-Lint
             Invoke-Native uv run ruff format --check .
             Invoke-Native uv run pyright

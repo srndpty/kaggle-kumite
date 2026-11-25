@@ -63,7 +63,7 @@
 | [K027](K027-qwk-threshold-calibration.md) | 仮説 | #016 の内側 OOF 閾値調整で QWK +0.11453、2段階以上の誤分類率は15.87%から24.35% |
 | [K028](K028-evaluate-all-hierarchy-levels.md) | 再現 | #021 の点予測と #022 の分位点予測で、商品×店舗の損失と12階層平均の順位が逆転した |
 | [K029](K029-round-count-quantiles.md) | 仮説 | #022 の商品×店舗で分位点を丸めると WSPL が 0.30587 → 0.29824、50%区間の被覆率が 58.13% → 73.22% |
-| [K030](K030-missing-value-ablation.md) | 仮説 | #010 の LightGBM では、数値欠損の分岐・指示・カテゴリ欠損の独立化で明確な改善なし |
+| [K030](K030-missing-value-ablation.md) | 仮説 | #010 の数値欠損処理と #023 の気象欠測フラグで明確な改善なし |
 | [K031](K031-absolute-loss-for-mae.md) | 仮説 | #014 の時系列 CV で LightGBM の学習損失を二乗誤差から絶対誤差に変えると MAE が 0.07284 → 0.06913 |
 | [K032](K032-class-weighting-and-per-class-recall.md) | 仮説 | #059 でクラス頻度の逆平方根を損失に掛けると Accuracy +0.02383。改善への寄与は最多クラスが最大で、クラス別再現率の変化は混在 |
 | [K033](K033-shrink-probabilities-to-label-priors.md) | 仮説 | MoA で個別確率をラベルの出現率へ 10% 縮小すると、希少ラベル帯の OOF Log Loss が 0.005034 → 0.004564 |
@@ -77,3 +77,4 @@
 | [K040](K040-l1-for-original-scale-mae.md) | 仮説 | #011 で元尺度 L1 は L2 より全体 MAE が 29.02 改善し、実測上位 1% の MAE は悪化 |
 | [K041](K041-patent-peer-similarity.md) | 仮説 | #054 で同じ anchor・CPC の他候補の類似度を加えると OOF Pearson +0.00118 |
 | [K042](K042-empty-vs-positive-mask-dice.md) | 仮説 | #072 で非空 Dice が +0.09924 でも、空マスクの誤検出が増えて全体 Dice は −0.28264 |
+| [K043](K043-weather-by-meter.md) | 仮説 | #023 の気象追加は全体 RMSLE −0.068107。冷水・蒸気・温水は改善し、電力は +0.03759 |

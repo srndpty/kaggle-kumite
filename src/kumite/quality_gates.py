@@ -15,8 +15,10 @@ from kumite.experiments import ExperimentRecord, compare_runs
 from kumite.paths import REPO_ROOT
 from kumite.provenance import array_sha256, code_version, file_sha256
 from kumite.runs import CV_EVIDENCE, QUALITY_GATE_MARKER, Reservation, RunStore, validate_run_id
+from kumite.source_audit import verify_local_imports
 
 SELECTION = "selection.json"
+EXPORT_EVIDENCE = "export_evidence.json"
 
 Artifact = Callable[[str], Path]
 Scores = tuple[list[float], float]
@@ -34,6 +36,7 @@ class SourceSpec:
     root: Path
     files: tuple[str, ...]
     settings: Mapping[str, object]
+    import_roots: tuple[str, ...] = (".",)
 
     def snapshot(self) -> str:
         if not self.files or len(set(self.files)) != len(self.files):
@@ -45,7 +48,15 @@ class SourceSpec:
             if not path.is_relative_to(root) or path.relative_to(root).as_posix() != name:
                 raise ValueError(f"ソースパスが root からの相対パスではありません: {name}")
             hashes[name] = file_sha256(path)
-        return _json({"version": 1, "files": hashes, "settings": dict(self.settings)})
+        verify_local_imports(root, set(hashes), self.import_roots)
+        snapshot: dict[str, object] = {
+            "version": 1,
+            "files": hashes,
+            "settings": dict(self.settings),
+        }
+        if self.import_roots != (".",):
+            snapshot["import_roots"] = self.import_roots
+        return _json(snapshot)
 
 
 def verify_dependencies(
@@ -70,7 +81,7 @@ def verify_dependencies(
             store.artifact_path(parent, name)
             if parent not in verified:
                 if strict or CV_EVIDENCE in record.artifacts:
-                    _read_cv_evidence(store, record)
+                    _read_evidence(store, record)
                 active.add(parent)
                 visit(record.inputs)
                 active.remove(parent)
@@ -90,28 +101,30 @@ def _verify_scores(record: ExperimentRecord, actual: Scores) -> None:
             raise ValueError(f"{record.run_id}: OOF スコアの再計算値が記録と一致しません")
 
 
-def _cv_identity(record: ExperimentRecord) -> dict[str, object]:
+def _record_identity(record: ExperimentRecord) -> dict[str, object]:
     evidence = asdict(record)
     for name in ("created_at", "artifacts", "late_score", "conclusion", "next_experiment"):
         del evidence[name]
     return evidence
 
 
-def _read_cv_evidence(store: RunStore, record: ExperimentRecord) -> tuple[Path, str]:
-    evidence = store.artifact_path(record.run_id, CV_EVIDENCE)
+def _read_evidence(
+    store: RunStore, record: ExperimentRecord, name: str = CV_EVIDENCE
+) -> tuple[Path, str]:
+    evidence = store.artifact_path(record.run_id, name)
     decoded: object = json.loads(evidence.read_text(encoding="utf-8"))
     if not isinstance(decoded, dict):
-        raise ValueError(f"{record.run_id}: CV 証跡の形式が不正です")
+        raise ValueError(f"{record.run_id}: {name} の形式が不正です")
     payload = cast(dict[str, object], decoded)
-    manifest = {name: digest for name, digest in record.artifacts.items() if name != CV_EVIDENCE}
+    manifest = {key: digest for key, digest in record.artifacts.items() if key != name}
     source = payload.get("source")
     if (
         not manifest
         or not isinstance(source, str)
         or _json(payload)
-        != _json({"source": source, "record": _cv_identity(record), "artifacts": manifest})
+        != _json({"source": source, "record": _record_identity(record), "artifacts": manifest})
     ):
-        raise ValueError(f"{record.run_id}: CV 証跡と実験ログが一致しません")
+        raise ValueError(f"{record.run_id}: {name} の証跡と実験ログが一致しません")
     return evidence, source
 
 
@@ -164,7 +177,7 @@ def publish_gated_cv(
             _json(
                 {
                     "source": before_training.source,
-                    "record": _cv_identity(record),
+                    "record": _record_identity(record),
                     "artifacts": dict(artifacts),
                 }
             )
@@ -185,7 +198,7 @@ def _verify_cv_run(
 ) -> tuple[ExperimentRecord, float]:
     validate_run_id(run_id)
     record = store.record(run_id)
-    evidence, _ = _read_cv_evidence(store, record)
+    evidence, _ = _read_evidence(store, record)
     paths = {
         name: store.artifact_path(run_id, name) for name in record.artifacts if name != CV_EVIDENCE
     }
@@ -277,6 +290,31 @@ def write_selection(path: Path, selection: Selection) -> None:
         receipt.write(_json(asdict(selection)) + "\n")
 
 
+def _verify_export_dependencies(store: RunStore, inputs: Mapping[str, str]) -> None:
+    """export Store の配置と cv: 名前空間から、同じコンペの CV Store を特定する。"""
+    directory = store.competition_dir
+    if (directory.parent.name, directory.name) != ("outputs", "exports"):
+        raise ValueError("export Store はコンペの outputs/exports にある必要があります")
+    if not inputs or any(not key.startswith("cv:") for key in inputs):
+        raise ValueError("export の依存には cv: 名前空間が必要です")
+    verify_dependencies(
+        RunStore(directory.parent.parent),
+        {key.removeprefix("cv:"): digest for key, digest in inputs.items()},
+    )
+
+
+def verify_export(store: RunStore, run_id: str) -> ExperimentRecord:
+    """公開済み export Store から、成果物・ログ・CV 依存を再照合する。"""
+    record = store.record(run_id)
+    evidence, _ = _read_evidence(store, record, EXPORT_EVIDENCE)
+    if {item.name for item in evidence.parent.iterdir()} != set(record.artifacts):
+        raise ValueError(f"{run_id}: 成果物の一覧が記録と一致しません")
+    for name in record.artifacts.keys() - {EXPORT_EVIDENCE}:
+        store.artifact_path(run_id, name)
+    _verify_export_dependencies(store, record.inputs)
+    return record
+
+
 def publish_export(
     store: RunStore,
     run_id: str,
@@ -287,6 +325,7 @@ def publish_export(
     source: SourceSpec,
     write: Callable[[Path, ExperimentRecord], None],
     required_outputs: tuple[str, ...],
+    validate_outputs: Callable[[Path], None],
 ) -> Path:
     """選定とソースを確認後、選定 run を渡して export し、証跡ごと公開する。"""
     selected = verify_selection(store, plan, receipt, assess)
@@ -297,20 +336,22 @@ def publish_export(
     ):
         raise ValueError("選定後に候補の CV 証跡が変わりました")
     winner = candidates[selected.winner]
-    _, expected = _read_cv_evidence(store, winner)
+    _, expected = _read_evidence(store, winner)
     if source.snapshot() != expected:
         raise ValueError("export のソースまたは設定が選定された CV と一致しません")
 
+    export_store = RunStore(store.competition_dir / "outputs" / "exports")
     inputs = {
-        f"{candidate}/{name}": digest
+        f"cv:{candidate}/{name}": digest
         for candidate, record in candidates.items()
         for name, digest in record.artifacts.items()
     }
-    verify_dependencies(store, inputs)
+    _verify_export_dependencies(export_store, inputs)
     record = replace(
         winner,
         run_id=run_id,
         model=f"export:{winner.model}",
+        metric=f"cv_reference:{winner.metric}",
         inputs=inputs,
         hypothesis="選定済みモデルの export",
         changed_one_thing="全学習データでの最終学習または提出生成",
@@ -327,16 +368,28 @@ def publish_export(
         if not required_outputs or not set(required_outputs) <= {
             item.name
             for item in path.iterdir()
-            if item.is_file() and item.name not in {SELECTION, "export_source.json"}
+            if item.is_file() and item.name not in {SELECTION, EXPORT_EVIDENCE}
         }:
             raise ValueError("必須の export 成果物がありません")
+        validate_outputs(path)
         if source.snapshot() != expected:
             raise ValueError("export 中にソースまたは設定が変わりました")
-        verify_dependencies(store, inputs)
+        _verify_export_dependencies(export_store, inputs)
         write_selection(path / SELECTION, selected)
-        with (path / "export_source.json").open("x", encoding="utf-8") as evidence:
-            evidence.write(expected + "\n")
 
-    export_store = RunStore(store.competition_dir / "outputs" / "exports")
+    def seal(artifacts: Mapping[str, str]) -> str:
+        return (
+            _json(
+                {
+                    "source": expected,
+                    "record": _record_identity(record),
+                    "artifacts": dict(artifacts),
+                }
+            )
+            + "\n"
+        )
+
     with export_store.reserve(run_id) as reservation:
-        return export_store.publish(reservation, record, checked_write)
+        return export_store.publish(
+            reservation, record, checked_write, seal=(EXPORT_EVIDENCE, seal)
+        )

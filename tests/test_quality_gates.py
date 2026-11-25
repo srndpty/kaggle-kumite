@@ -1,4 +1,6 @@
+import csv
 import json
+import math
 from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
@@ -7,7 +9,7 @@ import numpy as np
 import pytest
 
 from kumite.crossfit import Split, split_roles
-from kumite.experiments import ExperimentRecord
+from kumite.experiments import ExperimentRecord, compare_runs
 from kumite.provenance import array_sha256, file_sha256
 from kumite.quality_gates import (
     Artifact,
@@ -21,6 +23,7 @@ from kumite.quality_gates import (
     select_runs,
     verify_cv_run,
     verify_dependencies,
+    verify_export,
     verify_selection,
     write_selection,
 )
@@ -203,7 +206,19 @@ def test_training_source_change_prevents_publication(tmp_path: Path, source: Sou
 
 
 @pytest.mark.parametrize(
-    "mutation", ["winner", "candidates", "score", "source", "settings", "source_during", "output"]
+    "mutation",
+    [
+        "winner",
+        "candidates",
+        "score",
+        "source",
+        "settings",
+        "source_during",
+        "output",
+        "duplicate_id",
+        "missing_id",
+        "nan_prediction",
+    ],
 )
 def test_export_rejects_invalid_evidence(tmp_path: Path, source: SourceSpec, mutation: str) -> None:
     store = RunStore(tmp_path)
@@ -231,13 +246,31 @@ def test_export_rejects_invalid_evidence(tmp_path: Path, source: SourceSpec, mut
         source = replace(source, settings={"features": ["b"], "seed": 42})
 
     called: list[str] = []
+    invalid_csv = {
+        "duplicate_id": "id,target\n1,5\n1,6\n",
+        "missing_id": "id,target\n1,5\n",
+        "nan_prediction": "id,target\n1,5\n2,NaN\n",
+    }
 
     def write(path: Path, winner: ExperimentRecord) -> None:
         called.append(winner.run_id)
         if mutation != "output":
-            (path / "submission.csv").write_text("id,target\n1,5\n", encoding="utf-8")
+            (path / "submission.csv").write_text(
+                invalid_csv.get(mutation, "id,target\n1,5\n2,6\n"), encoding="utf-8"
+            )
         if mutation == "source_during":
             (tmp_path / "model.py").write_text("changed", encoding="utf-8")
+
+    def validate_outputs(path: Path) -> None:
+        with (path / "submission.csv").open(encoding="utf-8", newline="") as stream:
+            reader = csv.DictReader(stream)
+            if reader.fieldnames != ["id", "target"]:
+                raise ValueError("提出スキーマ")
+            rows = list(reader)
+        if [row["id"] for row in rows] != ["1", "2"]:
+            raise ValueError("提出 ID")
+        if not all(math.isfinite(float(row["target"])) for row in rows):
+            raise ValueError("提出予測値")
 
     def export() -> Path:
         return publish_export(
@@ -249,12 +282,15 @@ def test_export_rejects_invalid_evidence(tmp_path: Path, source: SourceSpec, mut
             source=source,
             write=write,
             required_outputs=("submission.csv",),
+            validate_outputs=validate_outputs,
         )
 
     original = store.log_path.read_bytes()
-    with pytest.raises(ValueError, match=r"選定記録|ソースまたは設定|必須"):
+    with pytest.raises(ValueError, match=r"選定記録|ソースまたは設定|必須|提出 ID|提出予測値"):
         export()
-    assert called == (["E00"] if mutation in {"output", "source_during"} else [])
+    assert called == (["E00"] if mutation in {"output", "source_during", *invalid_csv} else [])
+    export_store = RunStore(tmp_path / "outputs" / "exports")
+    assert export_store.records() == []
     assert store.log_path.read_bytes() == original
 
     (tmp_path / "model.py").write_text("model", encoding="utf-8")
@@ -263,12 +299,52 @@ def test_export_rejects_invalid_evidence(tmp_path: Path, source: SourceSpec, mut
     write_selection(receipt, selected)
     with pytest.raises(FileExistsError):
         write_selection(receipt, selected)
-    if mutation in {"output", "source_during"}:
+    if mutation in {"output", "source_during", *invalid_csv}:
         mutation = "restored"
     final = export()
     assert (final / "submission.csv").is_file()
     assert (final / "selection.json").read_bytes() == receipt.read_bytes()
     assert store.log_path.read_bytes() == original
+
+    exported = verify_export(export_store, "final")
+    assert exported.inputs == {
+        f"cv:{candidate}/{name}": digest
+        for candidate in plan.candidates
+        for name, digest in store.record(candidate).artifacts.items()
+    }
+    assert exported.metric == "cv_reference:mae"
+    assert exported.oof_score == store.record("E00").oof_score
+    assert exported.late_score is None
+    with pytest.raises(ValueError, match="評価条件"):
+        compare_runs(store.record("E00"), exported)
+
+    losing_oof = store.artifact_path("E01", "oof.npy")
+    np.save(losing_oof, np.array([np.nan, 7.0, 7.0]))
+    with pytest.raises(ValueError, match="ハッシュ"):
+        verify_export(export_store, "final")
+    losing_oof.unlink()
+    with pytest.raises(FileNotFoundError):
+        verify_export(export_store, "final")
+
+
+def test_source_audit_checks_local_and_relative_imports(tmp_path: Path) -> None:
+    src = tmp_path / "src"
+    package = src / "model"
+    package.mkdir(parents=True)
+    (src / "train.py").write_text("from model import features\nimport numpy\n", encoding="utf-8")
+    (package / "__init__.py").touch()
+    (package / "features.py").write_text("from . import transforms\n", encoding="utf-8")
+    (package / "transforms.py").touch()
+    source = SourceSpec(
+        tmp_path, ("src/train.py", "src/model/__init__.py"), {}, import_roots=("src",)
+    )
+    with pytest.raises(ValueError, match=r"未宣言.*features\.py"):
+        source.snapshot()
+    source = replace(source, files=(*source.files, "src/model/features.py"))
+    with pytest.raises(ValueError, match=r"未宣言.*transforms\.py"):
+        source.snapshot()
+    source = replace(source, files=(*source.files, "src/model/transforms.py"))
+    assert source.snapshot()
 
 
 def test_custom_oof_can_verify_keyed_image_records(tmp_path: Path, source: SourceSpec) -> None:

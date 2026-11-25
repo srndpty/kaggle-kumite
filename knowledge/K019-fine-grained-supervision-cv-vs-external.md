@@ -42,6 +42,9 @@ seed42のmacro F1・LogLossも改善したが、upのRecallは約0.0598悪化し
 | コンペ | run | 結果 |
 |---|---|---|
 | #083 Speech Recognition | E01 / E05-r2、E01-s43 / E05-s43 | 2seedのCVは約+0.04、Privateは-0.00529。採用前の固定・提出ハッシュ・予測再生成の証跡を保存 |
+| [#094 OpenVaccine](../competitions/094-stanford-covid-vaccine/experiments.jsonl) | E01・E05 | 採点外 2 条件を補助目的に加えた 5 目的同時学習。CV MCRMSE −0.00660（クラスタ bootstrap 95% 区間 [−0.0107, −0.0034]）だが、ローカル Private は +0.00236。単一 seed |
+
+#094 は細かいクラスではなく補助目的の追加で、仕組みは #083 と異なる。「教師情報を足して CV が改善しても外部で再現しない」という観測としてここに記録する。評価先は学習と別の収集ラウンド（K048）で、Private 差の大きさは seed 揺れと区別できていない。
 
 着眼点は[4位チーム構成の本人README](https://github.com/dimart/TensorFlow-Speech-Recognition-Challenge-Solution)。31クラス学習だけを小型モデルで再現し、元の二語合成・疑似ラベル・追加未知語クラスは再現していない。
 

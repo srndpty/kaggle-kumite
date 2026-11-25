@@ -10,6 +10,7 @@ import polars as pl
 import pytest
 from metric import TOLERANCES, score
 from pipeline import EVENTS, bins, candidates, limit_candidates, matrix, submission
+from polars.testing import assert_frame_equal
 from train import split
 
 
@@ -131,8 +132,18 @@ def test_shuffled_input_and_duplicate_steps(tmp_path: Path) -> None:
     ordered = bins(path, clock=True)
     raw.sample(fraction=1, shuffle=True, seed=42).write_parquet(path)
     shuffled = bins(path, clock=True)
-    assert ordered.equals(shuffled)
-    np.testing.assert_array_equal(matrix(ordered, True, True), matrix(shuffled, True, True))
+    # polars の group_by はグループ内の行順を保証せず、平均の足し算の順で末尾ビットが変わる
+    # （0.1 の平均が 0.09999999999999999 と 0.10000000000000002 になるなど）。
+    # 推論ソースは提出済みの inference.sha256 と照合するため本体は変えず、丸め誤差の範囲で比べる。
+    # 整数・文字列の列（ID・区切り・時刻）は完全一致を要求する。
+    assert_frame_equal(ordered, shuffled, rel_tol=1e-12, abs_tol=0.0)
+    exact = [c for c, dtype in ordered.schema.items() if not dtype.is_float()]
+    assert ordered.select(exact).equals(shuffled.select(exact))
+    # 一定値の窓の標準偏差では、1e-17 の差が平方根で 1e-9 程度に増幅され、片側が 0 になる。
+    # 特徴量の尺度（enmo 約 0.1、anglez 数十）に比べて十分小さい絶対許容差で比べる。
+    np.testing.assert_allclose(
+        matrix(ordered, True, True), matrix(shuffled, True, True), rtol=1e-12, atol=1e-8
+    )
 
     def detect(frame: pl.DataFrame) -> pl.DataFrame:
         return candidates(

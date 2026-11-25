@@ -13,6 +13,8 @@
 
 E04 の手法を5月までのデータで再学習した E06 の6月評価は、E01 比 Public −0.00005、Private +0.00003。3月・4月の改善幅は6月では再現しなかった。
 
+#033 では、本人の直近28日の購入を先頭に置く E01 が、人気だけの E00 の MAP@12 を 0.007331 → 0.024475 にした。直近の購入と共購入された商品を足した E03 は E01 から +0.00179 で、過去に買ったことのない商品の命中が 11,298 → 14,084 に増えた。
+
 ## 適用条件
 
 直前の暦月の保有状態を使える顧客商品パネル。取得率および学習対象は、前月の非保有と当月の状態を確認できる顧客・商品に限定する。検証は対象月より前に確定した取得情報だけを使う。
@@ -32,3 +34,5 @@ E04 の手法を5月までのデータで再学習した E06 の6月評価は、
 | [#034 Santander Product Recommendation](../competitions/034-santander-product-recommendation/experiments.jsonl) | E01 → E03 | OOF MAP@7 0.01947178 → 0.02033894 |
 | [#034 Santander Product Recommendation](../competitions/034-santander-product-recommendation/experiments.jsonl) | E01 → E04 | OOF MAP@7 0.01947178 → 0.02362319 |
 | [#034 Santander Product Recommendation](../competitions/034-santander-product-recommendation/report.md) | E01 → E06 | Private MAP@7 0.02388 → 0.02391 |
+| [#033 H&M](../competitions/033-h-and-m-personalized-fashion-recommendations/report.md) | E00 → E01 | OOF MAP@12 0.007331 → 0.024475（再購入を除外しない条件） |
+| [#033 H&M](../competitions/033-h-and-m-personalized-fashion-recommendations/report.md) | E01 → E03 | OOF MAP@12 +0.00179。再購入以外の命中 11,298 → 14,084 |

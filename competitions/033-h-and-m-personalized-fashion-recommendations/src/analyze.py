@@ -9,6 +9,7 @@ import numpy as np
 import polars as pl
 from data import COMP, FILES, LAST_DAY, Tables, load_tables
 from evaluation import (
+    K,
     Window,
     assessor,
     split_windows,
@@ -19,6 +20,7 @@ from evaluation import (
 from kumite.bootstrap import group_bootstrap_diff
 from kumite.provenance import files_sha256
 from kumite.quality_gates import verify_cv_run
+from kumite.ranking import sparse_hits
 from kumite.runs import RunStore
 
 SEGMENTS = ("履歴なし", "直近28日に購入なし", "直近28日に購入あり")
@@ -40,6 +42,22 @@ def segment(tables: Tables, window: Window) -> np.ndarray:
     return np.where(days < 0, 0, np.where(days >= window.start - 28, 2, 1))
 
 
+def hit_counts(tables: Tables, window: Window, ranked: np.ndarray) -> tuple[int, int, int]:
+    """上位 K 件の（再購入商品の枠数, 再購入の命中, それ以外の命中）。"""
+    target = pl.DataFrame({"customer": window.customers}, schema={"customer": pl.Int32})
+    past = (
+        tables.transactions.filter(pl.col("day") < window.start)
+        .join(target.with_row_index("row"), on="customer")
+        .select("row", "article")
+        .unique()
+    )
+    known = sparse_hits(
+        ranked, past["row"].to_numpy(), past["article"].to_numpy(), tables.n_articles
+    )
+    hits = sparse_hits(ranked, window.rows, window.items, tables.n_articles)
+    return int(known.sum()), int((hits & known).sum()), int((hits & ~known).sum())
+
+
 def main(pairs: list[tuple[str, str]]) -> None:
     tables = load_tables()
     windows = validation_windows(tables.transactions, LAST_DAY)
@@ -54,11 +72,18 @@ def main(pairs: list[tuple[str, str]]) -> None:
         ap[run_id] = np.concatenate(
             [window_ap(w, p, tables.n_articles) for w, p in zip(windows, parts, strict=True)]
         )
+        counts = np.sum(
+            [hit_counts(tables, w, p) for w, p in zip(windows, parts, strict=True)], axis=0
+        )
         by_segment = " ".join(
             f"{name} {ap[run_id][segments == i].mean():.5f}（{np.mean(segments == i):.1%}）"
             for i, name in enumerate(SEGMENTS)
         )
         print(f"{run_id} MAP@12 {ap[run_id].mean():.6f} {by_segment}")
+        print(
+            f"  上位12件の再購入枠 {counts[0]}（全 {len(customers) * K}） "
+            f"再購入の命中 {counts[1]} それ以外の命中 {counts[2]}"
+        )
     for base, other in pairs:
         # MAP は大きいほど良いので、損失は 1 - AP。差は (other - base) の MAP に直して表示する
         diff = group_bootstrap_diff(

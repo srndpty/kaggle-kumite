@@ -9,11 +9,11 @@
 
 | 状態 | 件数 |
 |---|---:|
-| 完了 | 40 |
+| 完了 | 41 |
 | 実装・学習完了、外部評価未達 | 1 |
 | P0 で中断 | 1 |
 | 差し替え | 1 |
-| 未着手 | 57 |
+| 未着手 | 56 |
 | **合計** | **100** |
 
 完了は個別の進捗チェックリストを終えたコンペを指す。#091 は外部評価未達のため、完了件数から除く。
@@ -64,7 +64,7 @@
 
 | # | コンペ | 状態 | 補足 |
 |---:|---|---|---|
-| 033 | H&M Personalized Fashion Recommendations | 未着手 | — |
+| 033 | [H&M Personalized Fashion Recommendations](competitions/033-h-and-m-personalized-fashion-recommendations/README.md) | 完了 | E06 の OOF MAP@12 0.03348、F00 の Late Private 0.02899。 |
 | 034 | [Santander Product Recommendation](competitions/034-santander-product-recommendation/README.md) | 完了 | — |
 | 035 | WSDM - KKBox's Music Recommendation Challenge | 未着手 | — |
 | 036 | WSDM - KKBox's Churn Prediction Challenge | 未着手 | — |

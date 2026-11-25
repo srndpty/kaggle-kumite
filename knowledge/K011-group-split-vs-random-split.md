@@ -39,6 +39,10 @@
   - ファイル内容の完全重複と、差分ハッシュの距離4以下の近重複候補は0件だった。撮影元によって穂の密度とサイズが異なった。分割変更で撮影元の共有に加え、fold ごとの学習画像数と構成も変わった。
   - 全学習画像で再学習したベースラインの Late Submission は Public 0.5459 / Private 0.4791。 [実験記録](../competitions/074-global-wheat-detection/experiments.jsonl)
 
+- #094 OpenVaccine（RNA 塩基ごとの分解予測、MCRMSE）
+  - 学習配列には同じ配列の小さな変種が多い（5-mer 最近傍 Jaccard の中央値 0.57）。5-mer Jaccard ≥ 0.35 の連結成分で GroupKFold にすると、同じ位置窓 LightGBM の OOF は 0.31993、分子単位のランダム 5 分割は 0.29940（0.02053 楽観）
+  - 外部評価（公開済み Private 正解でのローカル採点）は 0.43284 と 0.43473 でほぼ同じ。クラスタ分割でも CV との差は 0.113 残った。評価先が別の収集ラウンドで、分割で縮むのは差の一部だけ（K048）
+
 ## 適用条件
 
 - グループの中の行がほぼ重複していて（動画のコマ、同じ患者の複数枚など）、test のグループが学習と重ならない場合
@@ -67,3 +71,4 @@
 | [#093 MoA](../competitions/093-lish-moa/experiments.jsonl) | E01-r3・E01-row-r3 | 行分割の OOF Log Loss は化合物分割より 0.008234 低い |
 | [#074 Global Wheat Detection](../competitions/074-global-wheat-detection/experiments.jsonl) | E00-r2・E01 | 画像単位ランダム分割の OOF は撮影元分割より 0.167923 高い |
 | [#050 CommonLit](../competitions/050-commonlit-evaluate-student-summaries/experiments.jsonl) | E00・E04 | 行単位ランダム分割の OOF MCRMSE は課題分割より 0.12768 低い |
+| [#094 OpenVaccine](../competitions/094-stanford-covid-vaccine/experiments.jsonl) | E00・E00R | ランダム分割の OOF MCRMSE は類似配列クラスタ分割より 0.02053 低い。外部評価はほぼ同じ |

@@ -79,3 +79,7 @@
 | [K042](K042-empty-vs-positive-mask-dice.md) | 仮説 | #072 で非空 Dice が +0.09924 でも、空マスクの誤検出が増えて全体 Dice は −0.28264 |
 | [K043](K043-weather-by-meter.md) | 仮説 | #023 の気象追加は全体 RMSLE −0.068107。冷水・蒸気・温水は改善し、電力は +0.03759 |
 | [K044](K044-recency-weighting-and-weekly-gini.md) | 仮説 | #005 の新しさ重視の学習重みは3窓平均安定性スコア −0.04699。最初の窓で週別 Gini の低下が大きくなった |
+| [K045](K045-measurement-error-weighting.md) | 仮説 | #094 で荒れたラベルの除外は CV MCRMSE −0.01871、逆分散重みは −0.02467。Private でも改善したが優劣は逆転 |
+| [K046](K046-base-pair-probability-features.md) | 仮説 | #094 で対合確率による相手位置の集約を GRU に足すと CV −0.00814、Private −0.00839 |
+| [K047](K047-fold-local-pseudo-labels.md) | 仮説 | #094 で fold 内教師の疑似ラベルは CV −0.00565、Private −0.00226 |
+| [K048](K048-collection-round-shift-vs-length.md) | 仮説 | #094 は CV ≈ Public だが Private は約 0.12 悪い。長さ外挿の位置はむしろ誤差が小さく、別の収集ラウンドが主因 |

@@ -1,0 +1,133 @@
+# 手法の定義。run ごとの実効設定は CV 証跡（cv_evidence.json）に封入されるので、
+# このファイル自体はソース監査の対象にしない（手法を足しても既存 run の export を妨げない）。
+# 既存の手法の値は変えない。変えるときは新しい手法 ID を作る。
+#
+# model: lightgbm / gru
+# split: cluster（5-mer Jaccard 0.35 の連結成分で GroupKFold）/ random（分子単位 KFold）
+# weights: all（全分子を等重み）/ sn_filter（SN_filter=0 の分子を除外）/ inverse_variance（1/(誤差²+τ²)）
+# targets: scored（採点3列）/ all（5列の同時学習）
+
+[E00]
+hypothesis = "位置の前後4塩基の塩基・構造・ループ種別で、分解しやすさの大半を説明できる"
+changed_one_thing = "基準"
+model = "lightgbm"
+split = "cluster"
+use_bpp = false
+weights = "all"
+targets = "scored"
+seed = 42
+
+[E00R]
+hypothesis = "類似配列が学習と検証に分かれるランダム分割は、クラスタ分割より楽観的になる"
+changed_one_thing = "分割を分子単位のランダム KFold にする（E00 との比較用）"
+model = "lightgbm"
+split = "random"
+use_bpp = false
+weights = "all"
+targets = "scored"
+seed = 42
+
+[E00-s2]
+hypothesis = "seed による E00 の揺れの大きさを測る（同点許容差の根拠）"
+changed_one_thing = "seed"
+model = "lightgbm"
+split = "cluster"
+use_bpp = false
+weights = "all"
+targets = "scored"
+seed = 43
+
+[E01]
+hypothesis = "双方向 GRU は窓の外の文脈も使えるので、同じ入力の位置窓 LightGBM より良い"
+changed_one_thing = "模型を双方向 GRU にする"
+model = "gru"
+split = "cluster"
+use_bpp = false
+weights = "all"
+targets = "scored"
+seed = 42
+
+[E01-s2]
+hypothesis = "seed による E01 の揺れの大きさを測る（同点許容差の根拠）"
+changed_one_thing = "seed"
+model = "gru"
+split = "cluster"
+use_bpp = false
+weights = "all"
+targets = "scored"
+seed = 43
+
+# --- P4（E01 から1つだけ変える。比較前に定義を固定。同点許容差 0.002 は selections.toml） ---
+
+[E02]
+hypothesis = "対合確率（bpp）の行和・最大値と相手位置の塩基は、窓の外の対合相手の情報を与えるので改善する"
+changed_one_thing = "入力に bpp 要約と bpp 加重の相手位置 one-hot を足す"
+model = "gru"
+split = "cluster"
+use_bpp = true
+weights = "all"
+targets = "scored"
+seed = 42
+
+[E03]
+hypothesis = "SN_filter=0 の分子はラベルが極端に荒れる（±20 超）ので、学習から除くと改善する"
+changed_one_thing = "SN_filter=0 の分子を学習から除く"
+model = "gru"
+split = "cluster"
+use_bpp = false
+weights = "sn_filter"
+targets = "scored"
+seed = 42
+
+[E04]
+hypothesis = "測定誤差に応じた逆分散重みは、除外より情報を残しつつ荒れたラベルを弱めるので E03 以上に改善する"
+changed_one_thing = "学習損失を要素ごとに 1/(誤差²+0.3²) で重み付けする"
+model = "gru"
+split = "cluster"
+use_bpp = false
+weights = "inverse_variance"
+targets = "scored"
+seed = 42
+
+[E05]
+hypothesis = "採点外の2条件（Mg なし）も相関 0.58〜0.87 なので、同時学習が補助タスクとして効く"
+changed_one_thing = "5目的の同時学習にする"
+model = "gru"
+split = "cluster"
+use_bpp = false
+weights = "all"
+targets = "all"
+seed = 42
+
+[E06]
+hypothesis = "P4 で許容差 0.002 を超えて改善した変更（bpp・逆分散重み・5目的）は効く経路が異なるので、組み合わせても加算的に効く"
+changed_one_thing = "E02・E04・E05 の変更を併用する（重みは E03 より良かった E04 の逆分散重み）"
+model = "gru"
+split = "cluster"
+use_bpp = true
+weights = "inverse_variance"
+targets = "all"
+seed = 42
+
+# --- P6（上位解法の着眼点。論文 Wayment-Steele et al. 2022 で多くの上位チームが挙げた疑似ラベル） ---
+
+[E06-r2]
+hypothesis = "学習関数を長さ混在の組に一般化しても、組が1つなら E06 と同じ結果になる（再現性の確認）"
+changed_one_thing = "コードの一般化のみ（設定は E06 と同じ）"
+model = "gru"
+split = "cluster"
+use_bpp = true
+weights = "inverse_variance"
+targets = "all"
+seed = 42
+
+[E07]
+hypothesis = "test 配列（長さ130を含む）への疑似ラベルは、学習配列から遠い配列の入力分布を学習に入れるので改善する"
+changed_one_thing = "fold ごとの教師（E06 と同設定）で test に疑似ラベルを付け、重み 0.5×中央値で学習に加える"
+model = "gru"
+split = "cluster"
+use_bpp = true
+weights = "inverse_variance"
+targets = "all"
+seed = 42
+pseudo_label = true

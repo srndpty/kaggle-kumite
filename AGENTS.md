@@ -69,6 +69,7 @@ Survey でも、リーク対策・正しい検証分割・Baseline・評価指�
 
 ## 実験の原則
 
+- 新規コンペは共通 Quality Gate を使う。学習前に依存成果物を照合し、CV 公開時と選定時に保存 OOF を再採点する。最終 export は選定記録・ソース・設定の照合後に実行する。実行順と既存 run の扱いは [Quality Gate 仕様](docs/agent/experiment-quality-gates.md) を参照。
 - 変更は一度に1つだけ。組み合わせ効果は片方ずつの実験と比較して判断する
 - 同じ CV 分割でのペア比較を原則とする。分割を変えたら `split_version` を変える
 - seed・fold・評価指標・前処理を固定し、再現できる状態で比較する

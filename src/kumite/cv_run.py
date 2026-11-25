@@ -16,6 +16,7 @@ from kumite.crossfit import CrossFitResult, Split
 from kumite.experiments import ExperimentRecord
 from kumite.paths import REPO_ROOT
 from kumite.provenance import code_version, peak_memory_mb
+from kumite.quality_gates import CVStart, SourceSpec, dense_oof, publish_gated_cv
 from kumite.runs import Reservation, RunStore
 
 
@@ -57,6 +58,7 @@ def publish_cv_run(
     write_artifacts: Callable[[Path], None],
     *,
     save_query: bool = True,
+    gate: tuple[SourceSpec, CVStart, tuple[int, ...]] | None = None,
 ) -> Path:
     """分割ごと・検証行全体を採点し、`oof.npy`・`fold_info.json` と追加成果物を保存する。
 
@@ -102,6 +104,27 @@ def publish_cv_run(
         (out_dir / "fold_info.json").write_text(json.dumps(result.infos), encoding="utf-8")
         write_artifacts(out_dir)
 
-    final = store.publish(reservation, record, write)
+    if gate is None:
+        final = store.publish(reservation, record, write)
+    else:
+        source, before_training, expected_oof_shape = gate
+        assess = dense_oof(
+            y,
+            splits,
+            evaluation.score,
+            expected_shape=expected_oof_shape,
+            data_hash=evaluation.data_hash,
+        )
+        if save_query and not np.isfinite(result.query).all():
+            raise ValueError("クエリ予測に NaN または Inf があります")
+        final = publish_gated_cv(
+            store,
+            reservation,
+            record,
+            write,
+            source=source,
+            before_training=before_training,
+            assess=assess,
+        )
     print(f"出力: {final}")
     return final

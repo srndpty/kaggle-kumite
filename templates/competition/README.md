@@ -26,6 +26,9 @@
 
 ## 進捗
 
+CV run の公開には共通 Quality Gate が必須。評価単位・分割・採点関数を決めたら、
+[Quality Gate 仕様](../../docs/agent/experiment-quality-gates.md) に沿って学習・選定・最終 export の入口を実装する。
+
 - [ ] P0. 参加・評価環境の確認（Rules 承諾、データ取得、ダミー提出で採点されるか）
 - [ ] P1. 問題設定・EDA（予測仮説を3件以上。予想する結果も先に書く）
 - [ ] P2. 検証分割の設計（リーク経路の洗い出し、fold の確定）

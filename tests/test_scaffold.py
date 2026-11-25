@@ -4,6 +4,7 @@ import pytest
 
 from kumite.catalog import find_competition, load_catalog
 from kumite.paths import CATALOG_CSV, TEMPLATE_DIR
+from kumite.runs import QUALITY_GATE_MARKER
 from kumite.scaffold import create_competition_dir
 
 
@@ -19,6 +20,7 @@ def test_create_competition_dir_renders_templates(tmp_path: Path) -> None:
     assert "$" not in readme
     for name in ("src", "notebooks", "data", "outputs"):
         assert (target / name).is_dir()
+    assert (target / QUALITY_GATE_MARKER).is_file()
 
 
 def test_create_competition_dir_refuses_to_overwrite(tmp_path: Path) -> None:

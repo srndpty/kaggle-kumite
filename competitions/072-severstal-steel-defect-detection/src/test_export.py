@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 import torch
+from cv_checks import read_sources
 from export import write_bundle
 from model import SteelUNet, make_presence_model, normalize, training_loss
 from PIL import Image
@@ -37,7 +38,7 @@ def test_training_step_and_notebook_output(tmp_path: Path, variant: str) -> None
         with torch.no_grad():
             gate.fc.weight.zero_()
             gate.fc.bias.fill_(-1)
-    write_bundle(data, model, (128, 800), variant, "owner", "smoke", gate)
+    write_bundle(data, model, (128, 800), variant, "owner", "smoke", gate, sources=read_sources())
     notebook = json.loads((data / "submit.ipynb").read_text(encoding="utf-8"))
     source = "".join(notebook["cells"][0]["source"])
     output = tmp_path / "submission.csv"

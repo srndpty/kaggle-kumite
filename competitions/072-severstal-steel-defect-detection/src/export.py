@@ -8,10 +8,13 @@ from dataclasses import replace
 from pathlib import Path
 
 import torch
+from cv_checks import evaluation_key, read_sources, source_hashes, verify_sources
 from model import SteelUNet
+from select_model import read_oof
 from steel import SHAPE, load_labels
 from train import ROOT, WEIGHTS, SteelImages, fit, fit_presence
 
+from kumite.experiments import ExperimentRecord
 from kumite.kaggle_notebook import write_cpu_notebook
 from kumite.paths import REPO_ROOT
 from kumite.provenance import code_version, file_sha256, peak_memory_mb
@@ -73,6 +76,8 @@ def write_bundle(
     owner: str,
     run_id: str,
     gate: torch.nn.Module | None = None,
+    *,
+    sources: dict[str, bytes],
 ) -> None:
     name = f"kumite-steel-{run_id.lower()}"
     dataset_id = f"{owner}/{name}-weights"
@@ -91,10 +96,8 @@ def write_bundle(
         json.dumps({"id": dataset_id, "title": f"{name} weights", "licenses": [{"name": "other"}]}),
         encoding="utf-8",
     )
-    source_dir = Path(__file__).parent
     source = "\n\n".join(
-        [(source_dir / name).read_text(encoding="utf-8") for name in ("steel.py", "model.py")]
-        + [INFERENCE]
+        [sources[name].decode("utf-8") for name in ("steel.py", "model.py")] + [INFERENCE]
     )
     write_cpu_notebook(output, source, kernel_id=f"{owner}/{name}", title=name, competition=SLUG)
     metadata = output / "kernel-metadata.json"
@@ -115,13 +118,49 @@ def stage_upload(store: RunStore, run_id: str, output: Path) -> None:
             shutil.copyfile(store.artifact_path(run_id, filename), directory / filename)
 
 
+def verify_full_baseline(
+    store: RunStore, cv: ExperimentRecord, full: ExperimentRecord, hashes: dict[str, str]
+) -> None:
+    baseline_id = full.params.get("source_run")
+    if (
+        not isinstance(baseline_id, str)
+        or full.params.get("variant") != "baseline"
+        or full.params.get("score_source") != "source_cv"
+        or evaluation_key(full) != evaluation_key(cv)
+    ):
+        raise ValueError("全件学習済みの基準 run が CV の基準と一致しません")
+    baseline = store.record(baseline_id)
+    if (
+        baseline.params.get("variant") != "baseline"
+        or "score_source" in baseline.params
+        or evaluation_key(baseline) != evaluation_key(cv)
+        or not baseline.artifacts.get("oof.csv")
+        or full.inputs.get(f"{baseline_id}/oof.csv") != baseline.artifacts["oof.csv"]
+    ):
+        raise ValueError("基準 CV run の来歴が一致しません")
+    names = tuple(f"fold-{fold}.pt" for fold in range(3))
+    fold_inputs = {key for key in cv.inputs if key.rpartition("/")[2] in names}
+    if fold_inputs != {f"{baseline_id}/{name}" for name in names}:
+        raise ValueError("基準 CV の fold 参照が一致しません")
+    for name in names:
+        digest = baseline.artifacts.get(name)
+        if not digest or cv.inputs.get(f"{baseline_id}/{name}") != digest:
+            raise ValueError(f"基準 CV の {name} のハッシュが一致しません")
+    verify_sources(baseline, hashes)
+    verify_sources(full, hashes)
+
+
 def export(
     owner: str, run_id: str, source: str, selection: Path | None, full_baseline: str | None
 ) -> None:
     store = RunStore(ROOT)
     cv = store.record(source)
+    sources = read_sources()
+    hashes = source_hashes(sources)
+    verify_sources(cv, hashes)
+    read_oof(store, source)
     variant = str(cv.params["variant"])
-    inputs = store.input_hashes(source, "oof.csv")
+    inputs = {**store.input_hashes(source, "oof.csv"), **hashes}
     if selection is None:
         if variant != "baseline":
             raise ValueError("最終モデルの再学習には --selection が必要です")
@@ -139,15 +178,7 @@ def export(
     checkpoint = None
     if full_baseline is not None:
         full = store.record(full_baseline)
-        baseline_source = full.params.get("source_run")
-        if (
-            full.params.get("variant") != "baseline"
-            or full.params.get("score_source") != "source_cv"
-            or full.data_hash != cv.data_hash
-            or full.split_hash != cv.split_hash
-            or f"{baseline_source}/fold-0.pt" not in cv.inputs
-        ):
-            raise ValueError("全件学習済みの基準 run が CV の基準と一致しません")
+        verify_full_baseline(store, cv, full, hashes)
         checkpoint = store.artifact_path(full_baseline, "steel-checkpoint.pt")
         inputs.update(store.input_hashes(full_baseline, "steel-checkpoint.pt"))
     data = ROOT / "data"
@@ -176,6 +207,8 @@ def export(
                 presence=True,
             )
             gate = fit_presence(presence_data, data / WEIGHTS, device)
+        if source_hashes(read_sources()) != hashes:
+            raise ValueError("全件学習中に CV ソースが変更されました")
         record = replace(
             cv,
             run_id=run_id,
@@ -193,7 +226,9 @@ def export(
         final = store.publish(
             reservation,
             record,
-            lambda output: write_bundle(output, model, shape, variant, owner, run_id, gate),
+            lambda output: write_bundle(
+                output, model, shape, variant, owner, run_id, gate, sources=sources
+            ),
         )
         print(final, flush=True)
 

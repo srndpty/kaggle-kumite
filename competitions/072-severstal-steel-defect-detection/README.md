@@ -76,14 +76,16 @@
 
 リポジトリのルートで実行する。E00 は ImageNet 事前学習済み ResNet-18 の U-Net を使い、AdamW、学習率 `3e-4`、バッチ8、10 epoch、CUDA の混合精度で学習する。最後の epoch を採点し、元解像度に補間した独立4チャネルの確率を `0.5` で二値化する。
 
+採点済み run と提出の証跡は当時の記録。新しい export は CV 開始時に記録した学習・推論ソースの SHA-256 を要求する。採点済み run にはこの記録がないため、現行コードで再学習・提出する場合は全候補に新しい run ID を使う。以下では `-r3` を使用する。選定は全候補の OOF ファイル、評価条件、キー、fold、再計算した平均 Dice を照合してから行う。
+
 ```powershell
 $d = 'competitions/072-severstal-steel-defect-detection'
 dev download 72
 curl.exe --fail --location https://download.pytorch.org/models/resnet18-f37072fd.pth --output "$d/data/resnet18-f37072fd.pth"
-uv run python "$d/src/train.py" --run-id E00-r2 --variant baseline
-uv run python "$d/src/train.py" --run-id E01 --variant dice
-uv run python "$d/src/train.py" --run-id E02 --variant full
-uv run python "$d/src/train.py" --run-id E03 --variant area --baseline E00-r2
+uv run python "$d/src/train.py" --run-id E00-r3 --variant baseline
+uv run python "$d/src/train.py" --run-id E01-r3 --variant dice
+uv run python "$d/src/train.py" --run-id E02-r3 --variant full
+uv run python "$d/src/train.py" --run-id E03-r3 --variant area --baseline E00-r3
 ```
 
 各 CV run は画像×クラス別 Dice・正解面積・予測面積を `oof.csv` に保存する。欠陥あり Dice、空マスクの誤検出率、小欠陥の全見逃し率は `diagnostics.json` に出力する。小欠陥は各外側 fold の学習側で求めたクラス別の面積の下位四分位を基準にする。
@@ -92,26 +94,26 @@ uv run python "$d/src/train.py" --run-id E03 --variant area --baseline E00-r2
 
 ```powershell
 $owner = 'shion5'
-uv run python "$d/src/export.py" $owner E00-r2 late-E00 "$d/outputs/late-E00"
-kaggle datasets create -p (Resolve-Path "$d/outputs/late-E00/dataset").Path
-kaggle kernels push -p (Resolve-Path "$d/outputs/late-E00/kernel").Path
-kaggle kernels status "$owner/kumite-steel-late-e00"
-kaggle competitions submit severstal-steel-defect-detection -k "$owner/kumite-steel-late-e00" -v <版> -f submission.csv -m "Kumite Severstal E00"
+uv run python "$d/src/export.py" $owner E00-r3 late-E00-r3 "$d/outputs/late-E00-r3"
+kaggle datasets create -p (Resolve-Path "$d/outputs/late-E00-r3/dataset").Path
+kaggle kernels push -p (Resolve-Path "$d/outputs/late-E00-r3/kernel").Path
+kaggle kernels status "$owner/kumite-steel-late-e00-r3"
+kaggle competitions submit severstal-steel-defect-detection -k "$owner/kumite-steel-late-e00-r3" -v <版> -f submission.csv -m "Kumite Severstal E00-r3"
 ```
 
-P5 の調査で根拠を確認できた場合は、`train.py --run-id E04 --variant gate --baseline E00-r2` で独立した欠陥有無分類器を試す。分類器は各 fold の学習画像だけで学習し、画像×クラスの確率が `0.5` 未満なら E00-r2 のマスクを空にする。
+`train.py --run-id E04-r3 --variant gate --baseline E00-r3` で独立した欠陥有無分類器を試す。分類器は各 fold の学習画像だけで学習し、画像×クラスの確率が `0.5` 未満なら基準モデルのマスクを空にする。
 
 比較が揃ったら画像単位のペア bootstrap で選ぶ。平均 OOF Dice の最高 run が E00-r2 を上回り、差の95%区間の下限が0より大きければ採用する。E00-r2 を選んだ場合は採点済みのベースラインを使う。
 
 ```powershell
-uv run python "$d/src/select_model.py" E00-r2 E01 E02 E03 E04 --output "$d/selection.json"
+uv run python "$d/src/select_model.py" E00-r3 E01-r3 E02-r3 E03-r3 E04-r3 --output "$d/outputs/selection-r3.json"
 ```
 
 E03 または E04 を選定した場合は、全学習画像で学習済みの `late-E00` のセグメンテーション重みを再利用する。E04 の分類器は全学習画像で学習する。E01 または E02 を選定した場合は `--full-baseline` を外し、選定設定で全件再学習する。
 
 ```powershell
-$selected = (Get-Content "$d/selection.json" -Raw | ConvertFrom-Json).selected_run
-uv run python "$d/src/export.py" $owner $selected final "$d/outputs/final" --selection "$d/selection.json" --full-baseline late-E00
+$selected = (Get-Content "$d/outputs/selection-r3.json" -Raw | ConvertFrom-Json).selected_run
+uv run python "$d/src/export.py" $owner $selected final-r3 "$d/outputs/final-r3" --selection "$d/outputs/selection-r3.json" --full-baseline late-E00-r3
 ```
 
 選定結果は E04。提出用成果物は `outputs/late-E00/` と `outputs/final/` に保存した。ベースラインの CPU Notebook と最終モデルの CUDA リプレイはそれぞれ公開テスト5,506枚を推論し、22,024行の提出キーと全ての非空 RLE を検証した（ベースライン3,393件、最終2,108件）。最終の CPU Notebook も8枚で32行を生成した。

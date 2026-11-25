@@ -8,6 +8,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from cv_checks import read_sources, source_hashes, verify_sources
 from model import SteelUNet, make_presence_model, normalize, training_loss
 from PIL import Image
 from split import SEED, SPLIT_VERSION, make_folds
@@ -132,6 +133,7 @@ def predict(
 
 
 def run(run_id: str, variant: str, baseline: str | None) -> None:
+    hashes = source_hashes(read_sources())
     data = ROOT / "data"
     directory = data / "train_images"
     weights = data / WEIGHTS
@@ -147,6 +149,7 @@ def run(run_id: str, variant: str, baseline: str | None) -> None:
     )
     if baseline is not None:
         source = store.record(baseline)
+        verify_sources(source, hashes)
         if (source.params.get("variant"), source.split_hash, source.data_hash) != (
             "baseline",
             split_hash,
@@ -258,6 +261,8 @@ def run(run_id: str, variant: str, baseline: str | None) -> None:
             )
 
         score = float(np.mean([row[3] for row in rows]))
+        if source_hashes(read_sources()) != hashes:
+            raise ValueError("CV 実行中にソースが変更されました")
         record = ExperimentRecord(
             competition_id="072",
             run_id=run_id,
@@ -283,7 +288,7 @@ def run(run_id: str, variant: str, baseline: str | None) -> None:
             runtime_sec=time.monotonic() - started,
             peak_memory_mb=peak_memory_mb(),
             code_version=source_version,
-            inputs=input_hashes,
+            inputs={**input_hashes, **hashes},
         )
         store.publish(reservation, record, write_artifacts)
         print(f"OOF mean Dice: {score:.6f}", flush=True)

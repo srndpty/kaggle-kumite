@@ -50,7 +50,7 @@
 | [K014](K014-ranking-vs-probabilities.md) | 再現 | 順位と確率を分けて評価する。Porto Seguroの重み付けは両方悪化、JigsawではAUC改善でもLogLossは約2倍へ悪化 |
 | [K015](K015-feature-group-ablation.md) | 条件付き | 特徴群の除外で Porto Seguro の Gini と MoA の Log Loss は改善。Mercedes-Benz では R² が悪化 |
 | [K016](K016-character-features-in-text.md) | 再現 | 文字3〜5-gram 追加で #041 の macro AUC が約 +0.0052、#048 の範囲抽出の Jaccard が +0.00707、#042 の属性別 AUC を含む合成スコアが +0.01954 |
-| [K017](K017-customer-history-aggregation.md) | 仮説 | Home Creditで顧客内の借入・過去申込・返済履歴の単独追加がAUC約+0.0056〜+0.0057 |
+| [K017](K017-customer-history-aggregation.md) | 再現 | #004 の履歴集約で AUC 約 +0.0056〜+0.0057、#005 の過去申込件数・経過日数で平均安定性スコア +0.00512 |
 | [K018](K018-recent-history-aggregation.md) | 仮説 | Home Creditで全期間借入集約に直近365日集約を追加し、2 seedでAUC +0.000788 / +0.001562 |
 | [K019](K019-fine-grained-supervision-cv-vs-external.md) | 仮説 | Speechの31クラス学習は2seedのCV Accuracyが約+0.04だがPrivateは-0.00529。内部改善が外部へ再現しない例 |
 | [K020](K020-quantile-bins-for-additive-effects.md) | 仮説 | Santander では数値特徴を分位点ビンに置換すると、ロジスティック回帰の OOF AUC が +0.02516 |
@@ -78,3 +78,4 @@
 | [K041](K041-patent-peer-similarity.md) | 仮説 | #054 で同じ anchor・CPC の他候補の類似度を加えると OOF Pearson +0.00118 |
 | [K042](K042-empty-vs-positive-mask-dice.md) | 仮説 | #072 で非空 Dice が +0.09924 でも、空マスクの誤検出が増えて全体 Dice は −0.28264 |
 | [K043](K043-weather-by-meter.md) | 仮説 | #023 の気象追加は全体 RMSLE −0.068107。冷水・蒸気・温水は改善し、電力は +0.03759 |
+| [K044](K044-recency-weighting-and-weekly-gini.md) | 仮説 | #005 の新しさ重視の学習重みは3窓平均安定性スコア −0.04699。最初の窓で週別 Gini の低下が大きくなった |

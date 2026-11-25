@@ -9,11 +9,11 @@
 
 | 状態 | 件数 |
 |---|---:|
-| 完了 | 36 |
+| 完了 | 37 |
 | 実装・学習完了、外部評価未達 | 1 |
 | P0 で中断 | 1 |
 | 差し替え | 1 |
-| 未着手 | 61 |
+| 未着手 | 60 |
 | **合計** | **100** |
 
 完了は個別の進捗チェックリストを終えたコンペを指す。#091 は外部評価未達のため、完了件数から除く。
@@ -26,7 +26,7 @@
 | 002 | [Porto Seguro’s Safe Driver Prediction](competitions/002-porto-seguro-safe-driver-prediction/README.md) | 完了 | — |
 | 003 | [Santander Customer Transaction Prediction](competitions/003-santander-customer-transaction-prediction/README.md) | 完了 | — |
 | 004 | [Home Credit Default Risk](competitions/004-home-credit-default-risk/README.md) | 完了 | — |
-| 005 | Home Credit - Credit Risk Model Stability | 未着手 | — |
+| 005 | [Home Credit - Credit Risk Model Stability](competitions/005-home-credit-credit-risk-model-stability/README.md) | 完了 | F00 の Late Private 安定性スコア 0.36145。 |
 | 006 | American Express - Default Prediction | 未着手 | — |
 | 007 | [IEEE-CIS Fraud Detection](competitions/007-ieee-fraud-detection/README.md) | 完了 | — |
 | 008 | Microsoft Malware Prediction | 未着手 | — |

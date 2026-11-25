@@ -55,3 +55,4 @@
 | #019 Rossmann | E04・E12・E13 | ラベル由来の統計量を、どの行も過去だけから作ると E04 比 -0.0057（bootstrap 95% 区間 [-0.0066, -0.0049]） |
 | #021 M5 | `m5-28d-v1` | 28日分の学習ラベルが外側の締切までにそろう起点だけを採用し、締切後の売上を変えるテストで特徴・尺度・重みが不変だった。[レポート](../competitions/021-m5-forecasting-accuracy/report.md) |
 | [#007 IEEE-CIS Fraud Detection](../competitions/007-ieee-fraud-detection/report.md) | E01 → E03 | 30日の空白と履歴凍結により、評価時の24時間・7日取引件数は完全キーで一律ゼロ。平均 AUC の差は seed 42 で +0.00082、seed 43 で −0.00194。 |
+| [#005 Home Credit Stability](../competitions/005-home-credit-credit-risk-model-stability/report.md) | E01・E04 | 判断日と同日以降の過去申込レコードは集約前に除外した。対象レコードを将来に移動しても件数・経過日数・最大額が変わらないことを検査した。打ち切りのスコア差は未計測。 |

@@ -1,0 +1,2 @@
+candidates = ["B00", "E01", "E02", "E03"]
+tolerance = 0.0001

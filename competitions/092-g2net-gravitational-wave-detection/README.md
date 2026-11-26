@@ -72,3 +72,19 @@ B00-initial は未処理の Hanford 波形を固定倍率だけで入力した�
 5. `select p6`、`export p6 F00`、`analyze p6` で選定・提出生成・検出器別 RMS 区間の AUC 集計を行う。確定した提出 CSV の Late Private スコアを `dev submissions 92` で確認して報告する。
 
 最終モデルと外部評価の比較は [振り返り](report.md) に記録した。CV の公開、保存済み OOF の独立再採点、選定、export は [共通 Quality Gate](../../docs/agent/experiment-quality-gates.md) を通す。提出予測は選定済み run の 3-fold 平均確率を使用する。
+
+## 過去 run の再現範囲
+
+CV 証跡で照合できるのは、保存済み OOF・テスト予測、分割、ソース・設定と再採点結果。各 fold の白色化係数と学習済み重みは保存していない。F00 は照合済みの fold 平均予測を CSV にした提出であり、保存成果物からモデルを復元して再推論した結果は含まない。過去の export を再生成する場合は、その CV 証跡に対応するコミット（F00 は `0e9d98e`、F00-baseline は `33a4eeb`）のソースを使う。今後、保存成果物からの再推論が必要な場合は、新しい run ID で fold 別の白色化係数と重みを保存し、前処理設定と併せて検証する。
+
+## 公式データの取得証跡
+
+2026-11-26（JST）に Kaggle 公式 API の `/api/v1/competitions/data/download-all/g2net-gravitational-wave-detection` から取得した。HTTP Range で取得した部分を結合して `data/official.zip` に保存し、`prepare.py` で各エントリの CRC、CSV と波形 ID の対応、形状、有限性を照合して配列に変換した。ZIP 自体の SHA-256 はレビュー時に保存済みファイルから計測した。[Kaggle 公式データ](https://www.kaggle.com/c/g2net-gravitational-wave-detection/data)
+
+| 対象 | 値 |
+|---|---|
+| ZIP のバイト数 | 74,086,993,965 |
+| ZIP の SHA-256 | `d6827df165ffa4458cd43c9bca7361de14e6431286d66034abdf7a165a3b92f7` |
+| 変換後の CV データハッシュ | `f6a151a7eaac8778a606689e7ea6601801bc86ac393eb41b3635f113b8b7435e` |
+
+CV データハッシュは ID 順の波形指紋と学習ラベルに基づく。再取得時は `Get-FileHash -Algorithm SHA256` で ZIP を照合し、`run.py inspect` で変換後のデータハッシュを確認できる。

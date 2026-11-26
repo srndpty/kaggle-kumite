@@ -8,7 +8,8 @@ import numpy as np
 import pytest
 import run
 import torch
-from dataset import SHAPE, make_splits, waveform_path
+from dataset import SAMPLE_RATE, SHAPE, make_splits, waveform_path
+from model import fit_whitening, transform
 from prepare import prepare
 from run import CONFIGS, fit_fold, score, validate_csv, write_csv
 
@@ -113,3 +114,44 @@ def test_cv_selection_export(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     paths = list((tmp_path / "outputs" / "exports").rglob("submission.csv"))
     assert len(paths) == 1
     validate_csv(paths[0], test_ids)
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    [
+        np.full((1, *SHAPE), np.nan),
+        np.full((1, *SHAPE), np.inf),
+        np.zeros((1, 2, SHAPE[1])),
+        np.zeros((1, SHAPE[0], SHAPE[1] - 1)),
+        np.full((1, *SHAPE), np.finfo(np.float64).max),
+    ],
+)
+def test_whitening_rejects_invalid_waveforms(invalid: np.ndarray) -> None:
+    with pytest.raises(ValueError):
+        fit_whitening([invalid])
+    with pytest.raises(ValueError):
+        transform(invalid, 3, True, None)
+
+
+def test_whitening_handles_zero_and_strong_single_frequency() -> None:
+    zero = np.zeros((1, *SHAPE))
+    with pytest.raises(ValueError, match="学習行"):
+        fit_whitening([])
+    np.testing.assert_array_equal(transform(zero, 3, True, fit_whitening([zero])), zero)
+    sinusoid = 1e75 * np.sin(2 * np.pi * 100 * np.arange(SHAPE[1]) / SAMPLE_RATE)
+    wave = np.broadcast_to(sinusoid, (2, *SHAPE))
+    whitening = fit_whitening([wave])
+    assert np.isfinite(whitening).all()
+    result = transform(wave, 3, True, whitening)
+    assert result.dtype == np.float32
+    assert np.isfinite(result).all()
+    assert np.any(result)
+
+
+@pytest.mark.parametrize("bad_value", [0.0, -1.0, np.nan, np.inf])
+def test_transform_rejects_invalid_whitening(bad_value: float) -> None:
+    wave = np.zeros((1, *SHAPE))
+    whitening = fit_whitening([wave])
+    whitening[0, 100] = bad_value
+    with pytest.raises(ValueError, match="白色化係数"):
+        transform(wave, 3, True, whitening)

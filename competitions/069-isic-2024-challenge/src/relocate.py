@@ -24,6 +24,17 @@ DIRECT_LOOKUP = """    competition = 'isic-2024-challenge'
 """
 
 
+def relocate_notebook(original: Path, destination: Path) -> None:
+    payload = json.loads(original.read_text(encoding="utf-8"))
+    entry = payload["cells"][-1]
+    code = "".join(entry["source"])
+    target = "    paths = list(root.rglob(name))\n"
+    if code.count(target) != 1:
+        raise ValueError("F00 の入力パス探索が想定と一致しません")
+    entry["source"] = code.replace(target, DIRECT_LOOKUP).splitlines(keepends=True)
+    destination.write_text(json.dumps(payload), encoding="utf-8")
+
+
 def main() -> None:
     plan_path = ROOT / "selection-plan-p6.json"
     config = json.loads(plan_path.read_text(encoding="utf-8"))
@@ -44,16 +55,7 @@ def main() -> None:
     def write(path: Path, _) -> None:
         for name in ("model.txt", "sample-predictions.csv"):
             shutil.copyfile(previous.artifact_path("F00", name), path / name)
-        payload = json.loads(
-            previous.artifact_path("F00", "submit.ipynb").read_text(encoding="utf-8")
-        )
-        entry = payload["cells"][-1]
-        code = "".join(entry["source"])
-        target = "    paths = list(root.rglob(name))\n"
-        if code.count(target) != 1:
-            raise ValueError("F00 の入力パス探索が想定と一致しません")
-        entry["source"] = code.replace(target, DIRECT_LOOKUP).splitlines(keepends=True)
-        (path / "submit.ipynb").write_text(json.dumps(payload), encoding="utf-8")
+        relocate_notebook(previous.artifact_path("F00", "submit.ipynb"), path / "submit.ipynb")
 
     print(
         publish_export(

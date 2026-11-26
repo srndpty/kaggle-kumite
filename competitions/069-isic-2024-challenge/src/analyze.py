@@ -5,11 +5,17 @@ import argparse
 import numpy as np
 import pandas as pd
 from sklearn.metrics import log_loss, roc_auc_score, roc_curve
-from validation import pauc
+from validation import make_splits, pauc
 from workflow import ROOT, TRAIN
 
 from kumite.provenance import file_sha256
+from kumite.quality_gates import AssessOOF, dense_oof, verify_cv_run
 from kumite.runs import RunStore
+
+
+def verified_predictions(store: RunStore, run_id: str, assess: AssessOOF) -> np.ndarray:
+    verify_cv_run(store, run_id, assess)
+    return store.load_array(run_id, "oof.npy")
 
 
 def main() -> None:
@@ -21,10 +27,10 @@ def main() -> None:
     counts = frame.groupby("patient_id")["target"].transform("size").to_numpy()
     store = RunStore(ROOT)
     data_hash = file_sha256(TRAIN)
+    splits = make_splits(frame, y)
+    assess = dense_oof(y, splits, pauc, expected_shape=y.shape, data_hash=data_hash)
     for run_id in args.run_ids:
-        if store.record(run_id).data_hash != data_hash:
-            raise ValueError(f"{run_id}: 評価データが学習時と一致しません")
-        p = store.load_array(run_id, "oof.npy")
+        p = verified_predictions(store, run_id, assess)
         _, tpr, thresholds = roc_curve(y, p, drop_intermediate=False)
         threshold = thresholds[np.flatnonzero(tpr >= 0.8)[0]]
         print(

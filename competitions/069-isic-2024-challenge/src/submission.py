@@ -92,7 +92,8 @@ def write_export(
     variant: str,
 ) -> None:
     model_path = path / "model.txt"
-    fit(features(train, variant), y, variant).save_model(str(model_path))
+    fitted, _ = fit(features(train, variant), y, variant)
+    fitted.save_model(str(model_path))
     model = lgb.Booster(model_file=str(model_path))
     submission(model, test, sample, variant).to_csv(path / "sample-predictions.csv", index=False)
     digest = hashlib.sha256(model_path.read_bytes()).hexdigest()

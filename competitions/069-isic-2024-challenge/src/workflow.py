@@ -1,6 +1,7 @@
 """CV、選定、最終 export の実行入口。"""
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 from time import perf_counter
@@ -37,6 +38,19 @@ TRIALS = {
     "E03": "陽性学習重みを5倍",
     "E04": "学習 fold の陰性を陽性の5倍まで抽出",
 }
+
+
+def sampling_evidence(ids: pd.Series, labels: np.ndarray) -> dict[str, int | str | float]:
+    """実際にモデルへ渡した病変の集合を、行順によらない形式で記録する。"""
+    serialized = json.dumps(sorted(ids.tolist()), ensure_ascii=False, separators=(",", ":"))
+    positives = int(np.count_nonzero(labels == 1))
+    return {
+        "seed": SEED,
+        "positive_count": positives,
+        "sampled_negative_count": len(labels) - positives,
+        "positive_rate": positives / len(labels),
+        "isic_ids_sha256": hashlib.sha256(serialized.encode("utf-8")).hexdigest(),
+    }
 
 
 def source(variant: str, plan: Path) -> SourceSpec:
@@ -149,14 +163,18 @@ def main() -> None:
         x = features(frame, variant)
 
         def fit_fold(train: np.ndarray, valid: np.ndarray) -> FoldOutput:
-            model = fit(x.iloc[train], y[train], variant)
+            model, kept = fit(x.iloc[train], y[train], variant)
+            info: dict[str, object] = {
+                "valid_positives": int(y[valid].sum()),
+                "valid_patients": int(frame["patient_id"].iloc[valid].nunique()),
+            }
+            if variant == "E04":
+                sampled = train[kept]
+                info["sampling"] = sampling_evidence(frame["isic_id"].iloc[sampled], y[sampled])
             return FoldOutput(
                 predict(model, x.iloc[valid]),
                 np.empty(0),
-                {
-                    "valid_positives": int(y[valid].sum()),
-                    "valid_patients": int(frame["patient_id"].iloc[valid].nunique()),
-                },
+                info,
             )
 
         result = cross_fit_splits(len(y), splits, fit_fold)

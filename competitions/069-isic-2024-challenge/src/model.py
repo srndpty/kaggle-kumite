@@ -91,19 +91,26 @@ def settings(variant: str) -> dict[str, str | int | float | bool]:
     }
 
 
-def fit(x: pd.DataFrame, y: np.ndarray, variant: str) -> lgb.Booster:
+def training_rows(y: np.ndarray, variant: str) -> np.ndarray:
+    """学習バッチ内の採用行を元の順序で返す。"""
     if variant == "E04":
         positives = np.flatnonzero(y == 1)
         negatives = np.flatnonzero(y == 0)
         sampled = np.random.default_rng(SEED).choice(
             negatives, size=min(len(negatives), NEGATIVE_RATIO * len(positives)), replace=False
         )
-        keep = np.sort(np.concatenate((positives, sampled)))
-        x, y = x.iloc[keep], y[keep]
-    train = x.copy()
+        return np.sort(np.concatenate((positives, sampled)))
+    return np.arange(len(y))
+
+
+def fit(x: pd.DataFrame, y: np.ndarray, variant: str) -> tuple[lgb.Booster, np.ndarray]:
+    keep = training_rows(y, variant)
+    train = x.iloc[keep].copy()
     for column in CATEGORICAL:
         train[column] = train[column].cat.remove_unused_categories()
-    return lgb.train(settings(variant), lgb.Dataset(train, label=y), num_boost_round=ROUNDS)
+    return lgb.train(
+        settings(variant), lgb.Dataset(train, label=y[keep]), num_boost_round=ROUNDS
+    ), keep
 
 
 def predict(model: lgb.Booster, x: pd.DataFrame) -> np.ndarray:

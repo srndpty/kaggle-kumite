@@ -13,7 +13,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from dataset import SEED, fingerprint, make_splits, read_ids, read_waveform, waveform_path
+from dataset import SEED, SHAPE, fingerprint, make_splits, read_ids, validate_waveform
 from model import BAND_MASK, SCALE, build_model, fit_whitening, tensor, transform
 from sklearn.metrics import roc_auc_score
 from torch import nn
@@ -35,7 +35,7 @@ from kumite.quality_gates import (
 from kumite.runs import RunStore
 
 ROOT = Path(__file__).resolve().parents[1]
-DATA = ROOT / "data"
+DATA = ROOT / "data" / "packed"
 OUTPUTS = ROOT / "outputs"
 BATCH = 256
 EPOCHS = 3
@@ -65,7 +65,12 @@ def score(y: np.ndarray, predictions: np.ndarray) -> float:
 
 
 def inspect(
-    data: Path, train: list[str], test: list[str], *, diagnostics: bool = False
+    train: list[str],
+    test: list[str],
+    train_waves: np.ndarray,
+    test_waves: np.ndarray,
+    *,
+    diagnostics: bool = False,
 ) -> tuple[np.ndarray, str, dict[str, np.ndarray]]:
     if set(train).intersection(test):
         raise ValueError("学習とテストの ID が重複しています")
@@ -73,13 +78,13 @@ def inspect(
     groups: list[str] = []
     rms_by_split: dict[str, np.ndarray] = {}
     train_hashes: set[str] = set()
-    for split, ids in (("train", train), ("test", test)):
+    for split, ids, waves in (("train", train, train_waves), ("test", test, test_waves)):
         seen: set[str] = set()
         rms = np.empty((len(ids), 3)) if diagnostics else None
         constant = np.zeros(3, dtype=int)
         band_fraction = []
-        for index, key in enumerate(ids):
-            wave = read_waveform(waveform_path(data, split, key))
+        for index, (key, wave) in enumerate(zip(ids, waves, strict=True)):
+            validate_waveform(wave, f"{split}/{key}")
             checksum = fingerprint(wave)
             digest.update(f"{split}/{key}:{checksum}\n".encode())
             seen.add(checksum)
@@ -109,18 +114,18 @@ def inspect(
     return np.array(groups), digest.hexdigest(), rms_by_split
 
 
-def batches(paths: list[Path], indices: np.ndarray) -> Iterator[tuple[np.ndarray, np.ndarray]]:
+def batches(waves: np.ndarray, indices: np.ndarray) -> Iterator[tuple[np.ndarray, np.ndarray]]:
     for start in range(0, len(indices), BATCH):
         rows = indices[start : start + BATCH]
-        yield rows, np.stack([read_waveform(paths[int(index)]) for index in rows])
+        yield rows, waves[rows]
 
 
 def fit_fold(
     fold: int,
     train: np.ndarray,
     valid: np.ndarray,
-    paths: list[Path],
-    test: list[Path],
+    waves: np.ndarray,
+    test: np.ndarray,
     y: np.ndarray,
     config: Config,
     device: torch.device,
@@ -132,11 +137,11 @@ def fit_fold(
     model = build_model(config.channels).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.001)
     loss = nn.BCEWithLogitsLoss()
-    whitening = fit_whitening(wave for _, wave in batches(paths, train)) if config.whiten else None
+    whitening = fit_whitening(wave for _, wave in batches(waves, train)) if config.whiten else None
     for epoch in range(epochs):
         start = time.monotonic()
         model.train()
-        for rows, wave in batches(paths, rng.permutation(train)):
+        for rows, wave in batches(waves, rng.permutation(train)):
             optimizer.zero_grad()
             logits = model(
                 tensor(transform(wave, config.channels, config.bandpass, whitening), device)
@@ -146,22 +151,22 @@ def fit_fold(
         print(f"fold {fold} epoch {epoch + 1}: {time.monotonic() - start:.1f} 秒", flush=True)
 
     @torch.inference_mode()
-    def predict(files: list[Path], rows: np.ndarray) -> np.ndarray:
+    def predict(samples: np.ndarray, rows: np.ndarray) -> np.ndarray:
         predictions = []
         model.eval()
-        for _, wave in batches(files, rows):
+        for _, wave in batches(samples, rows):
             inputs = tensor(transform(wave, config.channels, config.bandpass, whitening), device)
             predictions.append(model(inputs)[:, 0].sigmoid().cpu().numpy())
         return np.concatenate(predictions)
 
     return FoldOutput(
-        predict(paths, valid), predict(test, np.arange(len(test))), {"epochs": epochs}
+        predict(waves, valid), predict(test, np.arange(len(test))), {"epochs": epochs}
     )
 
 
 def source(config: Config, plan_path: Path) -> SourceSpec:
     files = [
-        *(ROOT / "src" / name for name in ("dataset.py", "model.py", "run.py")),
+        *(ROOT / "src" / name for name in ("dataset.py", "model.py", "prepare.py", "run.py")),
         ROOT / "quality-gates.toml",
         plan_path,
     ]
@@ -225,9 +230,15 @@ def cuda_device() -> torch.device:
     return torch.device("cuda")
 
 
-def smoke(train: list[str], y: np.ndarray, test: list[str]) -> None:
-    paths = [waveform_path(DATA, "train", key) for key in train[: 5 * BATCH]]
-    queries = [waveform_path(DATA, "test", key) for key in test[:BATCH]]
+def load_packed(split: str, n_rows: int) -> np.ndarray:
+    shapes = (n_rows, *SHAPE)
+    waves = np.load(DATA / f"{split}.npy", mmap_mode="r", allow_pickle=False)
+    if waves.shape != shapes or waves.dtype != np.dtype("<f8"):
+        raise ValueError(f"{split} の波形配列の形状または型が不正です")
+    return waves
+
+
+def smoke(waves: np.ndarray, y: np.ndarray, test: np.ndarray) -> None:
     device = cuda_device()
     torch.cuda.reset_peak_memory_stats(device)
     start = time.monotonic()
@@ -235,8 +246,8 @@ def smoke(train: list[str], y: np.ndarray, test: list[str]) -> None:
         0,
         np.arange(4 * BATCH),
         np.arange(4 * BATCH, 5 * BATCH),
-        paths,
-        queries,
+        waves,
+        test[:BATCH],
         y,
         CONFIGS["B00"],
         device,
@@ -260,11 +271,13 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
     train, y = read_ids(DATA / "training_labels.csv", training=True)
     test, _ = read_ids(DATA / "sample_submission.csv")
+    train_waves = load_packed("train", len(train))
+    test_waves = load_packed("test", len(test))
     if args.action == "smoke":
-        smoke(train, y, test)
+        smoke(train_waves, y, test_waves)
         return
     groups, wave_hash, rms = inspect(
-        DATA, train, test, diagnostics=args.action in {"inspect", "analyze"}
+        train, test, train_waves, test_waves, diagnostics=args.action in {"inspect", "analyze"}
     )
     splits = make_splits(y, groups)
     data_hash = hashlib.sha256(f"{wave_hash}:{array_sha256(y)}".encode()).hexdigest()
@@ -299,8 +312,6 @@ def main(argv: list[str] | None = None) -> None:
             parser.error("選定計画に含まれる run ID を指定してください")
         config = configs[args.run_id]
         spec = source(config, plan_path)
-        paths = [waveform_path(DATA, "train", key) for key in train]
-        queries = [waveform_path(DATA, "test", key) for key in test]
         device = cuda_device()
         with reserve_cv(store, args.run_id, spec, {}, plan) as (reservation, start):
             initial = time.monotonic()
@@ -308,7 +319,9 @@ def main(argv: list[str] | None = None) -> None:
             result = cross_fit_splits(
                 len(y),
                 splits,
-                lambda tr, va: fit_fold(next(folds), tr, va, paths, queries, y, config, device),
+                lambda tr, va: fit_fold(
+                    next(folds), tr, va, train_waves, test_waves, y, config, device
+                ),
             )
             if result.query.shape != (len(test),) or not np.all(
                 (result.query >= 0) & (result.query <= 1)

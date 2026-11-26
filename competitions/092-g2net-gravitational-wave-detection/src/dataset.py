@@ -44,11 +44,9 @@ def waveform_path(data: Path, split: str, key: str) -> Path:
     return data.joinpath(split, *key[:3], f"{key}.npy")
 
 
-def read_waveform(path: Path) -> np.ndarray:
-    wave = np.load(path, allow_pickle=False)
+def validate_waveform(wave: np.ndarray, name: str) -> None:
     if wave.shape != SHAPE or wave.dtype.kind != "f" or not np.isfinite(wave).all():
-        raise ValueError(f"波形が不正です: {path}")
-    return wave
+        raise ValueError(f"波形が不正です: {name}")
 
 
 def fingerprint(wave: np.ndarray) -> str:

@@ -1,4 +1,6 @@
 import csv
+import io
+import zipfile
 from pathlib import Path
 
 import numpy as np
@@ -6,6 +8,7 @@ import pytest
 import run
 import torch
 from dataset import SHAPE, make_splits, waveform_path
+from prepare import prepare
 from run import CONFIGS, fit_fold, score, validate_csv, write_csv
 
 from kumite.checks import check_label_independence
@@ -29,19 +32,16 @@ def test_auc() -> None:
         score(y, np.array([0.1, np.nan, 0.8, 0.9]))
 
 
-def test_fold_predictions_ignore_validation_labels(tmp_path: Path) -> None:
+def test_fold_predictions_ignore_validation_labels() -> None:
     rng = np.random.default_rng(42)
-    paths = [waveform_path(tmp_path, "train", f"{index:010x}") for index in range(12)]
-    for path in paths:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        np.save(path, rng.normal(scale=1e-20, size=SHAPE))
+    waves = rng.normal(scale=1e-20, size=(12, *SHAPE))
     y = np.tile([0, 1], 6)
     train, valid = np.arange(8), np.arange(8, 12)
     config = CONFIGS["E03"]
     device = torch.device("cpu")
 
     def build(labels: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        result = fit_fold(0, train, valid, paths, paths[:2], labels, config, device)
+        result = fit_fold(0, train, valid, waves, waves[:2], labels, config, device)
         return result.valid, result.query
 
     changed = y.copy()
@@ -66,20 +66,24 @@ def test_submission_ids_and_probabilities(tmp_path: Path) -> None:
 
 def test_cv_selection_export(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     real_root = run.ROOT
-    data = tmp_path / "data"
+    data = tmp_path / "packed"
     for name in ("quality-gates.toml", "selection-plans.json"):
         (tmp_path / name).write_bytes((real_root / name).read_bytes())
     rng = np.random.default_rng(42)
     test_ids = [f"{index:010x}" for index in range(30, 32)]
-    for split, ids, filename in (
-        ("train", [f"{index:010x}" for index in range(12)], "training_labels.csv"),
-        ("test", test_ids, "sample_submission.csv"),
-    ):
-        for key in ids:
-            path = waveform_path(data, split, key)
-            path.parent.mkdir(parents=True, exist_ok=True)
-            np.save(path, rng.normal(scale=1e-20, size=SHAPE))
-        write_csv(data / filename, ids, np.arange(len(ids)) % 2)
+    archive = tmp_path / "official.zip"
+    with zipfile.ZipFile(archive, "w") as bundle:
+        for split, ids, filename in (
+            ("train", [f"{index:010x}" for index in range(12)], "training_labels.csv"),
+            ("test", test_ids, "sample_submission.csv"),
+        ):
+            for key in reversed(ids):
+                wave = io.BytesIO()
+                np.save(wave, rng.normal(scale=1e-20, size=SHAPE))
+                bundle.writestr(waveform_path(Path(), split, key).as_posix(), wave.getvalue())
+            write_csv(tmp_path / filename, ids, np.arange(len(ids)) % 2)
+            bundle.write(tmp_path / filename, filename)
+    prepare(archive, data)
 
     spec = run.source(CONFIGS["B00"], real_root / "selection-plans.json")
     monkeypatch.setattr(run, "ROOT", tmp_path)
@@ -93,13 +97,13 @@ def test_cv_selection_export(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
         fold: int,
         train: np.ndarray,
         valid: np.ndarray,
-        paths: list[Path],
-        test: list[Path],
+        waves: np.ndarray,
+        test: np.ndarray,
         y: np.ndarray,
         config: run.Config,
         device: torch.device,
     ) -> FoldOutput:
-        return fit_fold(fold, train, valid, paths, test, y, config, torch.device("cpu"))
+        return fit_fold(fold, train, valid, waves, test, y, config, torch.device("cpu"))
 
     monkeypatch.setattr(run, "fit_fold", predict)
     run.main(["cv", "baseline", "B00-initial"])

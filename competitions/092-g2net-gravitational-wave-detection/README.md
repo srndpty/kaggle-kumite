@@ -3,7 +3,7 @@
 - 深さは Standard。カテゴリ F、難度 5、計算負荷 L。
 - 3 検出器の各 2 秒間の波形から、ブラックホール連星の合体に伴う重力波信号の有無を予測する。公式指標は ROC AUC。提出はテスト ID ごとの確率を入れた `id,target` の CSV。 [Kaggle 公式概要・評価仕様](https://www.kaggle.com/c/23249)
 - 公式サンプルの全 226,000 行に 0.5 を入れた疎通提出は 2026-11-26 に採点完了し、Late Public・Private AUC ともに 0.50000 だった。この値は定数予測の疎通結果。選定候補には含めない。
-- Kaggle の一括アーカイブは 74,086,993,965 バイト。目録には学習波形 560,000 件、テスト波形 226,000 件と、ラベル・提出テンプレートの CSV 各 1 件がある。Windows の旧 Kaggle CLI が応答をメモリに蓄積したため、同じ公式 API からディスクへのストリーミングに切り替えた。
+- Kaggle の一括アーカイブは 74,086,993,965 バイト。目録には学習波形 560,000 件、テスト波形 226,000 件と、ラベル・提出テンプレートの CSV 各 1 件がある。Windows の旧 Kaggle CLI が応答をメモリに蓄積したため、同じ公式 API からディスクへストリーミングした。公式 ZIP の波形は CRC・ID・形状・有限値を照合し、CSV の順序で float64 の NumPy 配列へまとめる。
 
 ## 進捗
 
@@ -36,7 +36,7 @@ RTX 4090 で学習 1,024 行・検証 256 行・テスト 256 行を使い、B00
 
 ## 実行手順
 
-リポジトリ直下から実行する。以下では `$g2net` を `competitions/092-g2net-gravitational-wave-detection/src/run.py` に設定する。公式データの置き場所はコンペ直下の `data/`。
+リポジトリ直下から実行する。以下では `$g2net` を `competitions/092-g2net-gravitational-wave-detection/src/run.py` に設定する。公式一括 ZIP をコンペ直下の `data/official.zip` に保存し、`uv run python competitions/092-g2net-gravitational-wave-detection/src/prepare.py` で `data/packed/` を生成する。ZIP と配列を合わせて約 152 GB の空き容量が必要。
 
 1. `uv run python $g2net inspect` で ID・波形・分割を照合し、`outputs/data-manifest.npz` を生成する。
 2. `uv run python $g2net smoke` で実波形 1,024 行の学習と検証・テストの推論を疎通してから、バッチサイズとエポック数を固定する。`selection-plans.json` をコミットしてから、`uv run python $g2net cv baseline B00-initial`、`select baseline`、`export baseline F00-baseline` を順に実行し、確定した export 内の `submission.csv` を `dev submit 92` で提出する。B00 は比較用計画でも同一構成で個別に実行する。

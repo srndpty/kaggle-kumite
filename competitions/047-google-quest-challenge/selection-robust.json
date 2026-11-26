@@ -1,0 +1,1 @@
+{"evidence": {"E01-robust": "551e52256fdc78e997025417a0a9efc4c2f47c917ac3d92434d481f105cbbcf2", "E05-robust": "f208b71dd517c0022a80932cae9a4b92bfc6b4c54be002e1cd93122df1f8059e"}, "plan": {"candidates": ["E01-robust", "E05-robust"], "tolerance": 0.001}, "scores": {"E01-robust": 0.32460298420077993, "E05-robust": 0.32158876042466483}, "winner": "E01-robust"}

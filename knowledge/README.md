@@ -88,3 +88,5 @@
 | [K051](K051-band-limit-waveform-classification.md) | 仮説 | #092 の 1D CNN で 25〜500 Hz の帯域制限を加えると OOF AUC 0.50067 → 0.72396 |
 | [K052](K052-multi-detector-waveform-input.md) | 仮説 | #092 の帯域制限・白色化した波形で、1 検出器から 3 検出器に増やすと OOF AUC 0.73009 → 0.78815 |
 | [K053](K053-upper-tail-waveform-amplitude.md) | 仮説 | #031 で絶対振幅の上位分位点を追加すると OOF MAE −0.05967、残り 0〜2 秒の窓では −0.18771 |
+| [K054](K054-field-specific-text-features.md) | 仮説 | #047 でタイトル・質問本文・回答の単語 TF-IDF を分けると OOF 平均 Spearman +0.03297 |
+| [K055](K055-empirical-quantile-rank-ties.md) | 仮説 | #047 の分位点写像は OOF 平均 Spearman +0.01293。改善は綴りの1項目に集中 |

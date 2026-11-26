@@ -1,0 +1,59 @@
+{
+  "competition": "google-quest-challenge",
+  "submissions": [
+    {
+      "trial": "P0",
+      "run_id": null,
+      "notebook": "shion5/kumite-quest-p0",
+      "version": 1,
+      "submitted_at_utc": "2026-11-26 10:29:34",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_mean_spearman": 0.00586,
+      "private_mean_spearman": 0.00372,
+      "notebook_sha256": "3c07c30597e5075a9a888825171fdc985c6061725dd7b4abc4ddf0e1423281f6",
+      "metadata_sha256": "0cabf17b747eee56498e200208d45f14dded63eae8e7df87a7def20aa546a774",
+      "submission_id": 58941725
+    },
+    {
+      "trial": "P7",
+      "run_id": "E04-review",
+      "export_id": "F00",
+      "notebook": "shion5/kumite-quest-final",
+      "version": 1,
+      "submission_id": 58942189,
+      "submitted_at_utc": "2026-11-26 10:41:10",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_mean_spearman": null,
+      "private_mean_spearman": null,
+      "error_description": "Your notebook generated a submission file with incorrect format. Some examples causing this are: wrong number of rows or columns, empty values, an incorrect data type for a value, or invalid submission values from what is expected.",
+      "notebook_sha256": "26801689216b84686f182fbe83dfb1b9dc2c34dea753d6630f4f282f0851b83c",
+      "metadata_sha256": "d3bb5e6b02444959af2b7ad0ec98605dde3b5e2a0b9e8da3a33a3d8c1a6d3873",
+      "public_test": {
+        "rows": 476,
+        "max_abs_prediction_delta": 1.9301227283108346e-13,
+        "local_sha256": "35ae1b91197d939eacfe4831e954a536436b6291de75630f6c8ce4747f7fa6ed",
+        "kaggle_preview_sha256": "89d5a2082fb6194f01f4ba17fce1d6f5fea313688ef7db49073f6477e7db9284"
+      }
+    },
+    {
+      "trial": "P7",
+      "run_id": "E01-external",
+      "export_id": "F01",
+      "notebook": "shion5/kumite-quest-final",
+      "version": 2,
+      "submission_id": 58942363,
+      "submitted_at_utc": "2026-11-26 10:45:42.867000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_mean_spearman": 0.30035,
+      "private_mean_spearman": 0.2856,
+      "notebook_sha256": "5c6f1c26df3817691eb6c87e2b015f92a072c5475436c237971308007988effd",
+      "metadata_sha256": "d3bb5e6b02444959af2b7ad0ec98605dde3b5e2a0b9e8da3a33a3d8c1a6d3873",
+      "public_test": {
+        "rows": 476,
+        "max_abs_prediction_delta": 5.822009541134321e-13,
+        "local_sha256": "219cc6870a897c122a9e295cc5ff62f83616bf816d15f93283bd679033f5346e",
+        "kaggle_preview_sha256": "5dbc55c5b8fa6a059bb24b543e8d1d64372760ed86d48b2fe5a7de8f692765d2"
+      }
+    }
+  ]
+}

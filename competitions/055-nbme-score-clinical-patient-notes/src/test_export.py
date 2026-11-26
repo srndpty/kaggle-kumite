@@ -3,13 +3,14 @@ import json
 from pathlib import Path
 from zipfile import ZipFile
 
+import model as model_module
 import pytest
 import torch
 from data import load_pairs
 from deployment import MODEL_ARCHIVE, validate
 from export import write_notebook
 from model import Tagger, decode_pair, encode, predict
-from transformers import BertTokenizer, DistilBertConfig
+from transformers import BertTokenizer, DistilBertConfig, DistilBertModel
 
 
 def write_csv(path: Path, rows: list[tuple[str, ...]]) -> None:
@@ -89,3 +90,15 @@ def test_expanded_notebook_matches_model_and_rejects_changed_file(tmp_path: Path
     (inputs / "dataset" / "tokenizer_config.json").write_text("{}", encoding="utf-8")
     with pytest.raises(ValueError, match=r"SHA-256.*tokenizer_config"):
         exec(compile(local, "inference", "exec"), namespace)
+
+
+def test_fit_enables_training_on_pretrained_encoder(monkeypatch: pytest.MonkeyPatch) -> None:
+    encoder = DistilBertModel(
+        DistilBertConfig(vocab_size=8, n_layers=1, n_heads=2, dim=8, hidden_dim=16)
+    ).eval()
+    training_modes: list[bool] = []
+    encoder.register_forward_pre_hook(lambda module, args: training_modes.append(module.training))
+    monkeypatch.setattr(model_module.AutoModel, "from_pretrained", lambda *args: encoder)
+    window = model_module.Window(0, [2, 5, 3], [None, (0, 1), None], [-1, 1, -1])
+    model_module.fit([window], 0, torch.device("cpu"))
+    assert training_modes == [True] * model_module.EPOCHS

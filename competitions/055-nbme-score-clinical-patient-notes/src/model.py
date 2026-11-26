@@ -110,6 +110,7 @@ def batch_tensors(
 def fit(windows: list[Window], pad: int, device: torch.device) -> Tagger:
     torch.manual_seed(SEED)
     model = Tagger().to(device)
+    model.train()
     optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE)
     loss_function = nn.BCEWithLogitsLoss()
     for _ in range(EPOCHS):

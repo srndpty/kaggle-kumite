@@ -11,7 +11,7 @@ from data import ROOT
 from deployment import MODEL_ARCHIVE, REQUIRED, guard_inference, model_hashes, validate
 from model import encode, fit, tokenizer
 from notebook import SLUG
-from train import assess, dataset, plan, source
+from train import DEFAULT_PLAN, DEFAULT_RECEIPT, assess, dataset, plan, source
 
 from kumite.experiments import ExperimentRecord
 from kumite.quality_gates import publish_export, verify_selection
@@ -93,10 +93,16 @@ def write_notebook(path: Path, owner: str, dataset_slug: str, trial: str) -> Non
         (path / name).write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def export(run_id: str, owner: str, dataset_slug: str) -> Path:
+def export(
+    run_id: str,
+    owner: str,
+    dataset_slug: str,
+    *,
+    plan_path: Path = DEFAULT_PLAN,
+    receipt: Path = DEFAULT_RECEIPT,
+) -> Path:
     store = RunStore(ROOT)
-    receipt = ROOT / "selection.json"
-    selection = verify_selection(store, plan(), receipt, assess)
+    selection = verify_selection(store, plan(plan_path), receipt, assess)
     trial = str(store.record(selection.winner).params["trial"])
 
     def write(path: Path, winner: ExperimentRecord) -> None:
@@ -120,10 +126,10 @@ def export(run_id: str, owner: str, dataset_slug: str) -> Path:
     return publish_export(
         store,
         run_id,
-        plan=plan(),
+        plan=plan(plan_path),
         receipt=receipt,
         assess=assess,
-        source=source(trial),
+        source=source(trial, plan_path),
         write=write,
         required_outputs=REQUIRED,
         validate_outputs=validate,
@@ -135,5 +141,11 @@ if __name__ == "__main__":
     parser.add_argument("run_id")
     parser.add_argument("owner")
     parser.add_argument("dataset_slug")
+    parser.add_argument("--plan", type=Path, default=DEFAULT_PLAN)
+    parser.add_argument("--receipt", type=Path, default=DEFAULT_RECEIPT)
     args = parser.parse_args()
-    print(export(args.run_id, args.owner, args.dataset_slug))
+    print(
+        export(
+            args.run_id, args.owner, args.dataset_slug, plan_path=args.plan, receipt=args.receipt
+        )
+    )

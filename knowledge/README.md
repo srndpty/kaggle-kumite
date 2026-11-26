@@ -90,3 +90,4 @@
 | [K053](K053-upper-tail-waveform-amplitude.md) | 仮説 | #031 で絶対振幅の上位分位点を追加すると OOF MAE −0.05967、残り 0〜2 秒の窓では −0.18771 |
 | [K054](K054-field-specific-text-features.md) | 仮説 | #047 でタイトル・質問本文・回答の単語 TF-IDF を分けると OOF 平均 Spearman +0.03297 |
 | [K055](K055-empirical-quantile-rank-ties.md) | 仮説 | #047 の分位点写像は OOF 平均 Spearman +0.01293。改善は綴りの1項目に集中 |
+| [K056](K056-whitespace-bridging-for-spans.md) | 仮説 | #055 の文字区間抽出で、陽性トークン間の空白を補うと OOF micro-F1 が 0.76145 → 0.80106 |

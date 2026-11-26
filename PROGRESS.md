@@ -9,11 +9,11 @@
 
 | 状態 | 件数 |
 |---|---:|
-| 完了 | 46 |
+| 完了 | 47 |
 | 実装・学習完了、外部評価未達 | 1 |
 | P0 で中断 | 1 |
 | 差し替え | 1 |
-| 未着手 | 51 |
+| 未着手 | 50 |
 | **合計** | **100** |
 
 完了は個別の進捗チェックリストを終えたコンペを指す。#091 は外部評価未達のため、完了件数から除く。
@@ -110,7 +110,7 @@
 | 066 | RSNA 2023 Abdominal Trauma Detection | 未着手 | — |
 | 067 | RSNA 2024 Lumbar Spine Degenerative Classification | 未着手 | — |
 | 068 | SIIM-ISIC Melanoma Classification | 未着手 | — |
-| 069 | ISIC 2024 - Skin Cancer Detection with 3D-TBP | 未着手 | — |
+| 069 | [ISIC 2024 - Skin Cancer Detection with 3D-TBP](competitions/069-isic-2024-challenge/README.md) | 完了 | E04 の OOF pAUC 0.15543、F01 の Late Private pAUC 0.14107。 |
 | 070 | [TGS Salt Identification Challenge](competitions/070-tgs-salt-identification-challenge/README.md) | 完了 | — |
 | 071 | Carvana Image Masking Challenge | 未着手 | — |
 | 072 | [Severstal: Steel Defect Detection](competitions/072-severstal-steel-defect-detection/README.md) | 完了 | E04 の OOF Dice 0.92488、Late Private Dice 0.88359。 |

@@ -33,22 +33,34 @@ def read_rows(path: Path) -> list[dict[str, str]]:
 
 def parse_location(location: str, length: int) -> list[Span]:
     parsed: list[Span] = []
-    for entry in ast.literal_eval(location):
+    entries = ast.literal_eval(location)
+    if not isinstance(entries, list) or any(not isinstance(entry, str) for entry in entries):
+        msg = "location は文字列のリストである必要があります"
+        raise ValueError(msg)
+    for entry in entries:
         for segment in entry.split(";"):
             start, end = map(int, segment.split())
             parsed.append((start, end))
     return normalize(parsed, length)
 
 
+def index_rows(path: Path, key: str, value: str) -> dict[tuple[str, str], str]:
+    index: dict[tuple[str, str], str] = {}
+    for row in read_rows(path):
+        identity = (row["case_num"], row[key])
+        if identity in index:
+            msg = f"{path.name} の結合キーが重複しています: {identity}"
+            raise ValueError(msg)
+        index[identity] = row[value]
+    return index
+
+
 def load_pairs(data_dir: Path, *, training: bool) -> list[Pair]:
-    notes = {
-        (row["case_num"], row["pn_num"]): row["pn_history"]
-        for row in read_rows(data_dir / "patient_notes.csv")
-    }
-    features = {
-        (row["case_num"], row["feature_num"]): row["feature_text"]
-        for row in read_rows(data_dir / "features.csv")
-    }
+    notes = index_rows(data_dir / "patient_notes.csv", "pn_num", "pn_history")
+    features = index_rows(data_dir / "features.csv", "feature_num", "feature_text")
+    if len({note_id for _, note_id in notes}) != len(notes):
+        msg = "同じ pn_num が複数のケースにあります"
+        raise ValueError(msg)
     pairs: list[Pair] = []
     for row in read_rows(data_dir / ("train.csv" if training else "test.csv")):
         case = row["case_num"]
@@ -71,7 +83,12 @@ def load_pairs(data_dir: Path, *, training: bool) -> list[Pair]:
 
 
 def make_folds(pairs: list[Pair]) -> list[int]:
-    notes = {pair.note_id: (pair.case, pair.text) for pair in pairs}
+    notes: dict[str, tuple[str, str]] = {}
+    for pair in pairs:
+        identity = (pair.case, pair.text)
+        if notes.setdefault(pair.note_id, identity) != identity:
+            msg = f"pn_num のケースまたは本文が一致しません: {pair.note_id}"
+            raise ValueError(msg)
     note_ids = sorted(notes)
     cases = [notes[note_id][0] for note_id in note_ids]
     texts = [notes[note_id][1] for note_id in note_ids]

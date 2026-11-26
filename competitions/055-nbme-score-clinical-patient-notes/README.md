@@ -91,9 +91,11 @@ E04 と B00-r2 の全 OOF はともに 0.76102。保存区間も全件一致し�
 | E01-r2 | 0.70842 |
 | E04 | 0.76102 |
 
-Kaggle Dataset が ZIP を自動展開するため、Notebook の重みの読み込み先を展開後のディレクトリに合わせた。`src/refresh.py` で既存 run のソースと設定を照合し、提出時の変更だけであることを確認して保存 OOF を `-pkg` の別 ID に引き継いだ。再選定の勝者は E03-r2-pkg。 [初回選定](selection-f00.json) · [再選定](selection.json)
+F01 の履歴には、Kaggle Dataset の ZIP 自動展開への対応時に、保存 OOF を再登録した `-pkg` run が含まれる。選定記録とスコアは当時の証跡として保存する。 [初回選定](selection-f00.json) · [F01 の選定](selection.json)
 
-提出用 export ID は F01。ルートで `uv run python competitions/055-nbme-score-clinical-patient-notes/src/export.py F01 <Kaggleユーザー名> <ユーザー名/重みデータセット名>` を実行すると、選定の照合後に全量学習し、`outputs/exports/outputs/runs/F01` に重みと推論 Notebook を生成する。モデルの ZIP を非公開の Kaggle Dataset に登録し、Notebook の入力に指定する。Kaggle が展開した `weights.pt` と同じディレクトリから設定とトークナイザーを読み込む。
+今後は、検証済み export の Notebook にファイル同一性検査だけを追加する場合、`src/deployment.py <export ID> <改訂 ID>` を使う。元の Notebook の重み参照行に SHA-256 検査を挿入し、元の CV・export 証跡、Notebook とモデルのハッシュを `outputs/deployments/<改訂 ID>/deployment-evidence.json` に記録する。既存 CV の再登録が不要な提出用改訂の手順である。推論や学習の処理を変更する場合は、更新後のソースで CV を実行し、新たな選定記録から `src/export.py` を実行する。
+
+新規 export と提出用改訂の Notebook は、Kaggle が展開したモデルの全ファイルを、ZIP から採取した SHA-256 と読み込み前に照合する。F01 v1 の採点は、ファイル単位の実行時照合を導入する前に行った。
 
 ## 外部評価
 

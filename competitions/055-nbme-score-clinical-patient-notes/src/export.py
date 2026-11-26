@@ -8,6 +8,7 @@ from zipfile import ZipFile
 
 import torch
 from data import ROOT
+from deployment import MODEL_ARCHIVE, REQUIRED, guard_inference, model_hashes, validate
 from model import encode, fit, tokenizer
 from notebook import SLUG
 from train import assess, dataset, plan, source
@@ -16,7 +17,6 @@ from kumite.experiments import ExperimentRecord
 from kumite.quality_gates import publish_export, verify_selection
 from kumite.runs import RunStore
 
-REQUIRED = ("submit.ipynb", "kernel-metadata.json", "model.zip")
 INFERENCE = """
 
 (data_dir,) = [p.parent for p in Path('/kaggle/input').rglob('sample_submission.csv')
@@ -57,7 +57,8 @@ def write_notebook(path: Path, owner: str, dataset_slug: str, trial: str) -> Non
             code = code.split('if __name__ == "__main__":')[0]
             code = "\n".join(line for line in code.splitlines() if not line.startswith("ROOT = "))
         cells.append((name, code))
-    cells.append(("inference", f"trial = {trial!r}\n{INFERENCE}"))
+    inference = guard_inference(INFERENCE, model_hashes(path / MODEL_ARCHIVE))
+    cells.append(("inference", f"trial = {trial!r}\n{inference}"))
     notebook = {
         "cells": [
             {
@@ -92,20 +93,6 @@ def write_notebook(path: Path, owner: str, dataset_slug: str, trial: str) -> Non
         (path / name).write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def validate(path: Path) -> None:
-    notebook = json.loads((path / REQUIRED[0]).read_text(encoding="utf-8"))
-    cells = notebook["cells"]
-    if [cell["id"] for cell in cells] != ["spans", "data", "model", "inference"]:
-        msg = "推論 Notebook のセルが一致しません"
-        raise ValueError(msg)
-    for cell in cells:
-        compile(cell["source"], cell["id"], "exec")
-    with ZipFile(path / REQUIRED[2]) as archive:
-        if not {"weights.pt", "config.json", "tokenizer.json"} <= set(archive.namelist()):
-            msg = "オフライン推論に必要なモデルファイルがありません"
-            raise ValueError(msg)
-
-
 def export(run_id: str, owner: str, dataset_slug: str) -> Path:
     store = RunStore(ROOT)
     receipt = ROOT / "selection.json"
@@ -125,7 +112,7 @@ def export(run_id: str, owner: str, dataset_slug: str) -> Path:
             torch.save(model.cpu().state_dict(), directory / "weights.pt")
             model.encoder.config.save_pretrained(directory)
             tok.save_pretrained(directory)
-            with ZipFile(path / REQUIRED[2], "w") as archive:
+            with ZipFile(path / MODEL_ARCHIVE, "w") as archive:
                 for item in directory.iterdir():
                     archive.write(item, item.name)
         write_notebook(path, owner, dataset_slug, trial)

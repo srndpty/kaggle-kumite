@@ -15,6 +15,7 @@
     "model.zip": "c8b829e9b4d2391fc3a0af64606720f0cc753cad5b83a3aac91921f697348d84",
     "submit.ipynb": "fba5ec1bc68adcbe35a47a6605b69c6b33a3113bfa3ef03e201144abba405ab4"
   },
+  "runtime_model_file_sha256_verified": false,
   "validated_sample_rows": 5,
   "sample_submission_sha256": "272fb11b459b365bb54d97e5e0b8180deccd9e97d88bed645391623aeadf3029"
 }

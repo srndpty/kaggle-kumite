@@ -32,6 +32,7 @@ from kumite.quality_gates import (
     publish_gated_cv,
     reserve_cv,
     select_runs,
+    verify_cv_run,
     write_selection,
 )
 from kumite.runs import RunStore
@@ -58,7 +59,7 @@ def source(trial: str) -> SourceSpec:
     prefix = ROOT.relative_to(REPO).as_posix()
     files = tuple(
         f"{prefix}/src/{name}.py"
-        for name in ("train", "model", "data", "spans", "export", "notebook")
+        for name in ("train", "model", "data", "spans", "export", "notebook", "deployment")
     )
     shared = (
         "__init__",
@@ -167,6 +168,30 @@ def token_scores(
     return result
 
 
+def read_probabilities(path: Path, pairs: list[Pair]) -> list[dict[Span, float]]:
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    result: list[dict[Span, float]] = []
+    for pair, row in zip(pairs, saved, strict=True):
+        if row["id"] != pair.id:
+            msg = "依存する OOF の ID が一致しません"
+            raise ValueError(msg)
+        scores: dict[Span, float] = {}
+        for start, end, probability in row["scores"]:
+            if (
+                type(start) is not int
+                or type(end) is not int
+                or not 0 <= start < end <= len(pair.text)
+                or (start, end) in scores
+                or type(probability) not in (int, float)
+                or not 0 <= probability <= 1
+            ):
+                msg = f"保存トークンの範囲または確率が不正です: {pair.id}"
+                raise ValueError(msg)
+            scores[start, end] = probability
+        result.append(scores)
+    return result
+
+
 def run(trial: str, run_id: str, baseline: str) -> Path:
     store = RunStore(ROOT)
     inputs = store.input_hashes(baseline, PROBABILITIES) if trial in {"E03", "E04"} else {}
@@ -175,15 +200,16 @@ def run(trial: str, run_id: str, baseline: str) -> Path:
         started = perf_counter()
         pairs, folds, data_hash, split_hash = dataset()
         if trial in {"E03", "E04"}:
-            saved = json.loads(
-                store.artifact_path(baseline, PROBABILITIES).read_text(encoding="utf-8")
-            )
-            probabilities = []
-            for pair, row in zip(pairs, saved, strict=True):
-                if row["id"] != pair.id:
-                    msg = "依存する OOF の ID が一致しません"
-                    raise ValueError(msg)
-                probabilities.append({(a, b): p for a, b, p in row["scores"]})
+            parent = verify_cv_run(store, baseline, assess)
+            if (
+                parent.params != source("B00").settings
+                or parent.model != MODEL
+                or parent.seed != SEED
+                or (parent.data_hash, parent.split_hash) != (data_hash, split_hash)
+            ):
+                msg = "依存 run が現在の B00 設定・データ・分割と一致しません"
+                raise ValueError(msg)
+            probabilities = read_probabilities(store.artifact_path(baseline, PROBABILITIES), pairs)
         else:
             probabilities = token_scores(pairs, folds, trial)
         outputs = [

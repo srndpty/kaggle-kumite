@@ -55,7 +55,7 @@
 | [K019](K019-fine-grained-supervision-cv-vs-external.md) | 仮説 | Speechの31クラス学習は2seedのCV Accuracyが約+0.04だがPrivateは-0.00529。内部改善が外部へ再現しない例 |
 | [K020](K020-quantile-bins-for-additive-effects.md) | 仮説 | Santander では数値特徴を分位点ビンに置換すると、ロジスティック回帰の OOF AUC が +0.02516 |
 | [K021](K021-value-frequency-in-numeric-features.md) | 仮説 | Santander では値の出現回数追加で OOF AUC +0.00554、反復値を残した列の追加で +0.00473 |
-| [K022](K022-product-holdings-for-ranking.md) | 仮説 | #034 で前月保有商品に条件付けて順位付けすると MAP@7 が +0.00415 |
+| [K022](K022-product-holdings-for-ranking.md) | 仮説 | #034 で前月保有商品に条件付けて順位付けすると MAP@7 が +0.00415。#033 では購入履歴を先頭に置くと MAP@12 +0.01714、共購入で +0.00179 |
 | [K023](K023-horizontal-flips-for-segmentation.md) | 再現 | 左右反転は #070 のセグメンテーションと #059 の画像分類で OOF を改善。#059 は学習時 +0.02879、推論時 +0.01860 |
 | [K024](K024-extreme-value-mixture-regression.md) | 仮説 | Elo でまれな極端値が二乗誤差の約78%を占めた。同じ特徴での群別回帰の確率加重は OOF RMSE +0.00217 |
 | [K025](K025-identity-weighting-bias-auc.md) | 仮説 | #042 の属性言及ありの陰性を2倍に重み付けすると、OOF BPSN は +0.05288、BNSP は −0.04093 |
@@ -72,7 +72,7 @@
 
 | [K036](K036-periodic-local-time.md) | 仮説 | #090 で現地時刻を1日周期で符号化すると、系列単位3-fold の OOF AP が +0.049922 |
 | [K037](K037-summary-source-overlap.md) | 仮説 | #050 で原文と要約の語句一致率を加えると、課題単位 OOF MCRMSE が 0.85492 → 0.75594 |
-| [K038](K038-retrieval-vs-reranking.md) | 再現 | 候補固定の再ランキングで #058 の MAP@25 +0.01279、#037 の平均 F1 +0.07892 |
+| [K038](K038-retrieval-vs-reranking.md) | 条件付き | 候補固定の再ランキングで #058 の MAP@25 +0.01279、#037 の平均 F1 +0.07892、#033 の MAP@12 +0.00467。候補 Recall の改善は最終指標に対応しないことがある（K050） |
 | [K039](K039-sensor-event-window-length.md) | 仮説 | #091 の過去3秒窓は過去1秒窓より Turn AP +0.03172、StartHesitation AP −0.00870 |
 | [K040](K040-l1-for-original-scale-mae.md) | 仮説 | #011 で元尺度 L1 は L2 より全体 MAE が 29.02 改善し、実測上位 1% の MAE は悪化 |
 | [K041](K041-patent-peer-similarity.md) | 仮説 | #054 で同じ anchor・CPC の他候補の類似度を加えると OOF Pearson +0.00118 |
@@ -84,3 +84,4 @@
 | [K047](K047-fold-local-pseudo-labels.md) | 仮説 | #094 で fold 内教師の疑似ラベルは CV −0.00565、Private −0.00226 |
 | [K048](K048-collection-round-shift-vs-length.md) | 仮説 | #094 は CV ≈ Public だが Private は約 0.12 悪い。長さ外挿の位置はむしろ誤差が小さく、別の収集ラウンドが主因 |
 | [K049](K049-short-window-realized-volatility.md) | 仮説 | #025 で直近300秒・150秒の板 RV を10分 RV に加えると OOF RMSPE −0.01134 |
+| [K050](K050-candidate-count-vs-ranker.md) | 仮説 | #033 で候補を100→300件にすると Recall は約2倍だが MAP@12 −0.00182。教師の顧客を揃えると −0.00011 で、低下の大半は教師の変化に対応 |

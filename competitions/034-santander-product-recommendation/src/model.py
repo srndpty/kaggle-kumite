@@ -4,6 +4,8 @@ import numpy as np
 import polars as pl
 from sklearn.linear_model import LogisticRegression
 
+from kumite.ranking import average_precision as average_precision_at_k
+
 ID = "ncodpers"
 DATE = "fecha_dato"
 K = 7
@@ -82,9 +84,7 @@ def average_precision(labels: np.ndarray, ranked: np.ndarray) -> np.ndarray:
     valid = ranked >= 0
     hits = np.take_along_axis(labels, np.where(valid, ranked, 0).astype(np.intp), axis=1) == 1
     hits &= valid
-    precision = hits.cumsum(axis=1) / np.arange(1, ranked.shape[1] + 1)
-    denom = np.maximum(1, np.minimum(K, (labels == 1).sum(axis=1)))
-    return (precision * hits).sum(axis=1) / denom
+    return average_precision_at_k(hits, (labels == 1).sum(axis=1))
 
 
 def map_at_7(labels: np.ndarray, ranked: np.ndarray) -> float:

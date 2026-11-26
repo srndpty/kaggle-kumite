@@ -43,6 +43,11 @@ def transform(
     return values.astype(np.float32)
 
 
+class GlobalMaxPool(nn.Module):
+    def forward(self, values: torch.Tensor) -> torch.Tensor:
+        return values.amax(dim=-1)
+
+
 def build_model(channels: int) -> nn.Sequential:
     return nn.Sequential(
         nn.Conv1d(channels, 24, kernel_size=31, stride=8, padding=15),
@@ -54,8 +59,7 @@ def build_model(channels: int) -> nn.Sequential:
         nn.Conv1d(48, 64, kernel_size=9, stride=2, padding=4),
         nn.BatchNorm1d(64),
         nn.GELU(),
-        nn.AdaptiveMaxPool1d(1),
-        nn.Flatten(),
+        GlobalMaxPool(),
         nn.Linear(64, 1),
     )
 

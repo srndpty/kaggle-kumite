@@ -1,0 +1,4 @@
+{
+  "baseline": {"candidates": ["B00-initial"], "tolerance": 0.001},
+  "p4": {"candidates": ["B00", "E01", "E02", "E03"], "tolerance": 0.001}
+}

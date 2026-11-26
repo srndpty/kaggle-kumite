@@ -1,0 +1,21 @@
+{
+  "p6": {
+    "candidates": ["E04", "E05"],
+    "tolerance": 0.001,
+    "configs": {
+      "E04": {
+        "channels": 3,
+        "bandpass": true,
+        "whiten": true,
+        "change": "E03 と同じ構成の対照"
+      },
+      "E05": {
+        "channels": 3,
+        "bandpass": true,
+        "whiten": true,
+        "change": "学習時に Hanford と Livingston を確率 0.5 で入れ替える",
+        "shuffle_ligo": true
+      }
+    }
+  }
+}

@@ -34,3 +34,4 @@ Porto Seguroで陽性重みを学習foldの陰性数÷陽性数（約26.44）に
 | [002 Porto Seguro](../competitions/002-porto-seguro-safe-driver-prediction/README.md) | E01/E05 | 重み付けで順位・確率とも悪化 |
 | 同上 | E06の保存済みOOF診断 | 単調変換でGini不変、LogLoss悪化。outputs/analysis/E01-E04-E06.json |
 | [041 Jigsaw](../competitions/041-jigsaw-toxic-comment-classification-challenge/README.md) | E01/E04 | balanced重みでmacro AUCは改善、LogLossは約2倍へ悪化 |
+| [069 ISIC 2024](../competitions/069-isic-2024-challenge/report.md) | B00/E03 | 陽性重み5倍で pAUC 0.020184 → 0.022024、log loss 0.062310 → 0.180435 |

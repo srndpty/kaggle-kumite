@@ -1,0 +1,31 @@
+{
+  "competition_id": "069",
+  "cv_run_id": "E04",
+  "selection_receipt": "selection-p6.json",
+  "export_id": "F01",
+  "notebook": "shion5/kumite-isic-2024-final",
+  "notebook_version": 2,
+  "dataset": "shion5/kumite-isic-2024-f00-model",
+  "dataset_version": 1,
+  "submitted_at": "2026-11-27T06:22:51.857+09:00",
+  "status": "COMPLETE",
+  "public_score": 0.1598,
+  "private_score": 0.14107,
+  "export_sha256": {
+    "export_evidence.json": "52ce9d30af2efea43592d995619a7c49d5f153028aa2e9eed7411cd9fe7febe5",
+    "model.txt": "6ef3a31e58ca0c048264aaf864be064912919b14f5bb5d34fbe0d1970d1a33ae",
+    "submit.ipynb": "126fdca23f8fdae64ec8f083c325536152a2bd781b0100680c6a44be16e42b04"
+  },
+  "model_sha256_verified_in_notebook": true,
+  "validated_sample_rows": 3,
+  "sample_submission_sha256": "66cab7244a5c41636f975e045d0993967eea4aa127e1a3f0649a303121cfcbda",
+  "preview_submission_sha256": "f876ff854985a9e57511ba3f47cd6e6b0efb7a8169f822a5507bba33677342ec",
+  "p0": {
+    "notebook": "shion5/kumite-isic-2024-dummy",
+    "notebook_version": 2,
+    "submitted_at": "2026-11-27T06:16:50.507+09:00",
+    "status": "COMPLETE",
+    "public_score": 0.02,
+    "private_score": 0.02
+  }
+}

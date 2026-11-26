@@ -9,11 +9,11 @@
 
 | 状態 | 件数 |
 |---|---:|
-| 完了 | 42 |
+| 完了 | 43 |
 | 実装・学習完了、外部評価未達 | 1 |
 | P0 で中断 | 1 |
 | 差し替え | 1 |
-| 未着手 | 55 |
+| 未着手 | 54 |
 | **合計** | **100** |
 
 完了は個別の進捗チェックリストを終えたコンペを指す。#091 は外部評価未達のため、完了件数から除く。
@@ -57,7 +57,7 @@
 | 028 | Jane Street Real-Time Market Data Forecasting | 未着手 | — |
 | 029 | Ubiquant Market Prediction | 未着手 | — |
 | 030 | G-Research Crypto Forecasting | 未着手 | — |
-| 031 | LANL Earthquake Prediction | 未着手 | — |
+| 031 | [LANL Earthquake Prediction](competitions/031-LANL-Earthquake-Prediction/README.md) | 完了 | E04 の OOF MAE 2.24701、F00 の Late Private MAE 2.62490。 |
 | 032 | MITSUI&CO. Commodity Prediction Challenge | 未着手 | — |
 
 ## C. 推薦・検索・ランキング（8）

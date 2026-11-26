@@ -1,0 +1,3 @@
+base_trial = "E03"
+candidates = ["S00", "S01"]
+tolerance = 0.001

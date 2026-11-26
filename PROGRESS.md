@@ -9,11 +9,11 @@
 
 | 状態 | 件数 |
 |---|---:|
-| 完了 | 45 |
+| 完了 | 46 |
 | 実装・学習完了、外部評価未達 | 1 |
 | P0 で中断 | 1 |
 | 差し替え | 1 |
-| 未着手 | 52 |
+| 未着手 | 51 |
 | **合計** | **100** |
 
 完了は個別の進捗チェックリストを終えたコンペを指す。#091 は外部評価未達のため、完了件数から除く。
@@ -118,7 +118,7 @@
 | 074 | [Global Wheat Detection](competitions/074-global-wheat-detection/README.md) | 完了 | — |
 | 075 | VinBigData Chest X-ray Abnormalities Detection | 未着手 | — |
 | 076 | TensorFlow - Help Protect the Great Barrier Reef | 未着手 | — |
-| 077 | Sartorius - Cell Instance Segmentation | 未着手 | — |
+| 077 | [Sartorius - Cell Instance Segmentation](competitions/077-sartorius-cell-instance-segmentation/README.md) | 完了 | S00 の OOF AP 0.23359、F00 の Late Private AP 0.268。 |
 | 078 | HuBMAP + HPA - Hacking the Human Body | 未着手 | — |
 | 079 | HuBMAP - Hacking the Human Vasculature | 未着手 | — |
 | 080 | UW-Madison GI Tract Image Segmentation | 未着手 | — |

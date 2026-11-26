@@ -1,0 +1,21 @@
+{
+  "competition_id": "055",
+  "cv_run_id": "E03-r2-pkg",
+  "export_id": "F01",
+  "notebook": "shion5/kumite-nbme-final",
+  "notebook_version": 1,
+  "dataset": "shion5/kumite-nbme-f01-weights",
+  "dataset_version": 1,
+  "submitted_at": "2026-11-27T00:56:56.777+09:00",
+  "status": "COMPLETE",
+  "public_score": 0.80488,
+  "private_score": 0.80957,
+  "export_sha256": {
+    "export_evidence.json": "50a9a4d92d2f8298348a054f510f02f2c6d499203ffe2cc9b31e6256fc8b51ae",
+    "model.zip": "c8b829e9b4d2391fc3a0af64606720f0cc753cad5b83a3aac91921f697348d84",
+    "submit.ipynb": "fba5ec1bc68adcbe35a47a6605b69c6b33a3113bfa3ef03e201144abba405ab4"
+  },
+  "runtime_model_file_sha256_verified": false,
+  "validated_sample_rows": 5,
+  "sample_submission_sha256": "272fb11b459b365bb54d97e5e0b8180deccd9e97d88bed645391623aeadf3029"
+}

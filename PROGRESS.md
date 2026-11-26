@@ -1,6 +1,6 @@
 # Kaggle 100本ノックの全体進捗
 
-更新日 2026-11-26
+更新日 2026-11-27
 
 コンペ番号と分類は [カタログ CSV](catalog/kaggle100_catalog.csv) に準拠する。着手済みのコンペ名から個別 README を開ける。
 進捗を変更したときは、個別 README のチェックリストに合わせて、この表の該当行と集計を更新する。
@@ -9,11 +9,11 @@
 
 | 状態 | 件数 |
 |---|---:|
-| 完了 | 44 |
+| 完了 | 45 |
 | 実装・学習完了、外部評価未達 | 1 |
 | P0 で中断 | 1 |
 | 差し替え | 1 |
-| 未着手 | 53 |
+| 未着手 | 52 |
 | **合計** | **100** |
 
 完了は個別の進捗チェックリストを終えたコンペを指す。#091 は外部評価未達のため、完了件数から除く。
@@ -91,7 +91,7 @@
 | 052 | Feedback Prize - Predicting Effective Arguments | 未着手 | — |
 | 053 | Feedback Prize - English Language Learning | 未着手 | — |
 | 054 | [U.S. Patent Phrase to Phrase Matching](competitions/054-us-patent-phrase-to-phrase-matching/README.md) | 完了 | E05 の Late Private Pearson 0.4864。 |
-| 055 | NBME - Score Clinical Patient Notes | 未着手 | — |
+| 055 | [NBME - Score Clinical Patient Notes](competitions/055-nbme-score-clinical-patient-notes/README.md) | 完了 | E03-r2-pkg の OOF micro-F1 0.80082、F01 の Late Private 0.80957。 |
 | 056 | LLM - Detect AI Generated Text | 未着手 | — |
 | 057 | Kaggle - LLM Science Exam | 未着手 | — |
 | 058 | [Eedi - Mining Misconceptions in Mathematics](competitions/058-eedi-mining-misconceptions-in-mathematics/README.md) | 完了 | — |

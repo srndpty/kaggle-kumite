@@ -9,7 +9,7 @@ import pytest
 import torch
 import train
 from data import Image, dataset
-from export import NOTEBOOK, WEIGHTS, validate, write_notebook
+from export import NOTEBOOK, WEIGHTS, selected_trial, validate, write_notebook
 from masks import disjoint, encode, image_score, ious, pixels
 from model import build, settings
 from PIL import Image as PillowImage
@@ -180,20 +180,35 @@ def test_export_checks_oof_and_seals_export_source(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change: str | None
 ) -> None:
     path = tmp_path / "selection.toml"
-    path.write_text('candidates = ["E00"]\ntolerance = 0.001\n', encoding="utf-8")
+    path.write_text(
+        'base_trial = "E03"\ncandidates = ["S00-r2", "S01-r2"]\ntolerance = 0.001\n',
+        encoding="utf-8",
+    )
     (tmp_path / "quality-gates.toml").write_text("version = 1\n", encoding="utf-8")
-    spec = SourceSpec(tmp_path, ("selection.toml",), dict(settings("E00")))
+
+    def source(trial: str, plan_path: Path) -> SourceSpec:
+        return SourceSpec(tmp_path, ("selection.toml",), dict(train.run_settings(trial, plan_path)))
+
     rows = [Image(str(i), path, 3, 2, "cell", str(i), ["1 1"]) for i in range(3)]
     store = RunStore(tmp_path)
     monkeypatch.setattr(train, "RunStore", lambda *_: store)
     monkeypatch.setattr(train, "dataset", lambda: (rows, [0, 1, 2], "data", "split"))
-    monkeypatch.setattr(train, "source", lambda *_: spec)
+    monkeypatch.setattr(train, "source", source)
     monkeypatch.setattr(train, "fit", lambda *_, **__: object())
-    monkeypatch.setattr(train, "predict", lambda *_: [(0.9, "1 1")])
-    run_path = train.run("E00", "E00", "E00", path)
+    monkeypatch.setattr(
+        train,
+        "rankings",
+        lambda *_, **__: ([(0.9, "1 2"), (0.8, "1 1")], [(0.6, "1 2"), (0.7, "1 1")]),
+    )
+    train.run("S00", "S00-r2", "S00-r2", path)
+    run_path = train.run("S01", "S01-r2", "S00-r2", path)
     selection_plan = train.plan(path)
     receipt = tmp_path / "selection.json"
-    write_selection(receipt, select_runs(store, selection_plan, train.assess))
+    selection = select_runs(store, selection_plan, train.assess)
+    assert selection.winner == "S01-r2"
+    trial = selected_trial(path, store.record(selection.winner))
+    assert trial == "S01"
+    write_selection(receipt, selection)
     entry = tmp_path / "export.py"
     entry.write_text("VERSION = 1\n", encoding="utf-8")
     if change == "oof":
@@ -213,7 +228,7 @@ def test_export_checks_oof_and_seals_export_source(
             plan=selection_plan,
             receipt=receipt,
             assess=train.assess,
-            source=spec,
+            source=source(trial, path),
             write=write,
             required_outputs=(WEIGHTS,),
             validate_outputs=lambda _: None,

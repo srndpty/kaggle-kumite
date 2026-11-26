@@ -2,12 +2,13 @@
 
 import argparse
 import json
+import tomllib
 from pathlib import Path
 
 import torch
 from data import REPO, ROOT, dataset
 from model import Settings, fit
-from train import PLAN, RECEIPT, TRAINING, TRIALS, assess, plan, run_settings, source
+from train import PLAN, RECEIPT, TRAINING, assess, plan, run_settings, source
 
 from kumite.experiments import ExperimentRecord
 from kumite.provenance import file_sha256
@@ -143,17 +144,21 @@ def validate(path: Path) -> None:
         compile(cell["source"], NOTEBOOK, "exec")
 
 
+def selected_trial(path: Path, winner: ExperimentRecord) -> str:
+    config = tomllib.loads(path.read_text(encoding="utf-8"))
+    trials = ("S00", "S01") if "base_trial" in config else ("E00", "E01", "E02", "E03")
+    for trial in trials:
+        if dict(run_settings(trial, path)) == winner.params:
+            return trial
+    raise ValueError(f"選定 run の設定が計画にありません: {winner.run_id}")
+
+
 def export(run_id: str, owner: str, dataset_slug: str, path: Path, receipt: Path) -> Path:
     store = RunStore(ROOT)
     selection_plan = plan(path)
     selection = verify_selection(store, selection_plan, receipt, assess)
     winner = store.record(selection.winner)
-    trial = next(
-        name
-        for name in TRIALS
-        if (name not in ("S00", "S01") or "S00" in selection_plan.candidates)
-        and dict(run_settings(name, path)) == winner.params
-    )
+    trial = selected_trial(path, winner)
     config = run_settings(trial, path)
 
     def write(directory: Path, record: ExperimentRecord) -> None:

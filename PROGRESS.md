@@ -91,7 +91,7 @@
 | 052 | Feedback Prize - Predicting Effective Arguments | 未着手 | — |
 | 053 | Feedback Prize - English Language Learning | 未着手 | — |
 | 054 | [U.S. Patent Phrase to Phrase Matching](competitions/054-us-patent-phrase-to-phrase-matching/README.md) | 完了 | E05 の Late Private Pearson 0.4864。 |
-| 055 | [NBME - Score Clinical Patient Notes](competitions/055-nbme-score-clinical-patient-notes/README.md) | 完了 | E03-r2-pkg の OOF micro-F1 0.80082、F01 の Late Private 0.80957。 |
+| 055 | [NBME - Score Clinical Patient Notes](competitions/055-nbme-score-clinical-patient-notes/README.md) | 完了 | dropout 修正後の E03-dropout は OOF micro-F1 0.79770、F02 の Late Private 0.81945。 |
 | 056 | LLM - Detect AI Generated Text | 未着手 | — |
 | 057 | Kaggle - LLM Science Exam | 未着手 | — |
 | 058 | [Eedi - Mining Misconceptions in Mathematics](competitions/058-eedi-mining-misconceptions-in-mathematics/README.md) | 完了 | — |

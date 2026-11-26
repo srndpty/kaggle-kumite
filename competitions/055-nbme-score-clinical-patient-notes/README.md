@@ -100,3 +100,5 @@ F01 の履歴には、Kaggle Dataset の ZIP 自動展開への対応時に、�
 ## 外部評価
 
 2026-11-27 に F01 の Kaggle Late Submission が完了した。Public micro-F1 は **0.80488**、Private は **0.80957**。Notebook v1 のサンプル5行の列・ID 順・区間をローカルで検査した後に提出した。 [採点証跡](submission-audit.json) · [振り返り](report.md)
+
+2026-11-27 に dropout を有効にして再学習した F02 は、OOF **0.79770**、Late Public **0.81418**、Late Private **0.81945**。 [再計測の選定](selection-dropout.json) · [採点証跡](submission-audit-dropout.json)

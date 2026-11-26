@@ -48,6 +48,11 @@ class Config:
     bandpass: bool
     whiten: bool
     change: str
+    shuffle_ligo: bool = False
+
+    def __post_init__(self) -> None:
+        if self.shuffle_ligo and self.channels != SHAPE[0]:
+            raise ValueError("検出器の入れ替えには 3 チャネルが必要です")
 
 
 CONFIGS = {
@@ -134,6 +139,7 @@ def fit_fold(
 ) -> FoldOutput:
     torch.manual_seed(SEED + fold)
     rng = np.random.default_rng(SEED + fold)
+    augmentation_rng = np.random.default_rng([SEED, fold, 1])
     model = build_model(config.channels).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.001)
     loss = nn.BCEWithLogitsLoss()
@@ -143,9 +149,11 @@ def fit_fold(
         model.train()
         for rows, wave in batches(waves, rng.permutation(train)):
             optimizer.zero_grad()
-            logits = model(
-                tensor(transform(wave, config.channels, config.bandpass, whitening), device)
-            )
+            values = transform(wave, config.channels, config.bandpass, whitening)
+            if config.shuffle_ligo:
+                swap = augmentation_rng.random(len(rows)) < 0.5
+                values[swap, :2] = values[swap, 1::-1]
+            logits = model(tensor(values, device))
             loss(logits[:, 0], tensor(y[rows].astype(np.float32), device)).backward()
             optimizer.step()
         print(f"fold {fold} epoch {epoch + 1}: {time.monotonic() - start:.1f} 秒", flush=True)

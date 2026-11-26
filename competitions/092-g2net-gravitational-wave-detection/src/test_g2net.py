@@ -1,6 +1,7 @@
 import csv
 import io
 import zipfile
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -37,7 +38,7 @@ def test_fold_predictions_ignore_validation_labels() -> None:
     waves = rng.normal(scale=1e-20, size=(12, *SHAPE))
     y = np.tile([0, 1], 6)
     train, valid = np.arange(8), np.arange(8, 12)
-    config = CONFIGS["E03"]
+    config = replace(CONFIGS["E03"], shuffle_ligo=True)
     device = torch.device("cpu")
 
     def build(labels: np.ndarray) -> tuple[np.ndarray, np.ndarray]:

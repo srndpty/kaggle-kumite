@@ -147,6 +147,7 @@ def prepare(data: Path, output: Path, manifest: Path) -> None:
         rows=rows, train=train, boundaries=boundaries, folds=folds, test=np.asarray(test), ids=ids
     )
     verify_manifest(manifest, digest, arrays)
+    output.parent.mkdir(parents=True, exist_ok=True)
     temporary = output.with_suffix(".tmp.npz")
     np.savez(
         temporary,

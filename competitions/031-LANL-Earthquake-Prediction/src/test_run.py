@@ -1,14 +1,66 @@
 import json
+from functools import partial
 from pathlib import Path
 
 import numpy as np
 import pytest
+import windows as window_cache
 from run import fit, fold_prediction, mae, predict, validate_export_outputs, validate_submission
 from windows import fold_ids, rolling_std_quantile, verify_manifest, windows
 
 from kumite.checks import check_label_independence, perturb_targets
 from kumite.crossfit import folds_to_splits
 from kumite.provenance import array_sha256
+
+
+def test_prepare_creates_missing_output_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data = tmp_path / "data"
+    (data / "test").mkdir(parents=True)
+    y = np.tile(np.linspace(9, 0, 10), 7)
+    x = np.arange(len(y), dtype=np.int16)
+    np.savetxt(
+        data / "train.csv",
+        np.column_stack((x, y)),
+        delimiter=",",
+        header="acoustic_data,time_to_failure",
+        comments="",
+        fmt="%d",
+    )
+    (data / "sample_submission.csv").write_text("seg_id,time_to_failure\na,0\n", encoding="utf-8")
+    np.savetxt(data / "test" / "a.csv", x[:10], header="acoustic_data", comments="", fmt="%d")
+    rows, train, boundaries = windows([(x, y)], size=10)
+    ids = window_cache.read_ids(data)
+    arrays = dict(
+        positions=rows[:, :3].astype(np.int64),
+        labels=rows[:, 3],
+        train=train,
+        boundaries=boundaries,
+        folds=fold_ids(rows[:, 2]),
+        ids=ids,
+        test=np.array([window_cache.features(x[:10])]),
+    )
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "version": 2,
+                "official_hash": window_cache.official_hash(data, ids),
+                "arrays": {key: array_sha256(value) for key, value in arrays.items()},
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(window_cache, "WINDOW", 10)
+    monkeypatch.setattr(window_cache, "windows", partial(windows, size=10))
+    output = tmp_path / "outputs" / "windows-v2.npz"
+    assert not output.parent.exists()
+
+    window_cache.prepare(data, output, manifest)
+
+    with np.load(output, allow_pickle=False) as cache:
+        np.testing.assert_array_equal(cache["rows"], rows)
 
 
 def test_windows_keep_complete_cycles_and_use_end_labels() -> None:

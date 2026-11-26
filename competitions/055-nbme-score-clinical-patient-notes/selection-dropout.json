@@ -1,0 +1,1 @@
+{"evidence": {"B00-dropout": "39f14ec8ee006dabe50a1c2767e82f2807fb11d6609441b7ed9ed52be141af06", "E03-dropout": "a0c1c8b8db5dcadf9d8a59ac507055091bec7b6b742846dc2691ac6605b56a0c"}, "plan": {"candidates": ["E03-dropout", "B00-dropout"], "tolerance": 0.0}, "scores": {"B00-dropout": 0.7577079370082286, "E03-dropout": 0.7977033574751915}, "winner": "E03-dropout"}

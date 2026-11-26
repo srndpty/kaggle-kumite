@@ -39,6 +39,8 @@ from kumite.runs import RunStore
 
 REPO = ROOT.parents[1]
 DATA = ROOT / "data"
+DEFAULT_PLAN = ROOT / "selection-plan.json"
+DEFAULT_RECEIPT = ROOT / "selection.json"
 PROBABILITIES = "token-scores.json"
 PREDICTIONS = "oof.json"
 TRIALS = {
@@ -50,12 +52,12 @@ TRIALS = {
 }
 
 
-def plan() -> SelectionPlan:
-    payload = json.loads((ROOT / "selection-plan.json").read_text(encoding="utf-8-sig"))
+def plan(path: Path = DEFAULT_PLAN) -> SelectionPlan:
+    payload = json.loads(path.read_text(encoding="utf-8-sig"))
     return SelectionPlan(tuple(payload["candidates"]), payload["tolerance"])
 
 
-def source(trial: str) -> SourceSpec:
+def source(trial: str, plan_path: Path = DEFAULT_PLAN) -> SourceSpec:
     prefix = ROOT.relative_to(REPO).as_posix()
     files = tuple(
         f"{prefix}/src/{name}.py"
@@ -79,7 +81,7 @@ def source(trial: str) -> SourceSpec:
             "pyproject.toml",
             "uv.lock",
             f"{prefix}/quality-gates.toml",
-            f"{prefix}/selection-plan.json",
+            plan_path.resolve().relative_to(REPO).as_posix(),
         ),
         {
             "trial": trial,
@@ -91,6 +93,7 @@ def source(trial: str) -> SourceSpec:
             "batch_size": BATCH_SIZE,
             "learning_rate": LEARNING_RATE,
             "threshold": 0.5,
+            "encoder_training_mode": True,
         },
         ("src", f"{prefix}/src"),
     )
@@ -192,17 +195,17 @@ def read_probabilities(path: Path, pairs: list[Pair]) -> list[dict[Span, float]]
     return result
 
 
-def run(trial: str, run_id: str, baseline: str) -> Path:
+def run(trial: str, run_id: str, baseline: str, plan_path: Path = DEFAULT_PLAN) -> Path:
     store = RunStore(ROOT)
     inputs = store.input_hashes(baseline, PROBABILITIES) if trial in {"E03", "E04"} else {}
-    spec = source(trial)
-    with reserve_cv(store, run_id, spec, inputs, plan()) as (reservation, start):
+    spec = source(trial, plan_path)
+    with reserve_cv(store, run_id, spec, inputs, plan(plan_path)) as (reservation, start):
         started = perf_counter()
         pairs, folds, data_hash, split_hash = dataset()
         if trial in {"E03", "E04"}:
             parent = verify_cv_run(store, baseline, assess)
             if (
-                parent.params != source("B00").settings
+                parent.params != source("B00", plan_path).settings
                 or parent.model != MODEL
                 or parent.seed != SEED
                 or (parent.data_hash, parent.split_hash) != (data_hash, split_hash)
@@ -262,10 +265,12 @@ if __name__ == "__main__":
     parser.add_argument("trial", choices=(*TRIALS, "select"))
     parser.add_argument("--run-id")
     parser.add_argument("--baseline", default="B00")
+    parser.add_argument("--plan", type=Path, default=DEFAULT_PLAN)
+    parser.add_argument("--receipt", type=Path, default=DEFAULT_RECEIPT)
     args = parser.parse_args()
     if args.trial == "select":
-        selection = select_runs(RunStore(ROOT), plan(), assess)
-        write_selection(ROOT / "selection.json", selection)
+        selection = select_runs(RunStore(ROOT), plan(args.plan), assess)
+        write_selection(args.receipt, selection)
         print(selection)
     else:
-        print(run(args.trial, args.run_id or args.trial, args.baseline))
+        print(run(args.trial, args.run_id or args.trial, args.baseline, args.plan))

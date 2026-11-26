@@ -9,11 +9,10 @@
 
 | 状態 | 件数 |
 |---|---:|
-| 完了 | 41 |
+| 完了 | 42 |
 | 実装・学習完了、外部評価未達 | 1 |
 | P0 で中断 | 1 |
 | 差し替え | 1 |
-| 実験中 | 1 |
 | 未着手 | 55 |
 | **合計** | **100** |
 
@@ -139,7 +138,7 @@
 | 089 | HMS - Harmful Brain Activity Classification | 未着手 | — |
 | 090 | [Child Mind Institute - Detect Sleep States](competitions/090-child-mind-institute-detect-sleep-states/README.md) | 完了 | — |
 | 091 | [Parkinson's Freezing of Gait Prediction](competitions/091-tlvmc-parkinsons-freezing-gait-prediction/README.md) | 実装・学習完了、外部評価未達 | P0・P7 の外部評価が未完了。E04 を選定済み。形式エラーのため再提出を保留。 |
-| 092 | [G2Net Gravitational Wave Detection](competitions/092-g2net-gravitational-wave-detection/README.md) | 実験中 | P0〜P5 完了。P4 の選定構成 E03 の OOF AUC 0.78815。 |
+| 092 | [G2Net Gravitational Wave Detection](competitions/092-g2net-gravitational-wave-detection/README.md) | 完了 | E04 の OOF AUC 0.78815、F00 の Late Private AUC 0.79573。 |
 
 ## G. 科学・分子・最適化（8）
 

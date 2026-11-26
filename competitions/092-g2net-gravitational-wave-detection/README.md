@@ -13,9 +13,9 @@
 - [x] P3. B00 と同じ構成の B00-initial を CV で確定し、初回 Late 提出を採点。
 - [x] P4. E01〜E03 を比較し、保存 OOF を再採点して E03 を選定。
 - [x] P5. 1 位と 2 位の本人の解法・公開コードを調査。
-- [ ] P6. 1 件の工夫をアブレーションする。
-- [ ] P7. 最終 export の外部評価と OOF のエラー分析を行う。
-- [ ] P8. `report.md` と知見カードに実測結果を保存する。
+- [x] P6. Hanford と Livingston の入れ替えを E04・E05 で比較。
+- [x] P7. E04 を選定し、F00 の Late 採点と OOF のエラー分析を完了。
+- [x] P8. `report.md` と知見カード K051・K052 に実測結果を保存。
 
 ## 実波形の小規模疎通
 
@@ -50,6 +50,8 @@ RTX 4090 で学習 1,024 行・検証 256 行・テスト 256 行を使い、B00
 | E01 | 0.72396 | — | fold 別 0.73170 / 0.73428 / 0.73820。 |
 | E02 | 0.73009 | — | fold 別 0.72835 / 0.72956 / 0.73244。 |
 | E03 | 0.78815 | — | fold 別 0.78765 / 0.78794 / 0.78972。P4 の選定構成。 |
+| E04 | 0.78815 | 0.80164 | P6 対照。E03 と保存 OOF・テスト予測のハッシュが一致。F00 の Late Private AUC は 0.79573。 |
+| E05 | 0.78642 | — | Hanford と Livingston を学習時に入れ替え。fold 別 0.78622 / 0.78562 / 0.78934。 |
 
 B00-initial は未処理の Hanford 波形を固定倍率だけで入力した。CV では定数予測に近く、Late Public は提出経路の確認にのみ使用した。E01 は B00 から全体 AUC が 0.22328 改善した。E02 は E01 から全体 AUC が 0.00614 上がり、fold 内の AUC は全 fold で下がった。fold 別の予測中央値は E01 で 0.287〜0.456、E02 で 0.409〜0.410。全体指標は fold をまたぐ予測順位も含むため、改善と解釈できる範囲を区別する。
 
@@ -69,4 +71,4 @@ B00-initial は未処理の Hanford 波形を固定倍率だけで入力した�
 4. P5 後に P6 の対照と変更後を別の run ID にする。`selection-p6.json` に `p6` キーを置き、`candidates`、`tolerance`、run ID ごとの `configs` を固定する。P6 の実験前に計画と必要なモデル変更をコミットし、`cv p6 <run_id>` で両方を実行する。
 5. `select p6`、`export p6 F00`、`analyze p6` で選定・提出生成・検出器別 RMS 区間の AUC 集計を行う。確定した提出 CSV の Late Private スコアを `dev submissions 92` で確認して報告する。
 
-CV の公開、保存済み OOF の独立再採点、選定、export は [共通 Quality Gate](../../docs/agent/experiment-quality-gates.md) を通す。提出予測は選定済み run の 3-fold 平均確率を使用する。
+最終モデルと外部評価の比較は [振り返り](report.md) に記録した。CV の公開、保存済み OOF の独立再採点、選定、export は [共通 Quality Gate](../../docs/agent/experiment-quality-gates.md) を通す。提出予測は選定済み run の 3-fold 平均確率を使用する。

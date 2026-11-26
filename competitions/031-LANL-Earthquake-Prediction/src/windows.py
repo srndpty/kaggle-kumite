@@ -1,17 +1,38 @@
 """公式波形から固定窓の特徴量と破壊周期を作る。"""
 
-from collections.abc import Iterable
+import json
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from kumite.provenance import files_sha256
+from kumite.provenance import array_sha256, files_sha256
 
 WINDOW = 150_000
 RESET_JUMP = 1.0
 DTYPES = {"acoustic_data": "int16", "time_to_failure": "float64"}
 ROLLING_WIDTH = 50
+CACHE_NAME = "windows-v2.npz"
+MANIFEST_NAME = "windows-v2-manifest.json"
+CACHE_ARRAYS = ("rows", "train", "test", "folds", "ids", "boundaries")
+
+
+def verify_manifest(manifest: Path, official_digest: str, arrays: Mapping[str, np.ndarray]) -> None:
+    rows = arrays["rows"]
+    if rows.ndim != 2 or rows.shape[1] != 4:
+        raise ValueError("窓位置とラベルの配列形状が不正です")
+    positions = rows[:, :3].astype(np.int64)
+    if not np.array_equal(rows[:, :3], positions):
+        raise ValueError("窓位置と周期 ID は整数である必要があります")
+    measured = {key: arrays[key] for key in CACHE_ARRAYS if key != "rows"}
+    measured.update(positions=positions, labels=rows[:, 3])
+    expected = json.loads(manifest.read_text(encoding="utf-8"))
+    if expected["version"] != 2 or expected["official_hash"] != official_digest:
+        raise ValueError("公式データまたはキャッシュの仕様が manifest と一致しません")
+    for name, array in measured.items():
+        if expected["arrays"].get(name) != array_sha256(array):
+            raise ValueError(f"抽出済み窓の {name} が manifest と一致しません")
 
 
 def rolling_std_quantile(x: np.ndarray, width: int) -> float:
@@ -107,7 +128,7 @@ def official_hash(data: Path, ids: np.ndarray) -> str:
     )
 
 
-def prepare(data: Path, output: Path) -> None:
+def prepare(data: Path, output: Path, manifest: Path) -> None:
     ids = read_ids(data)
     digest = official_hash(data, ids)
     with pd.read_csv(data / "train.csv", dtype=DTYPES, chunksize=1_000_000) as reader:
@@ -122,16 +143,20 @@ def prepare(data: Path, output: Path) -> None:
             raise ValueError(f"窓長が一致しません: {key}")
         test.append(features(x))
     folds = fold_ids(rows[:, 2])
+    arrays = dict(
+        rows=rows, train=train, boundaries=boundaries, folds=folds, test=np.asarray(test), ids=ids
+    )
+    verify_manifest(manifest, digest, arrays)
     temporary = output.with_suffix(".tmp.npz")
     np.savez(
         temporary,
+        allow_pickle=False,
         rows=rows,
         train=train,
         boundaries=boundaries,
         folds=folds,
-        test=np.asarray(test),
+        test=arrays["test"],
         ids=ids,
-        official_hash=digest,
     )
     temporary.replace(output)
     print("破壊境界（行番号、直前、直後）", boundaries.tolist())
@@ -141,4 +166,4 @@ def prepare(data: Path, output: Path) -> None:
 
 if __name__ == "__main__":
     root = Path(__file__).resolve().parents[1]
-    prepare(root / "data", root / "outputs" / "windows.npz")
+    prepare(root / "data", root / "outputs" / CACHE_NAME, root / MANIFEST_NAME)

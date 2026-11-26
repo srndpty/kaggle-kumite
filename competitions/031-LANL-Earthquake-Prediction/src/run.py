@@ -9,9 +9,18 @@ from time import perf_counter
 from typing import TypedDict
 
 import numpy as np
-from lightgbm import LGBMRegressor
+from lightgbm import Booster, LGBMRegressor
 from p0 import COLUMNS, ROOT
-from windows import WINDOW, fold_ids, official_hash, read_ids
+from windows import (
+    CACHE_ARRAYS,
+    CACHE_NAME,
+    MANIFEST_NAME,
+    WINDOW,
+    fold_ids,
+    official_hash,
+    read_ids,
+    verify_manifest,
+)
 
 from kumite.checks import validate_regression
 from kumite.crossfit import FoldOutput, cross_fit_splits, folds_to_splits, split_roles
@@ -86,13 +95,15 @@ class Dataset:
 
 def load() -> Dataset:
     data = ROOT / "data"
-    cached = ROOT / "outputs" / "windows.npz"
+    cached = ROOT / "outputs" / CACHE_NAME
     ids = read_ids(data)
     raw = official_hash(data, ids)
     with np.load(cached, allow_pickle=False) as cache:
-        if str(cache["official_hash"]) != raw or not np.array_equal(cache["ids"], ids):
-            raise ValueError("公式データと抽出済み窓の出所が一致しません")
-        rows, train, test, folds = (cache[key] for key in ("rows", "train", "test", "folds"))
+        arrays = {key: cache[key] for key in CACHE_ARRAYS}
+    verify_manifest(ROOT / MANIFEST_NAME, raw, arrays)
+    if not np.array_equal(arrays["ids"], ids):
+        raise ValueError("公式データと抽出済み窓の ID が一致しません")
+    rows, train, test, folds = (arrays[key] for key in ("rows", "train", "test", "folds"))
     if (
         rows.shape != (len(train), 4)
         or train.shape != (len(rows), 21)
@@ -119,22 +130,23 @@ def fit(x: np.ndarray, y: np.ndarray) -> LGBMRegressor:
     return LGBMRegressor(**PARAMS).fit(x, y)
 
 
-def predict(model: LGBMRegressor, x: np.ndarray) -> np.ndarray:
-    pred = np.maximum(np.asarray(model.booster_.predict(x, num_threads=4)), 0)
-    validate_regression(pred, len(x), lower=0)
-    return pred
+def predict(model: Booster, x: np.ndarray) -> np.ndarray:
+    pred = np.asarray(model.predict(x, num_threads=4))
+    validate_regression(pred, len(x))
+    return np.maximum(pred, 0)
 
 
 def fold_prediction(
     x: np.ndarray, y: np.ndarray, train: np.ndarray, valid: np.ndarray
 ) -> np.ndarray:
-    return predict(fit(x[train], y[train]), x[valid])
+    return predict(fit(x[train], y[train]).booster_, x[valid])
 
 
 def source(variant: str) -> SourceSpec:
     local = (ROOT / "src").relative_to(REPO_ROOT).as_posix()
     shared = REPO_ROOT / "src" / "kumite"
     files = ["uv.lock", "pyproject.toml"]
+    files.append((ROOT / MANIFEST_NAME).relative_to(REPO_ROOT).as_posix())
     files.extend(f"{local}/{name}" for name in ("run.py", "windows.py", "p0.py"))
     files.extend(item.relative_to(REPO_ROOT).as_posix() for item in sorted(shared.rglob("*.py")))
     return SourceSpec(
@@ -171,7 +183,7 @@ def train_run(store: RunStore, dataset: Dataset, plan: SelectionPlan, run_id: st
             "E04": "E01 に移動標準偏差の下位分位点を追加",
         }[variant],
         "LightGBM L1",
-        "official-lanl",
+        "official-lanl-windows-v2",
         {"variant": variant, **PARAMS},
     )
     spec = source(variant)
@@ -202,7 +214,7 @@ def train_run(store: RunStore, dataset: Dataset, plan: SelectionPlan, run_id: st
         )
 
 
-def validate_submission(path: Path, ids: np.ndarray) -> None:
+def validate_submission(path: Path, ids: np.ndarray) -> np.ndarray:
     with path.open(encoding="utf-8", newline="") as stream:
         reader = csv.DictReader(stream)
         if reader.fieldnames != COLUMNS:
@@ -212,9 +224,16 @@ def validate_submission(path: Path, ids: np.ndarray) -> None:
             raise ValueError("提出 ID、順序、または件数が一致しません")
         if any(set(row) != set(COLUMNS) for row in rows):
             raise ValueError("提出行の列数が一致しません")
-        validate_regression(
-            np.asarray([float(row["time_to_failure"]) for row in rows]), len(ids), lower=0
-        )
+    predictions = np.asarray([float(row["time_to_failure"]) for row in rows])
+    validate_regression(predictions, len(ids), lower=0)
+    return predictions
+
+
+def validate_export_outputs(path: Path, ids: np.ndarray, test: np.ndarray) -> None:
+    submitted = validate_submission(path / "submission.csv", ids)
+    saved = Booster(model_file=str(path / "model.txt"))
+    if not np.allclose(predict(saved, test), submitted, rtol=0, atol=1e-12):
+        raise ValueError("保存モデルの再推論結果が提出予測と一致しません")
 
 
 def diagnostics(dataset: Dataset, prediction: np.ndarray) -> dict[str, object]:
@@ -268,13 +287,15 @@ def main() -> None:
         print(json.dumps(diagnostics(dataset, store.load_array(selected.winner, "oof.npy"))))
         return
     winner = json.loads(receipt.read_text(encoding="utf-8"))["winner"]
+    variant = variant_for(winner)
+    x, test = inputs(dataset, variant)
 
     def write(path: Path, record: ExperimentRecord) -> None:
-        variant = variant_for(record.run_id)
-        x, test = inputs(dataset, variant)
+        if record.run_id != winner:
+            raise ValueError("選定記録の勝者が変わりました")
         model = fit(x, dataset.y)
         model.booster_.save_model(str(path / "model.txt"))
-        pred = predict(model, test)
+        pred = predict(model.booster_, test)
         with (path / "submission.csv").open("w", encoding="utf-8", newline="") as stream:
             writer = csv.writer(stream)
             writer.writerow(COLUMNS)
@@ -286,10 +307,10 @@ def main() -> None:
         plan=plan,
         receipt=receipt,
         assess=assess,
-        source=source(variant_for(winner)),
+        source=source(variant),
         write=write,
         required_outputs=("model.txt", "submission.csv"),
-        validate_outputs=lambda path: validate_submission(path / "submission.csv", dataset.ids),
+        validate_outputs=lambda path: validate_export_outputs(path, dataset.ids, test),
     )
     print(out)
 

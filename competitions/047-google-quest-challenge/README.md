@@ -92,3 +92,14 @@ kaggle competitions submit google-quest-challenge -k "$kaggleUser/kumite-quest-f
 E05 は E04 と同じ経験分位点写像を行い、写像後の最大同値率が99%以上の列だけ、元スコアを最大0.001の重みで混ぜる。重みは写像値間の最小差の4分の1以下とし、別々の写像値の順序を維持する。E01-robust と E05-robust を同じ質問グループ分割で比較し、差が0.001以内なら採点実績のある E01 を優先する。E04-review は既存の OOF と F00 の形式エラーを診断の参照に使う。
 
 CV の定数列を相関0とする規約は維持する。公開テストに定数列または99%以上の同値率の列があれば新規 export を停止し、列名を表示する。公開テストの検査通過は非公開採点の保証とは独立に扱う。
+
+同じ5-foldで E01-robust は OOF 0.32460、E05-robust は 0.32159。E01-robust を選定し、公開テストの export Gate を通した F02 の CSV が採点済み F01 とバイト単位で一致することを確認した。Kaggle の評価値は F01 の Public 0.30035、Private 0.28560。
+
+```powershell
+uv run python "$d/src/run.py" train --plan robust
+uv run python "$d/src/run.py" select --plan robust
+uv run python "$d/src/analyze.py" --review-diagnostics "$d/outputs/review-diagnostics.json"
+uv run python "$d/src/run.py" export --plan robust --export-id F02
+```
+
+新 run の `prediction-diagnostics.json` に fold ごとの写像前後と全 OOF の列別診断を保存する。E05 では E04 相当の写像直後も保存する。分析コマンドは過去の F00・F01 の export 証跡を照合し、全 OOF と公開テストの列別診断を JSON にまとめる。

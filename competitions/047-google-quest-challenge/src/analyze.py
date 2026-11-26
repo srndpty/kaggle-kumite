@@ -6,18 +6,59 @@ from pathlib import Path
 
 import numpy as np
 from groups import question_groups
-from quest import correlations, read_data, score
+from quest import (
+    correlations,
+    predict,
+    prediction_diagnostics,
+    read_data,
+    score,
+    submission,
+    validate_submission,
+)
 
+from kumite.quality_gates import verify_export
 from kumite.runs import RunStore
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def review_diagnostics(output: Path) -> None:
+    train, test, sample = read_data(ROOT / "data")
+    columns = sample.columns[1:]
+    y = train[columns].to_numpy(dtype=float)
+    store = RunStore(ROOT)
+    export_store = RunStore(ROOT / "outputs" / "exports")
+    preview = {}
+    for name in ("F00", "F01"):
+        verify_export(export_store, name)
+        frame = validate_submission(
+            export_store.artifact_path(name, "submission.csv"), sample, test
+        )
+        preview[name] = prediction_diagnostics(columns, frame.iloc[:, 1:].to_numpy())
+    pred, _ = predict(train, test, y, "E05")
+    candidate = submission(sample, test, pred)
+    preview["E05-robust"] = prediction_diagnostics(columns, candidate.iloc[:, 1:].to_numpy())
+    diagnostics = {
+        "oof": {
+            name: prediction_diagnostics(columns, store.load_array(name, "oof.npy"), y)
+            for name in ("E01-robust", "E04-review", "E05-robust")
+        },
+        "public_test": preview,
+    }
+    output.write_text(json.dumps(diagnostics, indent=2) + "\n", encoding="utf-8")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("run")
+    parser.add_argument("run", nargs="?")
     parser.add_argument("--compare")
+    parser.add_argument("--review-diagnostics", type=Path)
     args = parser.parse_args()
+    if args.review_diagnostics is not None:
+        review_diagnostics(args.review_diagnostics)
+        return
+    if args.run is None:
+        parser.error("run ID または --review-diagnostics が必要です")
     train, _, sample = read_data(ROOT / "data")
     columns = sample.columns[1:]
     y = train[columns].to_numpy(dtype=float)

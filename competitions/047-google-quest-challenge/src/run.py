@@ -7,7 +7,21 @@ from time import perf_counter
 
 import numpy as np
 from groups import question_groups
-from quest import PARAMS, correlations, predict, read_data, score, submission
+from quest import (
+    MAX_BLEND_WEIGHT,
+    PARAMS,
+    TIE_LIMIT,
+    correlations,
+    postprocess,
+    predict_base,
+    prediction_diagnostics,
+    quantile_align,
+    read_data,
+    require_scorable_preview,
+    score,
+    submission,
+    validate_submission,
+)
 from sklearn.model_selection import GroupKFold
 
 from kumite.crossfit import FoldOutput, cross_fit_splits, split_roles
@@ -35,6 +49,7 @@ METHODS = {
     "E02": "文字 TF-IDF の追加",
     "E03": "15成分のラベル PCA",
     "E04": "フィールド別 TF-IDF と経験分位点への写像",
+    "E05": "最大同値率が99%以上の列に元スコアを混合",
 }
 
 
@@ -49,7 +64,17 @@ def source(variant: str) -> SourceSpec:
         f"{local}/groups.py",
         *(path.relative_to(REPO).as_posix() for path in shared),
     )
-    return SourceSpec(REPO, files, {"variant": variant, **PARAMS}, ("src", local))
+    return SourceSpec(
+        REPO,
+        files,
+        {
+            "variant": variant,
+            **PARAMS,
+            "tie_limit": TIE_LIMIT,
+            "max_blend_weight": MAX_BLEND_WEIGHT,
+        },
+        ("src", local),
+    )
 
 
 def notebook_source(variant: str) -> str:
@@ -134,19 +159,46 @@ def main() -> None:
             trial = Trial(
                 METHODS[variant], METHODS[variant], "Ridge", "quest-tfidf-v1", dict(spec.settings)
             )
+            fold_diagnostics: list[dict[str, object]] = []
 
-            def fit_fold(left: np.ndarray, right: np.ndarray, variant: str = variant) -> FoldOutput:
-                pred, clip_rate = predict(train.iloc[left], train.iloc[right], y[left], variant)
+            def fit_fold(
+                left: np.ndarray,
+                right: np.ndarray,
+                variant: str = variant,
+                diagnostics: list[dict[str, object]] = fold_diagnostics,
+            ) -> FoldOutput:
+                base, clip_rate = predict_base(
+                    train.iloc[left], train.iloc[right], y[left], variant
+                )
+                pred = postprocess(y[left], base, variant)
+                info: dict[str, object] = {
+                    "before": prediction_diagnostics(columns, base, y[right])
+                }
+                if variant in {"E04", "E05"}:
+                    info["after"] = prediction_diagnostics(columns, pred, y[right])
+                if variant == "E05":
+                    info["unguarded"] = prediction_diagnostics(
+                        columns, quantile_align(y[left], base), y[right]
+                    )
+                diagnostics.append(info)
                 return FoldOutput(pred, np.empty(0), {"clip_rate": clip_rate})
 
             with reserve_cv(store, run_id, spec, {}, plan) as (reservation, start):
                 before = perf_counter()
                 result = cross_fit_splits(len(y), splits, fit_fold)
 
-                def write_diagnostics(path: Path, oof: np.ndarray = result.oof) -> None:
+                def write_diagnostics(
+                    path: Path,
+                    oof: np.ndarray = result.oof,
+                    folds: list[dict[str, object]] = fold_diagnostics,
+                ) -> None:
                     metrics = dict(zip(columns, correlations(y, oof).tolist(), strict=True))
                     (path / "target-scores.json").write_text(
                         json.dumps(metrics, indent=2), encoding="utf-8"
+                    )
+                    diagnosis = {"folds": folds, "oof": prediction_diagnostics(columns, oof, y)}
+                    (path / "prediction-diagnostics.json").write_text(
+                        json.dumps(diagnosis, indent=2), encoding="utf-8"
                     )
 
                 publish_cv_run(
@@ -183,8 +235,16 @@ def main() -> None:
             title="Kumite QUEST final",
             competition=SLUG,
         )
-        pred, _ = predict(train, test, y, variant)
+        base, _ = predict_base(train, test, y, variant)
+        pred = postprocess(y, base, variant)
         submission(sample, test, pred).to_csv(path / "submission.csv", index=False)
+        diagnostics = {
+            "before": prediction_diagnostics(columns, base),
+            "after": prediction_diagnostics(columns, pred),
+        }
+        (path / "preview-diagnostics.json").write_text(
+            json.dumps(diagnostics, indent=2), encoding="utf-8"
+        )
 
     def validate(path: Path) -> None:
         nb = json.loads((path / "submit.ipynb").read_text(encoding="utf-8"))
@@ -195,12 +255,8 @@ def main() -> None:
         meta = json.loads((path / "kernel-metadata.json").read_text(encoding="utf-8"))
         if meta["competition_sources"] != [SLUG] or meta["enable_internet"] or meta["enable_gpu"]:
             raise ValueError("Invalid notebook metadata")
-        import pandas as pd
-
-        actual = pd.read_csv(path / "submission.csv")
-        if not actual.columns.equals(sample.columns) or not actual["qa_id"].equals(sample["qa_id"]):
-            raise ValueError("Invalid submission IDs or column order")
-        submission(sample, sample, actual.iloc[:, 1:].to_numpy())
+        actual = validate_submission(path / "submission.csv", sample, test)
+        require_scorable_preview(columns, actual.iloc[:, 1:].to_numpy())
 
     print(
         publish_export(
@@ -211,7 +267,12 @@ def main() -> None:
             assess=assess,
             source=source(variant),
             write=write,
-            required_outputs=("submit.ipynb", "kernel-metadata.json", "submission.csv"),
+            required_outputs=(
+                "submit.ipynb",
+                "kernel-metadata.json",
+                "submission.csv",
+                "preview-diagnostics.json",
+            ),
             validate_outputs=validate,
         )
     )

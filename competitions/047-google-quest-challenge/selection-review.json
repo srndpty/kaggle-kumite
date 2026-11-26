@@ -1,0 +1,1 @@
+{"evidence": {"E01-review": "798cbf80a2de8ddc5fc3ec148801c29d294a712e9ad2248af61b786c7cb8f617", "E04-review": "6567080c14ecf969851d5f977deeb7e95a22ae52e54048fde8569ca19a680a90"}, "plan": {"candidates": ["E01-review", "E04-review"], "tolerance": 0.001}, "scores": {"E01-review": 0.32460298420077993, "E04-review": 0.3375354709739526}, "winner": "E04-review"}

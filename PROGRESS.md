@@ -9,11 +9,11 @@
 
 | 状態 | 件数 |
 |---|---:|
-| 完了 | 43 |
+| 完了 | 44 |
 | 実装・学習完了、外部評価未達 | 1 |
 | P0 で中断 | 1 |
 | 差し替え | 1 |
-| 未着手 | 54 |
+| 未着手 | 53 |
 | **合計** | **100** |
 
 完了は個別の進捗チェックリストを終えたコンペを指す。#091 は外部評価未達のため、完了件数から除く。
@@ -83,7 +83,7 @@
 | 044 | Jigsaw Rate Severity of Toxic Comments | 未着手 | — |
 | 045 | [Quora Question Pairs](competitions/045-quora-question-pairs/README.md) | 完了 | — |
 | 046 | [Quora Insincere Questions Classification](competitions/046-quora-insincere-questions-classification/README.md) | 完了 | E02 の OOF F1 0.62319、Late Private F1 0.63519。 |
-| 047 | Google QUEST Q&A Labeling | 未着手 | — |
+| 047 | [Google QUEST Q&A Labeling](competitions/047-google-quest-challenge/README.md) | 完了 | F01 の Late Private Spearman 0.28560。CV 勝者 F00 は採点形式エラー。 |
 | 048 | [Tweet Sentiment Extraction](competitions/048-tweet-sentiment-extraction/README.md) | 完了 | — |
 | 049 | [CommonLit Readability Prize](competitions/049-commonlitreadabilityprize/README.md) | 完了 | — |
 | 050 | [CommonLit - Evaluate Student Summaries](competitions/050-commonlit-evaluate-student-summaries/README.md) | 完了 | — |

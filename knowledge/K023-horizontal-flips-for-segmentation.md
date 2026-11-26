@@ -19,6 +19,8 @@
 
 #074 の穂の物体検出では、元画像と左右反転画像の検出を同じ重みで行い、座標を戻して信頼度で矩形を加重平均した。撮影元を分けた3-fold の OOF は 0.445057 → 0.463676 に改善した。学習時反転は両構成で共通。推論時反転と矩形融合の寄与は個別に測っていない。
 
+#077 の細胞インスタンス分割では、Mask R-CNN の学習時に画像と正解マスクを確率 0.5 で左右反転すると OOF AP は 0.21658 → 0.21329。撮影サンプル単位の 3 fold すべてで低下した。結果は seed 42 での観測で、他の seed や推論時反転では未検証。
+
 ## 適用条件
 
 101×101 の地震画像による塩領域の二値セグメンテーション。学習時は画像と正解マスクを同時に反転し、推論時は予測を元の向きに戻してから合成する。
@@ -40,3 +42,4 @@
 | [#070 TGS Salt](../competitions/070-tgs-salt-identification-challenge/report.md) | E00、E03、E04 | OOF 0.69978、0.73200、0.71370 |
 | [#059 Cassava](../competitions/059-cassava-leaf-disease-classification/report.md) | E01、E03、E05 | OOF Accuracy 0.77296、0.80175、0.79156 |
 | [#074 Global Wheat Detection](../competitions/074-global-wheat-detection/report.md) | E00-r2・E05 | 推論時反転と矩形融合で OOF +0.018619 |
+| [#077 Sartorius](../competitions/077-sartorius-cell-instance-segmentation/report.md) | E00 → E02 | 学習時反転で OOF AP −0.00329 |

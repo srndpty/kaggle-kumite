@@ -56,7 +56,7 @@
 | [K020](K020-quantile-bins-for-additive-effects.md) | 仮説 | Santander では数値特徴を分位点ビンに置換すると、ロジスティック回帰の OOF AUC が +0.02516 |
 | [K021](K021-value-frequency-in-numeric-features.md) | 仮説 | Santander では値の出現回数追加で OOF AUC +0.00554、反復値を残した列の追加で +0.00473 |
 | [K022](K022-product-holdings-for-ranking.md) | 仮説 | #034 で前月保有商品に条件付けて順位付けすると MAP@7 が +0.00415。#033 では購入履歴を先頭に置くと MAP@12 +0.01714、共購入で +0.00179 |
-| [K023](K023-horizontal-flips-for-segmentation.md) | 再現 | 左右反転は #070 のセグメンテーションと #059 の画像分類で OOF を改善。#059 は学習時 +0.02879、推論時 +0.01860 |
+| [K023](K023-horizontal-flips-for-segmentation.md) | 再現 | 左右反転は #070 と #059 の OOF を改善。#077 の細胞インスタンス分割では学習時反転で OOF AP −0.00329 |
 | [K024](K024-extreme-value-mixture-regression.md) | 仮説 | Elo でまれな極端値が二乗誤差の約78%を占めた。同じ特徴での群別回帰の確率加重は OOF RMSE +0.00217 |
 | [K025](K025-identity-weighting-bias-auc.md) | 仮説 | #042 の属性言及ありの陰性を2倍に重み付けすると、OOF BPSN は +0.05288、BNSP は −0.04093 |
 | [K026](K026-image-summary-with-tabular.md) | 仮説 | #016 の掲載表に幅・高さ・縦横比・明度などの画像統計を追加すると OOF QWK +0.01143 |
@@ -91,3 +91,4 @@
 | [K054](K054-field-specific-text-features.md) | 仮説 | #047 でタイトル・質問本文・回答の単語 TF-IDF を分けると OOF 平均 Spearman +0.03297 |
 | [K055](K055-empirical-quantile-rank-ties.md) | 仮説 | #047 の分位点写像は OOF 平均 Spearman +0.01293。改善は綴りの1項目に集中 |
 | [K056](K056-whitespace-bridging-for-spans.md) | 仮説 | #055 の文字区間抽出で、陽性トークン間の空白を補うと OOF micro-F1 が 0.76145 → 0.80106 |
+| [K057](K057-instance-mask-retained-area.md) | 仮説 | #077 で重複除去後に元面積の半分未満となった候補を棄却すると、OOF AP が 0.21658 → 0.23275。偽陽性 −8,136 件、偽陰性 +152 件 |

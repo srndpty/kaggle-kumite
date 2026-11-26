@@ -86,3 +86,9 @@ kaggle competitions submit google-quest-challenge -k "$kaggleUser/kumite-quest-f
 ```
 
 第2版の F01 は公式採点が成立した。OOF 0.32460、Late Public 0.30035、Late Private 0.28560。外部採点まで成立したモデルは E01-external。F00 の Late スコアは未取得。 [採点証跡](submission-evidence.json)
+
+## 採点可能性の追試
+
+E05 は E04 と同じ経験分位点写像を行い、写像後の最大同値率が99%以上の列だけ、元スコアを最大0.001の重みで混ぜる。重みは写像値間の最小差の4分の1以下とし、別々の写像値の順序を維持する。E01-robust と E05-robust を同じ質問グループ分割で比較し、差が0.001以内なら採点実績のある E01 を優先する。E04-review は既存の OOF と F00 の形式エラーを診断の参照に使う。
+
+CV の定数列を相関0とする規約は維持する。公開テストに定数列または99%以上の同値率の列があれば新規 export を停止し、列名を表示する。公開テストの検査通過は非公開採点の保証とは独立に扱う。

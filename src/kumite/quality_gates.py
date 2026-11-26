@@ -369,6 +369,7 @@ def publish_export(
     write: Callable[[Path, ExperimentRecord], None],
     required_outputs: tuple[str, ...],
     validate_outputs: Callable[[Path], None],
+    export_files: tuple[str, ...] = (),
 ) -> Path:
     """選定とソースを確認後、選定 run を渡して export し、証跡ごと公開する。"""
     selected = verify_selection(store, plan, receipt, assess)
@@ -382,6 +383,8 @@ def publish_export(
     _, expected, _ = _read_evidence(store, winner)
     if source.snapshot() != expected:
         raise ValueError("export のソースまたは設定が選定された CV と一致しません")
+    export_source = replace(source, files=(*source.files, *export_files))
+    export_snapshot = export_source.snapshot() if export_files else expected
 
     export_store = RunStore(store.competition_dir / "outputs" / "exports")
     inputs = {
@@ -415,7 +418,7 @@ def publish_export(
         }:
             raise ValueError("必須の export 成果物がありません")
         validate_outputs(path)
-        if source.snapshot() != expected:
+        if export_source.snapshot() != export_snapshot:
             raise ValueError("export 中にソースまたは設定が変わりました")
         _verify_export_dependencies(export_store, inputs)
         write_selection(path / SELECTION, selected)
@@ -424,7 +427,7 @@ def publish_export(
         return (
             _json(
                 {
-                    "source": expected,
+                    "source": export_snapshot,
                     "record": _record_identity(record),
                     "artifacts": dict(artifacts),
                 }

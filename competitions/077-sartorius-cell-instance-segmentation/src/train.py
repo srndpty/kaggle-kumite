@@ -6,11 +6,11 @@ import tomllib
 from collections.abc import Callable
 from pathlib import Path
 from time import perf_counter
-from typing import cast
+from typing import Literal, overload
 
 import torch
 from data import REPO, ROOT, SEED, Image, dataset
-from masks import disjoint, image_score, ious
+from masks import disjoint, image_score, ious, pixels
 from model import Settings, fit, predict, rankings, settings
 
 from kumite.experiments import ExperimentRecord
@@ -41,6 +41,7 @@ RECEIPT = ROOT / "outputs" / "selection.json"
 PREDICTIONS = "oof.json"
 RAW = "raw_oof.json"
 WEIGHTED_RAW = "weighted_raw_oof.json"
+TRAINING = "training_provenance.json"
 
 
 def plan(path: Path) -> SelectionPlan:
@@ -67,11 +68,19 @@ def source(trial: str, path: Path) -> SourceSpec:
         f"{competition}/quality-gates.toml",
         path.relative_to(REPO).as_posix(),
     }
-    files.update(file.relative_to(REPO).as_posix() for file in (REPO / "src/kumite").glob("*.py"))
+    files.update(f"{competition}/src/{name}.py" for name in ("data", "masks", "model", "train"))
     files.update(
-        file.relative_to(REPO).as_posix()
-        for file in (ROOT / "src").glob("*.py")
-        if not file.name.startswith(("test_", "dummy"))
+        f"src/kumite/{name}.py"
+        for name in (
+            "__init__",
+            "crossfit",
+            "experiments",
+            "paths",
+            "provenance",
+            "quality_gates",
+            "runs",
+            "source_audit",
+        )
     )
     return SourceSpec(
         REPO,
@@ -95,21 +104,72 @@ def score(
     return [sum(group) / len(group) for group in scores], sum(values) / len(values)
 
 
-def read_rows(path: Path, rows: list[Image], folds: list[int]) -> list[object]:
+@overload
+def read_rows(
+    path: Path, rows: list[Image], folds: list[int], *, kind: Literal["prediction"] = ...
+) -> list[list[str]]: ...
+
+
+@overload
+def read_rows(
+    path: Path, rows: list[Image], folds: list[int], *, kind: Literal["raw"]
+) -> list[list[tuple[float, str]]]: ...
+
+
+def read_rows(
+    path: Path,
+    rows: list[Image],
+    folds: list[int],
+    *,
+    kind: Literal["prediction", "raw"] = "prediction",
+) -> list[list[str]] | list[list[tuple[float, str]]]:
     saved = json.loads(path.read_text(encoding="utf-8"))
-    values: list[object] = []
+    if not isinstance(saved, list) or len(saved) != len(rows) or len(folds) != len(rows):
+        raise ValueError("OOF の行数が一致しません")
+    predictions: list[list[str]] = []
+    candidates: list[list[tuple[float, str]]] = []
     for row, fold, item in zip(rows, folds, saved, strict=True):
-        if item["id"] != row.id or item["fold"] != fold or not isinstance(item["masks"], list):
+        if (
+            not isinstance(item, dict)
+            or item.get("id") != row.id
+            or type(item.get("fold")) is not int
+            or item["fold"] != fold
+            or not isinstance(item.get("masks"), list)
+        ):
             raise ValueError(f"OOF の ID、fold、マスクが不正です: {row.id}")
-        values.append(item["masks"])
-    return values
+        masks: list[str] = []
+        proposals: list[tuple[float, str]] = []
+        seen: set[bytes] = set()
+        for entry in item["masks"]:
+            confidence = 0.0
+            rle = entry
+            if kind == "raw":
+                if not isinstance(entry, list) or len(entry) != 2:
+                    raise ValueError(f"OOF の候補は [confidence, RLE] が必要です: {row.id}")
+                confidence, rle = entry
+                if type(confidence) not in (int, float) or not 0 <= confidence <= 1:
+                    raise ValueError(f"OOF の信頼度が不正です: {row.id}")
+            if not isinstance(rle, str):
+                raise ValueError(f"OOF の RLE は文字列が必要です: {row.id}")
+            try:
+                key = pixels(rle, row.size).tobytes()
+            except ValueError as error:
+                raise ValueError(f"OOF の RLE が不正です: {row.id}") from error
+            if key in seen:
+                raise ValueError(f"OOF の同一マスクが重複しています: {row.id}")
+            seen.add(key)
+            masks.append(rle)
+            proposals.append((confidence, rle))
+        predictions.append(masks)
+        candidates.append(proposals)
+    return candidates if kind == "raw" else predictions
 
 
 def assess(artifact: Callable[[str], Path], record: ExperimentRecord) -> tuple[list[float], float]:
     rows, folds, data_hash, split_hash = dataset()
     if (record.data_hash, record.split_hash) != (data_hash, split_hash):
         raise ValueError("データまたは分割が CV 記録と一致しません")
-    predictions = cast("list[list[str]]", read_rows(artifact(PREDICTIONS), rows, folds))
+    predictions = read_rows(artifact(PREDICTIONS), rows, folds)
     return score(rows, folds, predictions)
 
 
@@ -123,6 +183,7 @@ def run(trial: str, run_id: str, baseline: str, path: Path) -> Path:
         started = perf_counter()
         rows, folds, data_hash, split_hash = dataset()
         candidates: list[list[tuple[float, str]]]
+        training: list[dict[str, object]] = []
         weighted: list[list[tuple[float, str]]] = [[] for _ in rows]
         if dependency:
             artifact, parent_trial = dependency
@@ -132,20 +193,20 @@ def run(trial: str, run_id: str, baseline: str, path: Path) -> Path:
                 parent.split_hash,
             ) != (data_hash, split_hash):
                 raise ValueError("依存 run の設定、データまたは分割が一致しません")
-            candidates = cast(
-                "list[list[tuple[float, str]]]",
-                read_rows(store.artifact_path(baseline, artifact), rows, folds),
-            )
+            candidates = read_rows(store.artifact_path(baseline, artifact), rows, folds, kind="raw")
         else:
             candidates = [[] for _ in rows]
             device = torch.device("cuda")
             for fold in range(3):
                 print(f"fold {fold} 学習開始", flush=True)
+                evidence: dict[str, object] = {"fold": fold}
                 model = fit(
                     [row for row, index in zip(rows, folds, strict=True) if index != fold],
                     config,
                     device,
+                    evidence=evidence,
                 )
+                training.append(evidence)
                 for index, row in enumerate(rows):
                     if folds[index] == fold:
                         if trial == "S00":
@@ -182,6 +243,10 @@ def run(trial: str, run_id: str, baseline: str, path: Path) -> Path:
         )
 
         def write(directory: Path) -> None:
+            if training:
+                (directory / TRAINING).write_text(
+                    json.dumps(training, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+                )
             files: dict[str, list[object]] = {PREDICTIONS: list(predictions)}
             if trial == "E00":
                 files[RAW] = list(candidates)
@@ -195,6 +260,8 @@ def run(trial: str, run_id: str, baseline: str, path: Path) -> Path:
                 (directory / name).write_text(
                     json.dumps(payload, allow_nan=False), encoding="utf-8"
                 )
+                if name != PREDICTIONS:
+                    read_rows(directory / name, rows, folds, kind="raw")
 
         return publish_gated_cv(
             store, reservation, record, write, source=spec, before_training=start, assess=assess

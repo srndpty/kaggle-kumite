@@ -1,10 +1,12 @@
 """Mask R-CNN の学習と画像単位推論。"""
 
+from hashlib import sha256
 from pathlib import Path
 from typing import NotRequired, TypedDict
 
 import numpy as np
 import torch
+import torchvision
 from data import SEED, Image
 from masks import encode, pixels
 from PIL import Image as PillowImage
@@ -96,12 +98,43 @@ def build(config: Settings, pretrained: bool) -> MaskRCNN:
     return model
 
 
+def environment(device: torch.device) -> dict[str, object]:
+    return {
+        "torch": str(torch.__version__),
+        "torchvision": torchvision.__version__,
+        "cuda": torch.version.cuda,
+        "cudnn": torch.backends.cudnn.version(),
+        "device": str(device),
+        "gpu": torch.cuda.get_device_name(device) if device.type == "cuda" else None,
+        "deterministic_algorithms": torch.are_deterministic_algorithms_enabled(),
+        "cudnn_benchmark": torch.backends.cudnn.benchmark,
+        "cudnn_deterministic": torch.backends.cudnn.deterministic,
+    }
+
+
+def weights_hash(model: MaskRCNN) -> str:
+    digest = sha256()
+    for name, tensor in sorted(model.state_dict().items()):
+        digest.update(repr((name, str(tensor.dtype), tuple(tensor.shape))).encode() + b"\n")
+        digest.update(
+            tensor.detach().cpu().contiguous().reshape(-1).view(torch.uint8).numpy().tobytes()
+        )
+    return digest.hexdigest()
+
+
 def fit(
-    rows: list[Image], config: Settings, device: torch.device, *, smoke: bool = False
+    rows: list[Image],
+    config: Settings,
+    device: torch.device,
+    *,
+    smoke: bool = False,
+    evidence: dict[str, object] | None = None,
 ) -> MaskRCNN:
     torch.manual_seed(SEED)
     rng = np.random.default_rng(SEED)
     model = build(config, pretrained=True).to(device)
+    if evidence is not None:
+        evidence.update(environment(device), initial_weights_sha256=weights_hash(model))
     optimizer = torch.optim.SGD(
         (parameter for parameter in model.parameters() if parameter.requires_grad),
         lr=config["learning_rate"],
@@ -135,6 +168,8 @@ def fit(
                 break
         schedule.step()
         print(f"epoch {epoch + 1} 完了", flush=True)
+    if evidence is not None:
+        evidence["trained_weights_sha256"] = weights_hash(model)
     return model
 
 

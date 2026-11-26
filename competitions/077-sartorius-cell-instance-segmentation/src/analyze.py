@@ -4,7 +4,6 @@ import argparse
 from collections import defaultdict
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import cast
 
 import numpy as np
 from data import ROOT, dataset
@@ -41,9 +40,7 @@ def analyze(run_id: str, output: Path) -> None:
     store = RunStore(ROOT)
     verify_cv_run(store, run_id, assess)
     rows, folds, _, _ = dataset()
-    predictions = cast(
-        "list[list[str]]", read_rows(store.artifact_path(run_id, PREDICTIONS), rows, folds)
-    )
+    predictions = read_rows(store.artifact_path(run_id, PREDICTIONS), rows, folds)
     counts: defaultdict[tuple[str, str], Counts] = defaultdict(Counts)
     scores: defaultdict[tuple[str, str], list[float]] = defaultdict(list)
     for row, prediction in zip(rows, predictions, strict=True):

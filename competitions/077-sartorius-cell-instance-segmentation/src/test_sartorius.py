@@ -12,6 +12,7 @@ from data import Image, dataset
 from export import NOTEBOOK, WEIGHTS, validate, write_notebook
 from masks import disjoint, encode, image_score, ious, pixels
 from model import build, settings
+from PIL import Image as PillowImage
 from torchvision.models.detection import MaskRCNN
 from train import read_rows
 
@@ -96,20 +97,87 @@ def test_group_split_and_oof_coverage(tmp_path: Path) -> None:
         read_rows(path, rows, folds)
 
 
-def test_offline_notebook_structure(tmp_path: Path) -> None:
-    (tmp_path / WEIGHTS).write_bytes(b"weights")
-    write_notebook(tmp_path, "owner", "owner/model", settings("E03"))
-    validate(tmp_path)
-    notebook = json.loads((tmp_path / NOTEBOOK).read_text(encoding="utf-8"))
+@pytest.mark.parametrize(
+    "masks",
+    [
+        [[float("nan"), "1 1"]],
+        [[float("inf"), "1 1"]],
+        [[1.01, "1 1"]],
+        [[-0.1, "1 1"]],
+        [[True, "1 1"]],
+        [[0.5]],
+        [[0.5, 123]],
+        [[0.5, "6 2"]],
+        [[0.5, "3 1 1 1"]],
+        [[0.5, "1 2"], [0.4, "1 1 2 1"]],
+    ],
+)
+def test_invalid_raw_candidate(tmp_path: Path, masks: object) -> None:
+    path = tmp_path / "raw.json"
+    path.write_text(json.dumps([{"id": "image", "fold": 0, "masks": masks}]), encoding="utf-8")
+    rows = [Image("image", path, 3, 2, "cell", "sample", [])]
+    with pytest.raises(ValueError, match="OOF"):
+        read_rows(path, rows, [0], kind="raw")
+
+
+@pytest.mark.parametrize("fold", [1, False, "0"])
+def test_wrong_oof_fold(tmp_path: Path, fold: object) -> None:
+    path = tmp_path / "oof.json"
+    path.write_text(json.dumps([{"id": "image", "fold": fold, "masks": []}]), encoding="utf-8")
+    with pytest.raises(ValueError, match="OOF"):
+        read_rows(path, [Image("image", path, 3, 2, "cell", "sample", [])], [0])
+
+
+def test_offline_notebook_inference(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    previous_threads = torch.get_num_threads()
+    torch.set_num_threads(1)
+    try:
+        check_notebook_inference(tmp_path, monkeypatch)
+    finally:
+        torch.set_num_threads(previous_threads)
+
+
+def check_notebook_inference(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    root = tmp_path / "input"
+    test = root / "sartorius-cell-instance-segmentation" / "test"
+    test.mkdir(parents=True)
+    image = test / "fixed.png"
+    PillowImage.fromarray(np.arange(64 * 80, dtype=np.uint8).reshape(64, 80)).save(image)
+    weights = root / "model"
+    weights.mkdir()
+    device = torch.device("cpu")
+    config = settings("E03")
+    config.update(min_size=64, max_size=80, detections=5, score_threshold=0.0, mask_threshold=0.25)
+    with torch.random.fork_rng(devices=[]):
+        torch.manual_seed(42)
+        detector = build(config, pretrained=False)
+    expected = model.predict(detector, image, config, device)
+    assert expected
+    torch.save(detector.state_dict(), weights / WEIGHTS)
+    reloaded = build(config, pretrained=False)
+    reloaded.load_state_dict(torch.load(weights / WEIGHTS, map_location=device, weights_only=True))
+    assert model.weights_hash(detector) == model.weights_hash(reloaded)
+    assert model.predict(reloaded, image, config, device) == expected
+    write_notebook(weights, "owner", "owner/model", config)
+    validate(weights)
+    notebook = json.loads((weights / NOTEBOOK).read_text(encoding="utf-8"))
+    monkeypatch.chdir(tmp_path)
     namespace: dict[str, object] = {}
-    for cell in notebook["cells"][:-1]:
-        exec(cell["source"], namespace)
-    model = build(settings("E00"), pretrained=False)
-    assert model.backbone.get_submodule("body.bn1").eps == 0
+    for cell in notebook["cells"]:
+        code = cell["source"].replace('"/kaggle/input"', repr(str(root)))
+        exec(code.replace('torch.device("cuda")', 'torch.device("cpu")'), namespace)
+    actual = eval("predict(model, paths[0], config, device)", namespace)
+    assert actual == expected
+    with (tmp_path / "submission.csv").open(newline="", encoding="utf-8") as stream:
+        assert list(csv.reader(stream)) == [
+            ["id", "predicted"],
+            *[["fixed", rle] for rle in disjoint(expected, 64 * 80, config["retain"])],
+        ]
 
 
-def test_export_rejects_changed_oof_before_training(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("change", ["oof", "export_source", None])
+def test_export_checks_oof_and_seals_export_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change: str | None
 ) -> None:
     path = tmp_path / "selection.toml"
     path.write_text('candidates = ["E00"]\ntolerance = 0.001\n', encoding="utf-8")
@@ -120,22 +188,41 @@ def test_export_rejects_changed_oof_before_training(
     monkeypatch.setattr(train, "RunStore", lambda *_: store)
     monkeypatch.setattr(train, "dataset", lambda: (rows, [0, 1, 2], "data", "split"))
     monkeypatch.setattr(train, "source", lambda *_: spec)
-    monkeypatch.setattr(train, "fit", lambda *_: object())
+    monkeypatch.setattr(train, "fit", lambda *_, **__: object())
     monkeypatch.setattr(train, "predict", lambda *_: [(0.9, "1 1")])
     run_path = train.run("E00", "E00", "E00", path)
     selection_plan = train.plan(path)
     receipt = tmp_path / "selection.json"
     write_selection(receipt, select_runs(store, selection_plan, train.assess))
-    (run_path / train.PREDICTIONS).write_text("[]", encoding="utf-8")
-    with pytest.raises(ValueError):
-        publish_export(
+    entry = tmp_path / "export.py"
+    entry.write_text("VERSION = 1\n", encoding="utf-8")
+    if change == "oof":
+        (run_path / train.PREDICTIONS).write_text("[]", encoding="utf-8")
+
+    def write(directory: Path, _: object) -> None:
+        if change == "oof":
+            pytest.fail("改変された成果物で最終学習を開始しました")
+        (directory / WEIGHTS).write_bytes(b"weights")
+        if change == "export_source":
+            entry.write_text("VERSION = 2\n", encoding="utf-8")
+
+    def publish() -> Path:
+        return publish_export(
             store,
             "F00",
             plan=selection_plan,
             receipt=receipt,
             assess=train.assess,
             source=spec,
-            write=lambda *_: pytest.fail("改変された成果物で最終学習を開始しました"),
+            write=write,
             required_outputs=(WEIGHTS,),
             validate_outputs=lambda _: None,
+            export_files=("export.py",),
         )
+
+    if change is not None:
+        with pytest.raises(ValueError):
+            publish()
+    else:
+        evidence = json.loads((publish() / "export_evidence.json").read_text(encoding="utf-8"))
+        assert set(json.loads(evidence["source"])["files"]) == {"selection.toml", "export.py"}

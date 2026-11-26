@@ -65,6 +65,8 @@ F00 は S00 の構成で全量学習し、2026-11-27 に Notebook v1 を提出�
 
 リポジトリルートから実行する。
 
+以下の ID は実施時の例。レビュー後のソースで学習や export をやり直す場合は、新しい run ID を指定して比較計画を事前登録し、新しい export ID を使う。
+
 ```powershell
 $d = "competitions/077-sartorius-cell-instance-segmentation"
 uv run python "$d/src/train.py" smoke

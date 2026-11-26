@@ -47,4 +47,6 @@ LIVECell による事前学習、Cellpose とのアンサンブル、細胞種�
 
 ## 次のコンペに持ち越すこと
 
+レビュー後の新規学習では、PyTorch・torchvision・CUDA・cuDNN・GPU、決定性設定、初期と学習後のモデル状態の SHA-256 を `training_provenance.json` に記録する。CV 証跡には学習・採点の依存だけを含め、export 専用の Notebook 生成コードは export に封入する。既存 run・選定記録・F00 は当時の証跡を使用する。固定画像での CPU テストでは、保存前・再ロード後・Notebook の候補スコア、RLE、提出行の一致を確認した。既存の GPU 学習や外部採点は再実行していない。
+
 - [K057 重複除去で大きく削れたインスタンスを棄却する](../../knowledge/K057-instance-mask-retained-area.md)

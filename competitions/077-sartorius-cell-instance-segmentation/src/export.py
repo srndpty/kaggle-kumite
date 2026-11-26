@@ -5,9 +5,9 @@ import json
 from pathlib import Path
 
 import torch
-from data import ROOT, dataset
+from data import REPO, ROOT, dataset
 from model import Settings, fit
-from train import PLAN, RECEIPT, TRIALS, assess, plan, run_settings, source
+from train import PLAN, RECEIPT, TRAINING, TRIALS, assess, plan, run_settings, source
 
 from kumite.experiments import ExperimentRecord
 from kumite.provenance import file_sha256
@@ -18,7 +18,7 @@ SLUG = "sartorius-cell-instance-segmentation"
 WEIGHTS = "weights.pt"
 NOTEBOOK = "submit.ipynb"
 METADATA = "kernel-metadata.json"
-REQUIRED = (WEIGHTS, NOTEBOOK, METADATA)
+REQUIRED = (WEIGHTS, NOTEBOOK, METADATA, TRAINING)
 
 INFERENCE = """\
 import csv
@@ -160,7 +160,11 @@ def export(run_id: str, owner: str, dataset_slug: str, path: Path, receipt: Path
         rows, _, data_hash, split_hash = dataset()
         if (data_hash, split_hash) != (record.data_hash, record.split_hash):
             raise ValueError("最終学習のデータが選定済み CV と一致しません")
-        model = fit(rows, config, torch.device("cuda"))
+        evidence: dict[str, object] = {}
+        model = fit(rows, config, torch.device("cuda"), evidence=evidence)
+        (directory / TRAINING).write_text(
+            json.dumps(evidence, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
         torch.save(model.cpu().state_dict(), directory / WEIGHTS)
         write_notebook(directory, owner, dataset_slug, config)
 
@@ -174,6 +178,7 @@ def export(run_id: str, owner: str, dataset_slug: str, path: Path, receipt: Path
         write=write,
         required_outputs=REQUIRED,
         validate_outputs=validate,
+        export_files=(Path(__file__).resolve().relative_to(REPO).as_posix(),),
     )
 
 

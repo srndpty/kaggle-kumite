@@ -87,3 +87,4 @@
 | [K050](K050-candidate-count-vs-ranker.md) | 仮説 | #033 で候補を100→300件にすると Recall は約2倍だが MAP@12 −0.00182。教師の顧客を揃えると −0.00011 で、低下の大半は教師の変化に対応 |
 | [K051](K051-band-limit-waveform-classification.md) | 仮説 | #092 の 1D CNN で 25〜500 Hz の帯域制限を加えると OOF AUC 0.50067 → 0.72396 |
 | [K052](K052-multi-detector-waveform-input.md) | 仮説 | #092 の帯域制限・白色化した波形で、1 検出器から 3 検出器に増やすと OOF AUC 0.73009 → 0.78815 |
+| [K053](K053-upper-tail-waveform-amplitude.md) | 仮説 | #031 で絶対振幅の上位分位点を追加すると OOF MAE −0.05967、残り 0〜2 秒の窓では −0.18771 |

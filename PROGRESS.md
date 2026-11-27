@@ -9,11 +9,11 @@
 
 | 状態 | 件数 |
 |---|---:|
-| 完了 | 47 |
+| 完了 | 48 |
 | 実装・学習完了、外部評価未達 | 1 |
 | P0 で中断 | 1 |
 | 差し替え | 1 |
-| 未着手 | 50 |
+| 未着手 | 49 |
 | **合計** | **100** |
 
 完了は個別の進捗チェックリストを終えたコンペを指す。#091 は外部評価未達のため、完了件数から除く。
@@ -71,7 +71,7 @@
 | 037 | [Shopee - Price Match Guarantee](competitions/037-shopee-product-matching/README.md) | 完了 | E04 の Late Private F1 0.638。 |
 | 038 | Google Landmark Retrieval 2020 | 未着手 | — |
 | 039 | Google Landmark Recognition 2020 | 未着手 | — |
-| 040 | OTTO – Multi-Objective Recommender System | 未着手 | — |
+| 040 | [OTTO – Multi-Objective Recommender System](competitions/040-otto-recommender-system/README.md) | 完了 | E02-final の OOF 加重 Recall@20 0.48643、F00 の Late Private 0.49002。 |
 
 ## D. NLP・LLM（18）
 

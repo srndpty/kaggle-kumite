@@ -35,6 +35,7 @@ TRIALS = {
     "E01": ("bigram", "語の組み合わせが phraseology と syntax を改善する"),
     "E02": ("char", "語形や句読点が conventions と grammar を改善する"),
     "E03": ("length", "文章量と文構造が cohesion を改善する"),
+    "E04": ("rbf", "語彙の非線形な類似度で MCRMSE が改善する"),
 }
 
 
@@ -114,7 +115,13 @@ def run(trial: str, run_id: str, plan_file: Path) -> None:
             store,
             reservation,
             evaluation,
-            Trial(hypothesis, block, "TF-IDF Ridge", "official-v1", {"block": block}),
+            Trial(
+                hypothesis,
+                block,
+                "TF-IDF RBF KernelRidge" if block == "rbf" else "TF-IDF Ridge",
+                "official-v1",
+                {"block": block},
+            ),
             labels,
             splits,
             result,

@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 from scipy.sparse import csr_matrix, hstack
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.kernel_ridge import KernelRidge
 from sklearn.linear_model import Ridge
 from sklearn.preprocessing import StandardScaler
 
@@ -64,10 +65,18 @@ def fit_model(texts: list[str], labels: np.ndarray, block: str):
             blocks.append(csr_matrix(scaler.transform(length_features(rows))))
         return hstack(blocks, format="csr")
 
-    ridge = Ridge(alpha=1.0, solver="lsqr").fit(features(texts), labels)
+    ridge = (
+        KernelRidge(alpha=1, kernel="rbf", gamma=1.0)
+        if block == "rbf"
+        else Ridge(alpha=1.0, solver="lsqr")
+    )
+    train_features = features(texts)
+    # KernelRidge にも Ridge と同じ訓練平均の切片を与える。
+    offset = labels.mean(axis=0) if block == "rbf" else 0.0
+    ridge.fit(train_features, labels - offset)
 
     def predict(rows: list[str]) -> np.ndarray:
-        result = np.asarray(ridge.predict(features(rows)), dtype=float)
+        result = np.asarray(ridge.predict(features(rows)), dtype=float) + offset
         if result.shape != (len(rows), len(TARGETS)) or not np.isfinite(result).all():
             raise ValueError("予測の形状または値が不正です")
         return np.clip(result, 1.0, 5.0)

@@ -22,3 +22,11 @@
 | E03 | E00 に語数・文字数・文数・平均文長・異なり語率・句読点率を追加 | cohesion の RMSE が低下 |
 
 候補の優先順は E00、E03、E01、E02。実質同点は MCRMSE 0.001 以内。P4 の完了後に上位解法を確認する。
+
+## P5–P6　上位解法と追加仮説
+
+- １位チームの公開実装は Transformer を多数学習し、過去データの擬似ラベルも使った。 [公開コード](https://github.com/rohitsingh02/kaggle-feedback-english-language-learning-1st-place-solution)
+- ５位の本人解説では、複数のモデル・プーリングに加え、評価軸ごとのアンサンブル重みを検証した。 [本人の解法解説](https://www.kaggle.com/competitions/feedback-prize-english-language-learning/writeups/psi-5th-place-solution)
+- 効率部門17位チームは、擬似ラベルで小型モデルを学習し、教師側では埋め込みに RBF Kernel Ridge などを使った。 [本人の解法解説](https://www.kaggle.com/competitions/feedback-prize-english-language-learning/writeups/pdsg-efficiency-17th-place-solution)
+
+E04 は効率部門の教師モデルから非線形回帰の着眼点を取り出し、E00 と同じ単語 unigram TF-IDF に RBF Kernel Ridge（alpha 1、gamma 1）を適用する。非線形な語彙類似度によって MCRMSE が下がると予想する。最終選定では４件を再実行し、同じ計画ハッシュの E04 と比較する。

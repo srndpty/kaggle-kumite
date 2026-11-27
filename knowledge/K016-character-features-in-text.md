@@ -21,6 +21,8 @@ seed43でもfold平均macro AUCは0.979964→0.985175（+0.005211）。2つの�
 
 #046 Quora の質問分類では、単語 unigram の E01 に文字 3〜5-gram を加えた E02 の OOF F1 が 0.60346 → 0.62319 に上がった。単語語彙のカバー率が 100% の行でも誤検出は 38,324 → 34,364 件に減った。
 
+#053 の英文エッセイ６軸回帰では、単語 unigram TF-IDF と Ridge に文字 3〜5-gram を追加すると、OOF MCRMSE が 0.547784 から 0.539892 へ下がった。単語 bigram の追加でも 0.539894 まで下がり、両者を実質同点とした。語数中央値 402 の文章で、各 TF-IDF ブロックは学習 fold だけで適合した。
+
 ## 適用条件
 
 英語のWikipediaコメント・6ラベル分類。文面重複をグループ化した多ラベル層化3分割。語彙・IDFは学習foldのみでfit。min_df=3、単語最大10万・文字最大15万、sublinear_tf、各行列のL2正規化、LRのC=1。
@@ -50,3 +52,4 @@ seed43でもfold平均macro AUCは0.979964→0.985175（+0.005211）。2つの�
 | [#049 CommonLit Readability Prize](../competitions/049-commonlitreadabilityprize/report.md) | E01 → E02 | OOF RMSE −0.02445、グループ単位の95%区間 [−0.02987, −0.01947] |
 | [#046 Quora Insincere Questions](../competitions/046-quora-insincere-questions-classification/report.md) | E01 → E02 | OOF F1 +0.01973、文面グループ単位の 95% 区間 [+0.01813, +0.02132] |
 | [#047 Google QUEST](../competitions/047-google-quest-challenge/report.md) | B00 → E02 | 結合した質問・回答テキストへの文字 3–5 gram 追加で OOF 平均 Spearman 0.29164 → 0.29677 |
+| [#053 Feedback Prize – English Language Learning](../competitions/053-feedback-prize-english-language-learning/report.md) | E00 → E02 | OOF MCRMSE −0.007892、本文グループ単位の95%区間 [−0.010071, −0.005663] |

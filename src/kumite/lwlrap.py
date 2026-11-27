@@ -15,7 +15,8 @@ def positive_precisions(
     # 公式参照実装と同じ降順ソートで同点も処理する。
     order = np.argsort(scores, axis=1)[:, ::-1]
     ranked = np.take_along_axis(labels, order, axis=1)
-    precision = np.cumsum(ranked, axis=1) / np.arange(1, labels.shape[1] + 1)
+    cumulative = np.asarray(np.cumsum(ranked, axis=1), dtype=np.float64)
+    precision = cumulative / np.arange(1, labels.shape[1] + 1, dtype=np.float64)
     values = np.empty_like(scores)
     np.put_along_axis(values, order, precision * ranked, axis=1)
     return values

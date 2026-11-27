@@ -6,10 +6,10 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from metric import lwlrap, positive_precisions
 from train import ROOT
 
 from kumite.crossfit import folds_to_splits
+from kumite.lwlrap import lwlrap, positive_precisions
 from kumite.runs import RunStore
 
 CANDIDATES = ("E01", "E02", "E03", "E04", "E05")

@@ -1,7 +1,8 @@
 import numpy as np
 import pytest
-from metric import lwlrap
 from sklearn.metrics import label_ranking_average_precision_score
+
+from kumite.lwlrap import lwlrap
 
 
 def test_lwlrap_weights_positive_labels_equally() -> None:

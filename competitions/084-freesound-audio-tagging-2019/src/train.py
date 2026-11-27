@@ -17,11 +17,11 @@ from dataset import (
     split_groups,
     targets,
 )
-from metric import lwlrap
 from model import Tagger, fit, predict
 
 from kumite.crossfit import CrossFitResult
 from kumite.cv_run import Evaluation, Trial, publish_cv_run
+from kumite.lwlrap import lwlrap
 from kumite.provenance import array_sha256
 from kumite.runs import RunStore
 

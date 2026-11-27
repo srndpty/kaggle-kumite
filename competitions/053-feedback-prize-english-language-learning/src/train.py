@@ -7,7 +7,7 @@ from time import perf_counter
 
 import numpy as np
 import pandas as pd
-from model import TARGETS, duplicate_key, fit_model, read_essays
+from model import TARGETS, duplicate_key, fit_model, read_essays, validate_labels
 from sklearn.model_selection import StratifiedGroupKFold
 
 from kumite.crossfit import FoldOutput, cross_fit_splits, split_roles
@@ -40,9 +40,21 @@ TRIALS = {
 
 
 def mcrmse(labels: np.ndarray, predicted: np.ndarray) -> float:
-    if predicted.shape != labels.shape or labels.ndim != 2 or labels.shape[1] != len(TARGETS):
-        raise ValueError("６列の予測と正解が必要です")
-    return float(np.sqrt(np.mean(np.square(labels - predicted), axis=0)).mean())
+    if (
+        predicted.shape != labels.shape
+        or labels.ndim != 2
+        or labels.shape[1] != len(TARGETS)
+        or len(labels) == 0
+    ):
+        raise ValueError("空でない６列の予測と正解が必要です")
+    for values in (labels, predicted):
+        if values.dtype.kind not in "iuf" or not np.isfinite(values).all():
+            raise ValueError("採点には有限な実数が必要です")
+    errors = labels.astype(np.float64, copy=False) - predicted.astype(np.float64, copy=False)
+    score = float(np.sqrt(np.mean(np.square(errors), axis=0)).mean())
+    if not np.isfinite(score):
+        raise ValueError("MCRMSE が非有限値になりました")
+    return score
 
 
 def load_cv():
@@ -50,8 +62,7 @@ def load_cv():
     train = read_essays(path)
     texts = train["full_text"].fillna("").tolist()
     labels = train[list(TARGETS)].to_numpy(dtype=float)
-    if not (np.isfinite(labels) & (labels >= 1) & (labels <= 5)).all():
-        raise ValueError("得点の欠損または範囲外の値があります")
+    validate_labels(labels, len(texts))
     groups = np.asarray([duplicate_key(text) for text in texts])
     bins = pd.qcut(labels.mean(axis=1), 5, labels=False)
     splitter = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=SEED)

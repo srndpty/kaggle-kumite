@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
+from model import SLUG
 from train import COMP, TRIALS, load_cv, mcrmse, read_plan, source_spec
 
 from kumite.kaggle_notebook import write_cpu_notebook
@@ -16,6 +17,50 @@ from kumite.quality_gates import (
     write_selection,
 )
 from kumite.runs import RunStore
+
+
+def write_notebook(
+    output: Path,
+    block: str,
+    kernel: str,
+    *,
+    input_root: Path = Path("/kaggle/input"),
+    submission: Path = Path("/kaggle/working/submission.csv"),
+) -> str:
+    code = (COMP / "src" / "model.py").read_text(encoding="utf-8")
+    code += (
+        "\nnp.seterr(invalid='raise')\n"
+        f"root, = (p.parent for p in Path({input_root.as_posix()!r}).rglob('train.csv') "
+        "if p.parent.name == SLUG)\n"
+        f"write_submission(root, Path({submission.as_posix()!r}), {block!r})\n"
+    )
+    write_cpu_notebook(output, code, kernel_id=kernel, title=kernel.split("/")[1], competition=SLUG)
+    return code
+
+
+def validate_notebook(output: Path, code: str, kernel: str) -> str:
+    notebook = json.loads((output / "submit.ipynb").read_text(encoding="utf-8"))
+    metadata = json.loads((output / "kernel-metadata.json").read_text(encoding="utf-8"))
+    cells = notebook["cells"]
+    if len(cells) != 1 or cells[0]["cell_type"] != "code":
+        raise ValueError("Notebook のセル構成が不正です")
+    actual_code = "".join(cells[0]["source"])
+    expected_metadata = {
+        "id": kernel,
+        "code_file": "submit.ipynb",
+        "language": "python",
+        "kernel_type": "notebook",
+        "competition_sources": [SLUG],
+        "is_private": True,
+        "enable_internet": False,
+        "enable_gpu": False,
+    }
+    if actual_code != code or any(
+        metadata.get(key) != value for key, value in expected_metadata.items()
+    ):
+        raise ValueError("Notebook のコードまたは実行設定が不正です")
+    compile(actual_code, "submit.ipynb", "exec")
+    return actual_code
 
 
 def main() -> None:
@@ -42,28 +87,15 @@ def main() -> None:
         parser.error("export requires --owner and --export-id")
     selection = verify_selection(store, plan, args.receipt, assess)
     block = TRIALS[selection.winner.split("-")[0]][0]
-    code = (COMP / "src" / "model.py").read_text(encoding="utf-8")
-    code += (
-        "\nnp.seterr(invalid='raise')\n"
-        "root, = (p.parent for p in Path('/kaggle/input').rglob('train.csv') "
-        "if p.parent.name == SLUG)\n"
-        f"write_submission(root, Path('/kaggle/working/submission.csv'), {block!r})\n"
-    )
     kernel = f"{args.owner}/kumite-ell-{args.export_id.lower()}"
-    slug = "feedback-prize-english-language-learning"
+    code = ""
 
     def write(output: Path, _winner: object) -> None:
-        write_cpu_notebook(
-            output, code, kernel_id=kernel, title=kernel.split("/")[1], competition=slug
-        )
+        nonlocal code
+        code = write_notebook(output, block, kernel)
 
     def validate(output: Path) -> None:
-        notebook = json.loads((output / "submit.ipynb").read_text(encoding="utf-8"))
-        metadata = json.loads((output / "kernel-metadata.json").read_text(encoding="utf-8"))
-        actual_code = "".join(notebook["cells"][0]["source"])
-        if actual_code != code or metadata["competition_sources"] != [slug]:
-            raise ValueError("Notebook のコードまたはコンペ参照が不正です")
-        compile(actual_code, "submit.ipynb", "exec")
+        validate_notebook(output, code, kernel)
 
     print(
         publish_export(

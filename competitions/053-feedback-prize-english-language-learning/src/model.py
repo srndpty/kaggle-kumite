@@ -47,7 +47,19 @@ def length_features(texts: list[str]) -> np.ndarray:
     return np.asarray(rows, dtype=float)
 
 
+def validate_labels(labels: np.ndarray, n_rows: int) -> None:
+    if n_rows == 0 or labels.shape != (n_rows, len(TARGETS)):
+        raise ValueError("学習ラベルは空でない６列で、本文と同じ行数が必要です")
+    if labels.dtype.kind not in "iuf" or not np.isfinite(labels).all():
+        raise ValueError("学習ラベルには有限な実数が必要です")
+    if not ((labels >= 1) & (labels <= 5)).all():
+        raise ValueError("学習ラベルは [1, 5] の範囲が必要です")
+
+
 def fit_model(texts: list[str], labels: np.ndarray, block: str):
+    validate_labels(labels, len(texts))
+    if block not in {"base", "bigram", "char", "length", "rbf"}:
+        raise ValueError(f"未知の特徴量設定: {block}")
     vectorizers = [TfidfVectorizer(ngram_range=(1, 1), min_df=2, dtype=np.float64)]
     if block == "bigram":
         vectorizers.append(TfidfVectorizer(ngram_range=(2, 2), min_df=2, dtype=np.float64))

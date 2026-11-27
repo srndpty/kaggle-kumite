@@ -53,3 +53,5 @@ uv run python "$d/src/export.py" export "$d/outputs/final-selection.json" --plan
 ```
 
 公開済み export 内の Notebook を Kaggle に登録し、実行完了後にその版の `submission.csv` を Code Competition の提出入口から採点する。
+
+記録済みの run と export はコミット `627fe8f` 時点のソースに対応する。レビュー後のコードで書き出す場合は、新しい候補計画と run ID で CV を実行し直してから選定・export する。

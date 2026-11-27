@@ -4,6 +4,8 @@
 
 [公式概要](https://www.kaggle.com/competitions/feedback-prize-english-language-learning/overview)
 
+P0〜P8 完了。単語 bigram を追加した E01-final の OOF MCRMSE は 0.539894、Late Private は 0.526206。６軸別の比較と外部評価は [レポート](report.md) に記録した。
+
 ## P0–P2　採点と検証
 
 訓練平均のダミー Notebook は Late Submission で採点された。Public 0.618673、Private 0.644705。疎通の確認に使用した。
@@ -30,3 +32,24 @@
 - 効率部門17位チームは、擬似ラベルで小型モデルを学習し、教師側では埋め込みに RBF Kernel Ridge などを使った。 [本人の解法解説](https://www.kaggle.com/competitions/feedback-prize-english-language-learning/writeups/pdsg-efficiency-17th-place-solution)
 
 E04 は効率部門の教師モデルから非線形回帰の着眼点を取り出し、E00 と同じ単語 unigram TF-IDF に RBF Kernel Ridge（alpha 1、gamma 1）を適用する。非線形な語彙類似度によって MCRMSE が下がると予想する。最終選定では４件を再実行し、同じ計画ハッシュの E04 と比較する。
+
+## 再現手順
+
+リポジトリのルートで実行する。初回の `selection-plan.json` は E00〜E03、`selection-plan-baseline.json` は外部評価用の E00-external、`selection-plan-final.json` は P7 選定用。再実行時は新しい run ID を指定し、比較候補の計画を事前に固定する。
+
+```powershell
+$d = 'competitions/053-feedback-prize-english-language-learning'
+$env:OPENBLAS_NUM_THREADS = '1'
+$env:OMP_NUM_THREADS = '1'
+$plan = "$d/selection-plan-final.json"
+$owner = 'Kaggleのユーザー名'
+foreach ($trial in 'E00','E01','E02','E03','E04') {
+    uv run python "$d/src/train.py" $trial --run-id "$trial-final" --plan $plan
+    if ($LASTEXITCODE -ne 0) { throw "CV に失敗: $trial" }
+}
+uv run python "$d/src/compare.py" E00-final E01-final E02-final E03-final E04-final
+uv run python "$d/src/export.py" select "$d/outputs/final-selection.json" --plan $plan
+uv run python "$d/src/export.py" export "$d/outputs/final-selection.json" --plan $plan --owner $owner --export-id final
+```
+
+公開済み export 内の Notebook を Kaggle に登録し、実行完了後にその版の `submission.csv` を Code Competition の提出入口から採点する。

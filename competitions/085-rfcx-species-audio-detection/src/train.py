@@ -39,6 +39,7 @@ TRIALS = {
     "E01": (True, WINDOW, 1, "誤検出を種別の負例として使うと種の順位が改善する"),
     "E02": (False, WINDOW // 2, 1, "重複走査は短い鳴き声の順位を改善する"),
     "E03": (False, WINDOW, 3, "上位３窓平均で単発誤検出の影響を抑えられる"),
+    "E04": (False, WINDOW, 1, "周波数位置を明示すると種の順位が改善する"),
 }
 SHARED = (
     "__init__",
@@ -117,7 +118,13 @@ def source(plan_file: Path, trial: str) -> SourceSpec:
             "pyproject.toml",
             "uv.lock",
         ),
-        {"trial": trial, "config": list(TRIALS[trial][:3]), "updates": UPDATES, "seed": SEED},
+        {
+            "trial": trial,
+            "config": list(TRIALS[trial][:3]),
+            "updates": UPDATES,
+            "seed": SEED,
+            "frequency_position": trial == "E04",
+        },
         import_roots=("src", (COMP / "src").relative_to(REPO_ROOT).as_posix()),
     )
 
@@ -169,7 +176,7 @@ def run(
 
     def fit_fold(train: np.ndarray, valid: np.ndarray) -> FoldOutput:
         pools = training_examples(keys, lengths, train, true, false, SEED, hard)
-        network = fit(paths, pools, UPDATES, SEED, device)
+        network = fit(paths, pools, UPDATES, SEED, device, frequency_position=trial == "E04")
         valid_scores = np.stack([predict(network, paths[i], hop, top, device) for i in valid])
         query_scores = np.stack([predict(network, path, hop, top, device) for path in query])
         check_scores(valid_scores, len(valid))

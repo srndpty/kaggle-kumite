@@ -13,8 +13,22 @@ from kumite.audio import Features, SmallCNN
 BATCH = 16
 
 
-def model() -> nn.Sequential:
-    return nn.Sequential(Features(rate=RATE, bands=64), SmallCNN(len(SPECIES)))
+class FrequencyPosition(nn.Module):
+    """各 mel ビンに固定の周波数位置を加える。"""
+
+    offset: torch.Tensor
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.register_buffer("offset", torch.linspace(-0.5, 0.5, 64).reshape(1, 1, 64, 1))
+
+    def forward(self, features: torch.Tensor) -> torch.Tensor:
+        return features + self.offset
+
+
+def model(frequency_position: bool) -> nn.Sequential:
+    position = FrequencyPosition() if frequency_position else nn.Identity()
+    return nn.Sequential(Features(rate=RATE, bands=64), position, SmallCNN(len(SPECIES)))
 
 
 def read_crop(path: Path, start: int) -> np.ndarray:
@@ -32,12 +46,14 @@ def fit(
     updates: int,
     seed: int,
     device: torch.device,
+    *,
+    frequency_position: bool,
 ) -> nn.Sequential:
     rng = np.random.default_rng(seed)
     negative_rng = np.random.default_rng(seed + 1)
     torch.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
-    network = model().to(device)
+    network = model(frequency_position).to(device)
     optimizer = torch.optim.AdamW(network.parameters(), lr=0.001, weight_decay=0.0001)
     positive, background, hard = pools
     for _ in range(updates):

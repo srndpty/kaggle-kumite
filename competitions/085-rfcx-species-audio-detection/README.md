@@ -2,6 +2,8 @@
 
 深さは Standard。熱帯雨林の録音を入力とし、鳥・カエル24種の出現を録音単位で予測する。公式の主指標は lwlrap。
 
+P0〜P8 完了。最終モデルは E00-final、OOF lwlrap は 0.347081、Kaggle Late Private は 0.42966。実験の内訳と外部評価は [レポート](report.md) に記録した。
+
 [公式概要](https://www.kaggle.com/competitions/rfcx-species-audio-detection/overview) · [公式データ](https://www.kaggle.com/competitions/rfcx-species-audio-detection/data)
 
 ## 採点と検証
@@ -22,6 +24,7 @@ P0 の seed 42 ダミー提出は Public 0.26175、Private 0.25054。公式フ�
 | E01 | 背景窓の半数を、同じ種の真陽性と重ならない誤検出窓に置換 | 紛らわしい音による順位の誤りが減る |
 | E02 | 推論間隔を2.5秒に変更 | 境界をまたぐ短いイベントで改善する |
 | E03 | 窓上位３件の平均で集約 | 単発誤検出を抑え、短いイベントでは悪化し得る |
+| E04 | log-mel の周波数軸に固定オフセットを追加（P6） | 周波数位置の手掛かりで種の順位が改善する |
 
 学習は各 fold で800更新、バッチ16、AdamW、seed 42。真陽性窓では注釈された種のみに損失を課す。背景・誤検出の１窓あたりの総負例重みは0.25とし、誤検出窓では注釈対象種だけに割り当てる。E01 でも正例抽出の乱数列と正例・負例のバッチ件数は同じ。
 
@@ -45,4 +48,4 @@ uv run python "$d/src/compare.py" E00 E01 E02 E03
 uv run python "$d/src/train.py" select --receipt "$d/outputs/p4-selection.json"
 ```
 
-外部評価用のベースラインは `selection-plan-baseline.json` で E00 を E00-external として実行し、単独で選定する。最終候補は P5 の後に別の事前計画へ登録し、全候補に新しい run ID を使う。選定後に `export --plan <事前計画> --receipt <選定記録> --run-id <export ID>` を使い、Quality Gate が照合した fold 平均のテスト予測から提出 CSV を生成する。
+外部評価用のベースラインは `selection-plan-baseline.json` で E00 を E00-external として実行し、単独で選定する。最終比較では `--plan "$d/selection-plan-final.json"` を指定し、E00〜E04 をそれぞれ `E00-final`〜`E04-final` として実行する。選定後に `export --plan <事前計画> --receipt <選定記録> --run-id <export ID>` を使い、Quality Gate が照合した fold 平均のテスト予測から提出 CSV を生成する。

@@ -7,9 +7,11 @@ import numpy as np
 import pandas as pd
 import pytest
 import train as training
-from export import validate_notebook, write_notebook
+from export import write_notebook
 from model import SLUG, TARGETS, duplicate_key, fit_model, write_submission
 from train import mcrmse
+
+from kumite.kaggle_notebook import validate_cpu_notebook
 
 
 def test_mcrmse_averages_column_roots() -> None:
@@ -127,7 +129,9 @@ def test_generated_notebook_matches_local_inference(tmp_path: Path, submission_d
     code = write_notebook(
         notebook, "bigram", kernel, input_root=tmp_path / "input", submission=submission
     )
-    actual_code = validate_notebook(notebook, code, kernel)
+    actual_code = validate_cpu_notebook(
+        notebook, code, kernel_id=kernel, title=kernel.split("/")[1], competition=SLUG
+    )
     subprocess.run([sys.executable, "-c", actual_code], check=True, cwd=working, timeout=60)
     local = tmp_path / "local.csv"
     write_submission(submission_data, local, "bigram")
@@ -145,4 +149,6 @@ def test_generated_notebook_matches_local_inference(tmp_path: Path, submission_d
     metadata["enable_internet"] = True
     metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
     with pytest.raises(ValueError, match="実行設定"):
-        validate_notebook(notebook, code, kernel)
+        validate_cpu_notebook(
+            notebook, code, kernel_id=kernel, title=kernel.split("/")[1], competition=SLUG
+        )

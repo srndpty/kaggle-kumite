@@ -11,6 +11,7 @@ import numpy.typing as npt
 import pandas as pd
 import soundfile
 
+from kumite.group_folds import multilabel_group_folds
 from kumite.provenance import array_sha256, files_sha256
 
 RATE = 16000
@@ -76,33 +77,7 @@ def targets(clips: list[Clip], tags: list[str]) -> npt.NDArray[np.bool_]:
 
 
 def split_groups(clips: list[Clip], labels: npt.NDArray[np.bool_]) -> npt.NDArray[np.int64]:
-    groups: dict[str, list[int]] = {}
-    for i, clip in enumerate(clips):
-        groups.setdefault(clip.group, []).append(i)
-    if len(groups) < FOLDS:
-        raise ValueError("Too few independent curated groups")
-    rng = np.random.default_rng(SEED)
-    group_rows = list(groups.values())
-    members = [group_rows[i] for i in rng.permutation(len(groups))]
-    totals = labels.sum(axis=0).clip(min=1)
-    counts = [labels[group].sum(axis=0) for group in members]
-    order = sorted(range(len(members)), key=lambda i: -float((counts[i] / totals).sum()))
-    counts_per_fold = np.zeros((FOLDS, labels.shape[1]))
-    sizes = np.zeros(FOLDS)
-    folds = np.empty(len(clips), dtype=np.int64)
-    for i in order:
-        count = counts[i]
-        group = members[i]
-        # タグごとの正例数とクリップ総数の二乗偏差の増分を最小化する。
-        costs = ((2 * counts_per_fold + count) * count / totals**2).sum(axis=1)
-        costs += (2 * sizes + len(group)) * len(group) / len(clips) ** 2
-        fold = int(np.argmin(costs))
-        counts_per_fold[fold] += count
-        sizes[fold] += len(group)
-        folds[group] = fold
-    if not sizes.all():
-        raise ValueError("Empty validation fold")
-    return folds
+    return multilabel_group_folds([clip.group for clip in clips], labels, n_folds=FOLDS, seed=SEED)
 
 
 def eligible_noisy(noisy: list[Clip], validation: list[Clip]) -> list[Clip]:

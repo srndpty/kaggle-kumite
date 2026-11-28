@@ -93,3 +93,4 @@
 | [K056](K056-whitespace-bridging-for-spans.md) | 仮説 | #055 の文字区間抽出で、陽性トークン間の空白を補うと OOF micro-F1 が 0.76145 → 0.80106 |
 | [K057](K057-instance-mask-retained-area.md) | 仮説 | #077 で重複除去後に元面積の半分未満となった候補を棄却すると、OOF AP が 0.21658 → 0.23275。偽陽性 −8,136 件、偽陰性 +152 件 |
 | [K058](K058-negative-subsampling-for-rare-positives.md) | 仮説 | #069 の LightGBM は学習 fold の陽性対陰性を 1:5 にすると OOF pAUC 0.02018 → 0.15543。確率 0/1 への飽和も解消 |
+| [K059](K059-hard-negatives-for-audio-tags.md) | 仮説 | #085 で弱い背景窓の半数を種別の誤検出窓に置換すると OOF lwlrap 0.347081 → 0.305969 |

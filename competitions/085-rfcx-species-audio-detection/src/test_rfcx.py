@@ -1,7 +1,10 @@
 import csv
+import json
+import subprocess
 from pathlib import Path
 
 import numpy as np
+import prepare as conversion
 import pytest
 import soundfile as sf
 import torch
@@ -12,8 +15,70 @@ from train import check_scores, pcm_fingerprint, validate_submission, write_subm
 
 from kumite.group_folds import multilabel_group_folds
 from kumite.lwlrap import lwlrap
+from kumite.provenance import file_sha256
 from kumite.quality_gates import SelectionPlan, SourceSpec, dense_oof, verify_cv_run
 from kumite.runs import RunStore
+
+
+def write_manifest(data: Path) -> None:
+    entries = {}
+    for split in ("train", "test"):
+        for original in (data / split).glob("*.flac"):
+            output = data / "pcm" / split / original.with_suffix(".wav").name
+            entries[f"{split}/{original.name}"] = {
+                "source_sha256": file_sha256(original),
+                "output_sha256": file_sha256(output),
+                "output_frames": sf.info(output).frames,
+            }
+    (data / "pcm/manifest.json").write_text(
+        json.dumps({**conversion.SETTINGS, "decoder": "fixture", "files": entries}),
+        encoding="utf-8",
+    )
+
+
+@pytest.mark.parametrize("changed", ["train/a.flac", "pcm/train/a.wav"])
+def test_pcm_rejects_same_length_replacement(tmp_path: Path, changed: str) -> None:
+    original = tmp_path / "train/a.flac"
+    output = tmp_path / "pcm/train/a.wav"
+    for path in (original, output):
+        path.parent.mkdir(parents=True)
+        sf.write(path, np.zeros(100), RATE)
+    write_manifest(tmp_path)
+    assert conversion.verified_pcm(tmp_path, [original])[0] == [output]
+    sf.write(tmp_path / changed, np.ones(100), RATE)
+    with pytest.raises(ValueError, match="来歴"):
+        conversion.verified_pcm(tmp_path, [original])
+
+
+def test_failed_conversion_does_not_publish_manifest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    original = tmp_path / "train/a.flac"
+    original.parent.mkdir()
+    sf.write(original, np.zeros(100), RATE)
+    sf.write(original.with_name("b.flac"), np.zeros(100), RATE)
+    marker = tmp_path / "pcm/manifest.json"
+    marker.parent.mkdir()
+    marker.write_text("previous", encoding="utf-8")
+    monkeypatch.setattr(conversion.subprocess, "check_output", lambda *_, **__: "ffmpeg fixture")
+
+    def fail_second(command: list[str], *, check: bool) -> None:
+        assert check
+        if Path(command[command.index("-i") + 1]).stem == "b":
+            raise subprocess.CalledProcessError(1, "ffmpeg")
+        sf.write(command[-1], np.zeros(100), RATE)
+
+    monkeypatch.setattr(conversion.subprocess, "run", fail_second)
+    with pytest.raises(subprocess.CalledProcessError):
+        conversion.prepare(tmp_path)
+    assert marker.read_text(encoding="utf-8") == "previous"
+    assert (marker.parent / "train/a.wav").is_file()
+
+
+def test_run_trial_contract() -> None:
+    pipeline.require_trial("E00-final", "E00")
+    with pytest.raises(ValueError, match="不一致"):
+        pipeline.require_trial("E00-final", "E01")
 
 
 def test_synthetic_recording_covers_tail_and_short_clip(tmp_path: Path) -> None:
@@ -87,6 +152,7 @@ def test_small_audio_cv_publishes_and_rescores_oof(
         sf.write(data / "pcm" / "train" / f"r{i}.wav", wave, RATE)
     sf.write(data / "test" / "query.flac", np.zeros(WINDOW, dtype=np.float32), RATE)
     sf.write(data / "pcm" / "test" / "query.wav", np.zeros(WINDOW, dtype=np.float32), RATE)
+    write_manifest(data)
     for filename in ("train_tp.csv", "train_fp.csv"):
         with (data / filename).open("w", encoding="utf-8", newline="") as stream:
             writer = csv.writer(stream)
@@ -115,3 +181,12 @@ def test_small_audio_cv_publishes_and_rescores_oof(
     store = RunStore(tmp_path)
     assert verify_cv_run(store, "E00", assess).oof_score > 0
     assert store.load_array("E00", "test.npy").shape == (1, 24)
+    for kind in ("tp", "fp"):
+        annotations = data / f"train_{kind}.csv"
+        original = annotations.read_text(encoding="utf-8")
+        try:
+            annotations.write_text(original + "r0,0,9,11\n", encoding="utf-8")
+            with pytest.raises(ValueError, match="録音長"):
+                pipeline.load_cv()
+        finally:
+            annotations.write_text(original, encoding="utf-8")

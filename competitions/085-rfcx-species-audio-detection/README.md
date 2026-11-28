@@ -34,18 +34,24 @@ P0 の seed 42 ダミー提出は Public 0.26175、Private 0.25054。公式フ�
 
 ルートから次のように実行する。音声はコンペの data/train と data/test、CSV は data 直下に置く。
 
-一部の配布 FLAC は libsndfile 1.2.2 でデコード時に失敗した。全録音を FFmpeg で32 kHz・モノラルの16-bit PCM WAV にそろえ、学習・評価・推論で共用する。変換の際にサンプル数を照合し、元の FLAC と変換済み学習音声、FFmpeg のバージョンを CV のデータハッシュに含める。
+一部の配布 FLAC は libsndfile 1.2.2 でデコード時に失敗した。全録音を FFmpeg で32 kHz・モノラルの16-bit PCM WAV にそろえる。全変換の成功後に、元 FLAC・PCM の SHA-256、PCM 長、デコーダーと設定を記録したマニフェストを公開する。CV・選定・export で双方のファイルを照合し、テスト指紋には公式提出サンプルも含める。TP・FP の時刻は最も近い32 kHzサンプルに丸め、PCM 長を超える区間を拒否する。
 
 ```powershell
 $d = 'competitions/085-rfcx-species-audio-detection'
 uv run python "$d/src/prepare.py"
+if ($LASTEXITCODE -ne 0) { throw "PCM 変換に失敗" }
 uv run python "$d/src/train.py" eda
+if ($LASTEXITCODE -ne 0) { throw "EDA に失敗" }
 foreach ($trial in 'E00','E01','E02','E03') {
     uv run python "$d/src/train.py" cv --trial $trial --run-id $trial
     if ($LASTEXITCODE -ne 0) { throw "CV に失敗: $trial" }
 }
 uv run python "$d/src/compare.py" E00 E01 E02 E03
+if ($LASTEXITCODE -ne 0) { throw "比較に失敗" }
 uv run python "$d/src/train.py" select --receipt "$d/outputs/p4-selection.json"
+if ($LASTEXITCODE -ne 0) { throw "選定に失敗" }
 ```
 
 外部評価用のベースラインは `selection-plan-baseline.json` で E00 を E00-external として実行し、単独で選定する。最終比較では `--plan "$d/selection-plan-final.json"` を指定し、E00〜E04 をそれぞれ `E00-final`〜`E04-final` として実行する。選定後に `export --plan <事前計画> --receipt <選定記録> --run-id <export ID>` を使い、Quality Gate が照合した fold 平均のテスト予測から提出 CSV を生成する。
+
+記録済みの run と選定記録は `b4953cc` 時点の指紋に対応する。現行コードで再実行する場合は、新しい run ID と構成の対応を `RUN_TRIALS` と事前計画に登録し、選定・export も新規に行う。

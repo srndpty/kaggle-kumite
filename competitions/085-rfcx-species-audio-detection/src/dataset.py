@@ -89,6 +89,8 @@ def training_examples(
         fp = false.get(key, [])
         for start in sorted({centered(event, length) for event in tp}):
             species = tuple(sorted({e.species for e in tp if overlaps(e, start)}))
+            if not species:
+                raise ValueError(f"正例窓に対象種がありません: {key} / {start}")
             positives.append(Example(int(row), start, species))
         clear = [
             start

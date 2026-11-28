@@ -2,6 +2,7 @@
 
 import argparse
 import csv
+import hashlib
 import json
 from pathlib import Path
 from time import perf_counter
@@ -11,6 +12,7 @@ import soundfile as sf
 import torch
 from dataset import ID, RATE, SPECIES, WINDOW, read_events, training_examples
 from model import fit, predict
+from prepare import verified_pcm
 
 from kumite.crossfit import FoldOutput, cross_fit_splits, folds_to_splits, split_roles
 from kumite.cv_run import Evaluation, Trial, publish_cv_run
@@ -41,6 +43,22 @@ TRIALS = {
     "E03": (False, WINDOW, 3, "上位３窓平均で単発誤検出の影響を抑えられる"),
     "E04": (False, WINDOW, 1, "周波数位置を明示すると種の順位が改善する"),
 }
+RUN_TRIALS = {
+    **{f"E{i:02}": f"E{i:02}" for i in range(4)},
+    **{f"E{i:02}-final": f"E{i:02}" for i in range(5)},
+    "E00-external": "E00",
+}
+
+
+def require_trial(run_id: str, trial: object) -> None:
+    if run_id not in RUN_TRIALS or RUN_TRIALS[run_id] != trial:
+        raise ValueError(f"run ID と trial が不一致です: {run_id} / {trial}")
+
+
+def input_hash(pcm_hash: str, paths: list[Path]) -> str:
+    return hashlib.sha256(f"{pcm_hash}:{files_sha256(paths)}".encode()).hexdigest()
+
+
 SHARED = (
     "__init__",
     "audio",
@@ -71,7 +89,7 @@ def pcm_fingerprint(path: Path) -> str:
 def load_cv():
     originals = sorted((DATA / "train").glob("*.flac"))
     keys = [path.stem for path in originals]
-    paths = [DATA / "pcm" / "train" / f"{key}.wav" for key in keys]
+    paths, pcm_hash = verified_pcm(DATA, originals)
     annotation_files = [DATA / "train_tp.csv", DATA / "train_fp.csv"]
     true, false = map(read_events, annotation_files)
     if set(keys) != set(true) | set(false):
@@ -81,6 +99,10 @@ def load_cv():
     if any(item.samplerate != RATE or item.channels != 1 for item in info):
         raise ValueError("学習用 PCM は 32 kHz モノラルが必要です")
     lengths = np.array([item.frames for item in info])
+    for key, length in zip(keys, lengths, strict=True):
+        for event in (*true.get(key, []), *false.get(key, [])):
+            if event.end > length:
+                raise ValueError(f"注釈が PCM の録音長を超えています: {key} / {event}")
     labels = np.zeros((len(keys), len(SPECIES)), dtype=np.bool_)
     for row, key in enumerate(keys):
         for event in true.get(key, []):
@@ -93,7 +115,7 @@ def load_cv():
         "lwlrap",
         True,
         lwlrap,
-        files_sha256([*annotation_files, DATA / "pcm" / "decoder.txt", *originals, *paths]),
+        input_hash(pcm_hash, annotation_files),
         "v1",
         array_sha256(split_roles(len(labels), splits)),
         SEED,
@@ -129,8 +151,9 @@ def source(plan_file: Path, trial: str) -> SourceSpec:
     )
 
 
-def test_paths() -> list[Path]:
-    with (DATA / "sample_submission.csv").open(encoding="utf-8-sig", newline="") as stream:
+def test_inputs() -> tuple[list[Path], str]:
+    sample = DATA / "sample_submission.csv"
+    with sample.open(encoding="utf-8-sig", newline="") as stream:
         reader = csv.DictReader(stream)
         if reader.fieldnames != [ID, *SPECIES]:
             raise ValueError("公式提出サンプルの列が不正です")
@@ -138,7 +161,8 @@ def test_paths() -> list[Path]:
     paths = [DATA / "test" / f"{key}.flac" for key in ids]
     if not ids or len(set(ids)) != len(ids) or set(paths) != set((DATA / "test").glob("*.flac")):
         raise ValueError("テスト録音の ID が公式サンプルと一致しません")
-    return [DATA / "pcm" / "test" / f"{key}.wav" for key in ids]
+    query, pcm_hash = verified_pcm(DATA, paths)
+    return query, input_hash(pcm_hash, [sample])
 
 
 def check_scores(scores: np.ndarray, count: int) -> None:
@@ -168,9 +192,12 @@ def validate_submission(path: Path, ids: list[str]) -> None:
 def run(
     trial: str, run_id: str, plan_file: Path, plan: SelectionPlan, device: torch.device
 ) -> None:
+    require_trial(run_id, trial)
+    if run_id not in plan.candidates:
+        raise ValueError(f"候補計画にない run ID: {run_id}")
     started = perf_counter()
     paths, keys, lengths, _, true, false, labels, splits, evaluation = load_cv()
-    query = test_paths()
+    query, test_hash = test_inputs()
     hard, hop, top, hypothesis = TRIALS[trial]
     store, spec = RunStore(COMP), source(plan_file, trial)
 
@@ -200,7 +227,7 @@ def run(
                 trial,
                 "log-mel SmallCNN",
                 "official-v1",
-                {"trial": trial, "updates": UPDATES, "test_hash": files_sha256(query)},
+                {"trial": trial, "updates": UPDATES, "test_hash": test_hash},
             ),
             labels,
             splits,
@@ -268,6 +295,12 @@ def main() -> None:
     if args.receipt is None:
         parser.error("--receipt is required")
     store = RunStore(COMP)
+    query, test_hash = test_inputs()
+    for candidate in plan.candidates:
+        record = store.record(candidate)
+        require_trial(candidate, record.params["trial"])
+        if record.params["test_hash"] != test_hash:
+            raise ValueError(f"テスト入力の来歴が一致しません: {candidate}")
     *_, labels, splits, evaluation = load_cv()
     assess = dense_oof(
         labels, splits, lwlrap, expected_shape=labels.shape, data_hash=evaluation.data_hash
@@ -281,10 +314,7 @@ def main() -> None:
         parser.error("export requires --run-id")
     choice = verify_selection(store, plan, args.receipt, assess)
     chosen = store.record(choice.winner)
-    query = test_paths()
     ids = [item.stem for item in query]
-    if chosen.params["test_hash"] != files_sha256(query):
-        raise ValueError("テスト音声が CV 実行時から変わっています")
 
     def write(output: Path, _winner: object) -> None:
         saved_ids = json.loads(

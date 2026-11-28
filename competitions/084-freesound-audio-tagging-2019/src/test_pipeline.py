@@ -16,7 +16,7 @@ from dummy import SOURCE
 from export import evaluation_ids, notebook_source, refit
 from model import Tagger, fit, predict
 
-from kumite.provenance import file_sha256
+from kumite.provenance import array_sha256, file_sha256
 from kumite.runs import RunStore
 
 
@@ -24,8 +24,8 @@ def test_group_split_and_noisy_exclusion() -> None:
     clips = [Clip(Path(str(i)), group, ("tag",), 1) for i, group in enumerate("aabcd")]
     labels = np.ones((len(clips), 1), dtype=bool)
     folds = split_groups(clips, labels)
-    assert folds[0] == folds[1]
-    assert set(folds) == {0, 1, 2}
+    np.testing.assert_array_equal(folds, [0, 0, 1, 2, 1])
+    assert array_sha256(folds) == "dd659d95d8840ab0a98d2f5d0d974daf8da9a05a0a3b8ff4b078946fb2ac5253"
     assert eligible_noisy(clips[1:], clips[:1]) == clips[2:]
 
 

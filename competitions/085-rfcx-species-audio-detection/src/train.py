@@ -3,7 +3,6 @@
 import argparse
 import csv
 import json
-import math
 from pathlib import Path
 from time import perf_counter
 
@@ -69,15 +68,18 @@ def pcm_fingerprint(path: Path) -> str:
 
 
 def load_cv():
-    paths = sorted((DATA / "train").glob("*.flac"))
-    keys = [path.stem for path in paths]
+    originals = sorted((DATA / "train").glob("*.flac"))
+    keys = [path.stem for path in originals]
+    paths = [DATA / "pcm" / "train" / f"{key}.wav" for key in keys]
     annotation_files = [DATA / "train_tp.csv", DATA / "train_fp.csv"]
     true, false = map(read_events, annotation_files)
     if set(keys) != set(true) | set(false):
         raise ValueError("学習録音の ID と注釈の集合が一致しません")
-    groups = [pcm_fingerprint(path) for path in paths]
+    groups = [pcm_fingerprint(path) for path in originals]
     info = [sf.info(path) for path in paths]
-    lengths = np.array([math.ceil(item.frames * RATE / item.samplerate) for item in info])
+    if any(item.samplerate != RATE or item.channels != 1 for item in info):
+        raise ValueError("学習用 PCM は 32 kHz モノラルが必要です")
+    lengths = np.array([item.frames for item in info])
     labels = np.zeros((len(keys), len(SPECIES)), dtype=np.bool_)
     for row, key in enumerate(keys):
         for event in true.get(key, []):
@@ -90,7 +92,7 @@ def load_cv():
         "lwlrap",
         True,
         lwlrap,
-        files_sha256([*annotation_files, *paths]),
+        files_sha256([*annotation_files, DATA / "pcm" / "decoder.txt", *originals, *paths]),
         "v1",
         array_sha256(split_roles(len(labels), splits)),
         SEED,
@@ -103,6 +105,7 @@ def source(plan_file: Path, trial: str) -> SourceSpec:
         Path(__file__),
         COMP / "src/dataset.py",
         COMP / "src/model.py",
+        COMP / "src/prepare.py",
         COMP / "quality-gates.toml",
         plan_file,
     ]
@@ -128,7 +131,7 @@ def test_paths() -> list[Path]:
     paths = [DATA / "test" / f"{key}.flac" for key in ids]
     if not ids or len(set(ids)) != len(ids) or set(paths) != set((DATA / "test").glob("*.flac")):
         raise ValueError("テスト録音の ID が公式サンプルと一致しません")
-    return paths
+    return [DATA / "pcm" / "test" / f"{key}.wav" for key in ids]
 
 
 def check_scores(scores: np.ndarray, count: int) -> None:

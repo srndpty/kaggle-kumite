@@ -6,7 +6,6 @@ from pathlib import Path
 
 import numpy as np
 import soundfile as sf
-from scipy.signal import resample_poly
 
 RATE = 32000
 WINDOW = 5 * RATE
@@ -43,11 +42,10 @@ def read_events(path: Path) -> dict[str, list[Event]]:
 
 
 def read_wave(path: Path) -> np.ndarray:
-    samples, rate = sf.read(path, dtype="float32", always_2d=True)
-    mono = samples.mean(axis=1)
-    if not len(mono) or not np.isfinite(mono).all():
+    samples, rate = sf.read(path, dtype="float32")
+    if rate != RATE or samples.ndim != 1 or not len(samples) or not np.isfinite(samples).all():
         raise ValueError(f"不正な音声: {path}")
-    return resample_poly(mono, RATE, rate).astype(np.float32, copy=False)
+    return samples
 
 
 def starts(length: int, hop: int) -> list[int]:

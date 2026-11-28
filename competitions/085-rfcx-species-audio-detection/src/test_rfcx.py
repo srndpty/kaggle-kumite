@@ -78,10 +78,15 @@ def test_small_audio_cv_publishes_and_rescores_oof(
     data = tmp_path / "data"
     (data / "train").mkdir(parents=True)
     (data / "test").mkdir()
+    (data / "pcm" / "train").mkdir(parents=True)
+    (data / "pcm" / "test").mkdir()
+    (data / "pcm" / "decoder.txt").write_text("synthetic fixture", encoding="utf-8")
     for i in range(6):
         wave = np.full(2 * WINDOW, i / 10, dtype=np.float32)
         sf.write(data / "train" / f"r{i}.flac", wave, RATE)
+        sf.write(data / "pcm" / "train" / f"r{i}.wav", wave, RATE)
     sf.write(data / "test" / "query.flac", np.zeros(WINDOW, dtype=np.float32), RATE)
+    sf.write(data / "pcm" / "test" / "query.wav", np.zeros(WINDOW, dtype=np.float32), RATE)
     for filename in ("train_tp.csv", "train_fp.csv"):
         with (data / filename).open("w", encoding="utf-8", newline="") as stream:
             writer = csv.writer(stream)

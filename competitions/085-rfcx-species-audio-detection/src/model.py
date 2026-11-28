@@ -6,7 +6,6 @@ import numpy as np
 import soundfile as sf
 import torch
 from dataset import RATE, SPECIES, WINDOW, Example, aggregate, crop, read_wave, starts
-from scipy.signal import resample_poly
 from torch import nn
 
 from kumite.audio import Features, SmallCNN
@@ -20,10 +19,11 @@ def model() -> nn.Sequential:
 
 def read_crop(path: Path, start: int) -> np.ndarray:
     with sf.SoundFile(path) as recording:
-        rate = recording.samplerate
-        recording.seek(round(start * rate / RATE))
-        native = recording.read(round(WINDOW * rate / RATE), dtype="float32", always_2d=True)
-    return crop(resample_poly(native.mean(axis=1), RATE, rate).astype(np.float32), 0)
+        if recording.samplerate != RATE or recording.channels != 1:
+            raise ValueError(f"学習用 PCM は 32 kHz モノラルが必要です: {path}")
+        recording.seek(start)
+        samples = recording.read(WINDOW, dtype="float32")
+    return crop(samples, 0)
 
 
 def fit(

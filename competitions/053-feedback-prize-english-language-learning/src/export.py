@@ -1,13 +1,12 @@
 """OOF から選定を確定し、別操作で Kaggle Notebook を出力する。"""
 
 import argparse
-import json
 from pathlib import Path
 
 from model import SLUG
 from train import COMP, TRIALS, load_cv, mcrmse, read_plan, source_spec
 
-from kumite.kaggle_notebook import write_cpu_notebook
+from kumite.kaggle_notebook import validate_cpu_notebook, write_cpu_notebook
 from kumite.paths import REPO_ROOT
 from kumite.quality_gates import (
     dense_oof,
@@ -36,31 +35,6 @@ def write_notebook(
     )
     write_cpu_notebook(output, code, kernel_id=kernel, title=kernel.split("/")[1], competition=SLUG)
     return code
-
-
-def validate_notebook(output: Path, code: str, kernel: str) -> str:
-    notebook = json.loads((output / "submit.ipynb").read_text(encoding="utf-8"))
-    metadata = json.loads((output / "kernel-metadata.json").read_text(encoding="utf-8"))
-    cells = notebook["cells"]
-    if len(cells) != 1 or cells[0]["cell_type"] != "code":
-        raise ValueError("Notebook のセル構成が不正です")
-    actual_code = "".join(cells[0]["source"])
-    expected_metadata = {
-        "id": kernel,
-        "code_file": "submit.ipynb",
-        "language": "python",
-        "kernel_type": "notebook",
-        "competition_sources": [SLUG],
-        "is_private": True,
-        "enable_internet": False,
-        "enable_gpu": False,
-    }
-    if actual_code != code or any(
-        metadata.get(key) != value for key, value in expected_metadata.items()
-    ):
-        raise ValueError("Notebook のコードまたは実行設定が不正です")
-    compile(actual_code, "submit.ipynb", "exec")
-    return actual_code
 
 
 def main() -> None:
@@ -95,7 +69,9 @@ def main() -> None:
         code = write_notebook(output, block, kernel)
 
     def validate(output: Path) -> None:
-        validate_notebook(output, code, kernel)
+        validate_cpu_notebook(
+            output, code, kernel_id=kernel, title=kernel.split("/")[1], competition=SLUG
+        )
 
     print(
         publish_export(

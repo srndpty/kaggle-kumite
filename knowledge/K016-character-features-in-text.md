@@ -53,3 +53,4 @@ seed43でもfold平均macro AUCは0.979964→0.985175（+0.005211）。2つの�
 | [#046 Quora Insincere Questions](../competitions/046-quora-insincere-questions-classification/report.md) | E01 → E02 | OOF F1 +0.01973、文面グループ単位の 95% 区間 [+0.01813, +0.02132] |
 | [#047 Google QUEST](../competitions/047-google-quest-challenge/report.md) | B00 → E02 | 結合した質問・回答テキストへの文字 3–5 gram 追加で OOF 平均 Spearman 0.29164 → 0.29677 |
 | [#053 Feedback Prize – English Language Learning](../competitions/053-feedback-prize-english-language-learning/report.md) | E00 → E02 | OOF MCRMSE −0.007892、本文グループ単位の95%区間 [−0.010071, −0.005663] |
+| [#052 Feedback Prize – Predicting Effective Arguments](../competitions/052-feedback-prize-effectiveness/report.md) | E00 → E02 | 論証の文字 3–5 gram で OOF LogLoss −0.008069、エッセイ単位の95%区間 [−0.010645, −0.005433]。Rebuttal は +0.00557 |

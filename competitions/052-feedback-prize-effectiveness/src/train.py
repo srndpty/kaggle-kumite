@@ -42,6 +42,7 @@ TRIALS = {
     "E01": ("role", "論証種別を追加すると LogLoss が下がる"),
     "E02": ("char", "文字 n-gram が単語特徴を補う"),
     "E03": ("context", "他の論証文脈が短い論証の予測を改善する"),
+    "E04": ("boundary", "論証の冒頭と末尾の語彙を区別すると LogLoss が下がる"),
 }
 RUN_TRIALS = {
     **{f"E{i:02}": f"E{i:02}" for i in range(4)},

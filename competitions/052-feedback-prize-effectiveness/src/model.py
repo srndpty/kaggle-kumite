@@ -1,5 +1,6 @@
 """論証要素３クラスの分類と Kaggle 提出生成。"""
 
+import re
 from pathlib import Path
 
 import numpy as np
@@ -53,8 +54,15 @@ def check_probabilities(values: np.ndarray, count: int) -> None:
         raise ValueError("３クラスの確率が不正です")
 
 
+def boundary_text(text: str) -> str:
+    words = re.findall(r"\b\w\w+\b", text.lower())
+    return " ".join(
+        [*(f"start_{word}" for word in words[:8]), *(f"end_{word}" for word in words[-8:])]
+    )
+
+
 def fit_model(train: pd.DataFrame, block: str):
-    if block not in {"base", "role", "char", "context"}:
+    if block not in {"base", "role", "char", "context", "boundary"}:
         raise ValueError(f"未知の特徴量構成: {block}")
     labels = labels_for(train)
     if set(labels) != set(range(len(CLASSES))):
@@ -73,6 +81,11 @@ def fit_model(train: pd.DataFrame, block: str):
         if block == "context"
         else None
     )
+    boundary = (
+        TfidfVectorizer(min_df=2, dtype=np.float64).fit(train[TEXT].map(boundary_text))
+        if block == "boundary"
+        else None
+    )
 
     def features(frame: pd.DataFrame):
         matrices = [word.transform(frame[TEXT])]
@@ -82,6 +95,8 @@ def fit_model(train: pd.DataFrame, block: str):
             matrices.append(char.transform(frame[TEXT]))
         if context is not None:
             matrices.append(context.transform(other_discourses(frame)))
+        if boundary is not None:
+            matrices.append(boundary.transform(frame[TEXT].map(boundary_text)))
         return hstack(matrices, format="csr")
 
     model = LogisticRegression(C=1, solver="lbfgs", max_iter=1000, tol=1e-4)

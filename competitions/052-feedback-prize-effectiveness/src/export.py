@@ -17,16 +17,21 @@ from train import (
 
 from kumite.kaggle_notebook import validate_cpu_notebook, write_cpu_notebook
 from kumite.paths import REPO_ROOT
+from kumite.provenance import file_sha256
 from kumite.quality_gates import publish_export, verify_selection
 from kumite.runs import RunStore
 
 
-def notebook_source(block: str, input_root: Path, submission: Path) -> str:
+def notebook_source(block: str, train_sha256: str, input_root: Path, submission: Path) -> str:
     source = (COMP / "src/model.py").read_text(encoding="utf-8-sig")
     return source + (
-        f"\nroot, = (p.parent for p in Path({input_root.as_posix()!r}).rglob('train.csv') "
+        "\nimport platform\nfrom importlib.metadata import version\n"
+        "print('Python:', platform.python_version())\n"
+        "for package in ('scikit-learn', 'numpy', 'scipy'):\n"
+        "    print(f'{package}: {version(package)}')\n"
+        f"root, = (p.parent for p in Path({input_root.as_posix()!r}).rglob('train.csv') "
         "if p.parent.name == SLUG)\n"
-        f"write_submission(root, Path({submission.as_posix()!r}), {block!r})\n"
+        f"write_submission(root, Path({submission.as_posix()!r}), {block!r}, {train_sha256!r})\n"
     )
 
 
@@ -35,10 +40,11 @@ def write_notebook(
     block: str,
     kernel: str,
     *,
+    train_sha256: str,
     input_root: Path = Path("/kaggle/input"),
     submission: Path = Path("/kaggle/working/submission.csv"),
 ) -> str:
-    code = notebook_source(block, input_root, submission)
+    code = notebook_source(block, train_sha256, input_root, submission)
     write_cpu_notebook(output, code, kernel_id=kernel, title=kernel.split("/")[1], competition=SLUG)
     return code
 
@@ -58,11 +64,16 @@ def main() -> None:
     assess = assess_for(labels, splits, evaluation)
     selection = verify_selection(store, plan, args.receipt, assess)
     block = TRIALS[trial_for(selection.winner)][0]
+    train_sha256 = file_sha256(COMP / "data/train.csv")
+    if store.record(selection.winner).params.get("train_csv_sha256") != train_sha256:
+        raise ValueError("選定 run と train.csv のハッシュが一致しません")
     kernel = f"{args.owner}/kumite-effective-{args.export_id.lower()}"
-    code = notebook_source(block, Path("/kaggle/input"), Path("/kaggle/working/submission.csv"))
+    code = notebook_source(
+        block, train_sha256, Path("/kaggle/input"), Path("/kaggle/working/submission.csv")
+    )
 
     def write(output: Path, _winner: object) -> None:
-        write_notebook(output, block, kernel)
+        write_notebook(output, block, kernel, train_sha256=train_sha256)
 
     def validate(output: Path) -> None:
         validate_cpu_notebook(

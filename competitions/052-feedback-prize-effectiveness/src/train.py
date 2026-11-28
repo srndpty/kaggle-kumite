@@ -24,7 +24,7 @@ from sklearn.model_selection import StratifiedGroupKFold
 from kumite.crossfit import FoldOutput, cross_fit_splits, split_roles
 from kumite.cv_run import Evaluation, Trial, publish_cv_run
 from kumite.paths import REPO_ROOT
-from kumite.provenance import array_sha256, files_sha256
+from kumite.provenance import array_sha256, file_sha256, files_sha256
 from kumite.quality_gates import (
     SelectionPlan,
     SourceSpec,
@@ -165,30 +165,45 @@ def run(trial: str, run_id: str, path: Path) -> None:
     plan = read_plan(path)
     if trial_for(run_id) != trial or run_id not in plan.candidates:
         raise ValueError("run ID が候補計画または trial と一致しません")
+    train_csv = COMP / "data/train.csv"
+    train_sha256 = file_sha256(train_csv)
     frame, labels, _, splits, evaluation = load_cv()
     block, hypothesis = TRIALS[trial]
     source, store = source_spec(block, path), RunStore(COMP)
 
     def fit_fold(train: np.ndarray, valid: np.ndarray) -> FoldOutput:
         start = perf_counter()
-        predict = fit_model(frame.iloc[train], block)
+        fitted = fit_model(frame.iloc[train], block)
         fit_sec = perf_counter() - start
         start = perf_counter()
-        scores = predict(frame.iloc[valid].drop(columns="discourse_effectiveness"))
+        scores = fitted.predict(frame.iloc[valid].drop(columns="discourse_effectiveness"))
         return FoldOutput(
             scores,
             np.empty((0, len(CLASSES))),
-            {"fit_sec": fit_sec, "predict_sec": perf_counter() - start},
+            {
+                "fit_sec": fit_sec,
+                "predict_sec": perf_counter() - start,
+                "n_iter": fitted.n_iter,
+                "convergence_warning": fitted.convergence_warning,
+            },
         )
 
     with reserve_cv(store, run_id, source, {}, plan) as (reservation, start):
         timer = perf_counter()
         result = cross_fit_splits(len(labels), splits, fit_fold)
+        if file_sha256(train_csv) != train_sha256:
+            raise ValueError("CV 実行中に train.csv が変更されました")
         publish_cv_run(
             store,
             reservation,
             evaluation,
-            Trial(hypothesis, block, "TF-IDF logistic regression", "official-v1", {"block": block}),
+            Trial(
+                hypothesis,
+                block,
+                "TF-IDF logistic regression",
+                "official-v1",
+                {"block": block, "train_csv_sha256": train_sha256},
+            ),
             labels,
             splits,
             result,

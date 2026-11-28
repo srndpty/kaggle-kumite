@@ -1,11 +1,16 @@
 """論証要素３クラスの分類と Kaggle 提出生成。"""
 
+import hashlib
 import re
+import warnings
+from collections.abc import Callable
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 import pandas as pd
 from scipy.sparse import hstack
+from sklearn.exceptions import ConvergenceWarning
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import OneHotEncoder
@@ -61,7 +66,13 @@ def boundary_text(text: str) -> str:
     )
 
 
-def fit_model(train: pd.DataFrame, block: str):
+class FitResult(NamedTuple):
+    predict: Callable[[pd.DataFrame], np.ndarray]
+    n_iter: list[int]
+    convergence_warning: bool
+
+
+def fit_model(train: pd.DataFrame, block: str) -> FitResult:
     if block not in {"base", "role", "char", "context", "boundary"}:
         raise ValueError(f"未知の特徴量構成: {block}")
     labels = labels_for(train)
@@ -100,18 +111,30 @@ def fit_model(train: pd.DataFrame, block: str):
         return hstack(matrices, format="csr")
 
     model = LogisticRegression(C=1, solver="lbfgs", max_iter=1000, tol=1e-4)
-    model.fit(features(train), labels)
+    train_features = features(train)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", ConvergenceWarning)
+        model.fit(train_features, labels)
+    for warning in caught:
+        warnings.warn_explicit(warning.message, warning.category, warning.filename, warning.lineno)
 
     def predict(frame: pd.DataFrame) -> np.ndarray:
         values = np.asarray(model.predict_proba(features(frame)), dtype=np.float64)
         check_probabilities(values, len(frame))
         return values
 
-    return predict
+    return FitResult(
+        predict,
+        model.n_iter_.tolist(),
+        any(issubclass(w.category, ConvergenceWarning) for w in caught),
+    )
 
 
-def write_submission(data: Path, output: Path, block: str) -> None:
-    train = read_discourse(data / "train.csv")
+def write_submission(data: Path, output: Path, block: str, expected_train_sha256: str) -> None:
+    train_path = data / "train.csv"
+    if hashlib.sha256(train_path.read_bytes()).hexdigest() != expected_train_sha256:
+        raise ValueError("Training data hash mismatch")
+    train = read_discourse(train_path)
     test = read_discourse(data / "test.csv")
     sample = pd.read_csv(data / "sample_submission.csv", dtype={ID: str}, keep_default_na=False)
     if list(sample.columns) != [ID, *CLASSES] or not sample[ID].is_unique:
@@ -119,5 +142,7 @@ def write_submission(data: Path, output: Path, block: str) -> None:
     if set(sample[ID]) != set(test[ID]):
         raise ValueError("提出サンプルとテストの ID が一致しません")
     test = test.set_index(ID).loc[sample[ID]].reset_index()
-    sample[list(CLASSES)] = fit_model(train, block)(test)
+    fitted = fit_model(train, block)
+    print(f"Optimization: n_iter={fitted.n_iter}, convergence_warning={fitted.convergence_warning}")
+    sample[list(CLASSES)] = fitted.predict(test)
     sample.to_csv(output, index=False)
